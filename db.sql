@@ -1,0 +1,1 @@
+CREATE DATABASE fudmol_stadion;
