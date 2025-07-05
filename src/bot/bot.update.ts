@@ -15,9 +15,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Update()
 export class BotUpdate {
-  private readonly prisma: PrismaService
   private readonly ADMIN_ID = process.env.ADMIN_ID;
-  constructor(private readonly botService: BotService) {}
+  constructor(private readonly botService: BotService,  private readonly prisma: PrismaService) {}
 
   @Start()
   async onStart(@Ctx() ctx: Context) {
