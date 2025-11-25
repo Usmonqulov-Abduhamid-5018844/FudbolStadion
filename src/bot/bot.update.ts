@@ -1,6 +1,6 @@
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from './bot.service';
-import { Action, Ctx, Start, Update } from 'nestjs-telegraf';
+import { Action, Ctx, Hears, Message, Start, Update } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
@@ -39,5 +39,9 @@ export class BotUpdate {
       );
     }
     return this.botService.checket(ctx);
+  }
+  @Hears("register")
+  async register(@Ctx() ctx: MyContext){
+
   }
 }

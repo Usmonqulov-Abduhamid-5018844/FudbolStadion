@@ -12,9 +12,9 @@ export class BotService {
   ) {}
 
   async start(ctx: MyContext) {
-    ctx.session = ctx.session || {}
+    ctx.session = ctx.session || {};
     ctx.reply(
-      `${this.i18n.translate('common.START', {lang: ctx.session.lang || "uz" })}`,
+      `${this.i18n.translate('common.START', { lang: ctx.session.lang || 'uz' })}`,
       Markup.inlineKeyboard([
         [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
         [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
@@ -23,13 +23,27 @@ export class BotService {
     );
   }
 
-  async checket(ctx: MyContext){
-    const owners = await this.prisma.owners.findUnique({where:{chatID: String(ctx.from?.id)}})
-    if(!owners){
-      const users = await this.prisma.users.findUnique({where:{chatId: String(ctx.from?.id)}})
-      if(!users){
-        ctx.reply("Ro'yxat")
+  async checket(ctx: MyContext) {
+    const owners = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+    });
+    if (!owners) {
+      const users = await this.prisma.users.findUnique({
+        where: { chatId: String(ctx.from?.id) },
+      });
+      if (!users) {
+        ctx.session.step = 'registor';
+        ctx.reply(
+          `${this.i18n.translate('registor.title', { lang: ctx.session.lang || 'uz' })}`,
+          Markup.keyboard([
+            [`💼 ${this.i18n.translate('registor.button.0',{lang: ctx.session.lang || "uz"})}`],
+            [`🏃🏼 ${this.i18n.translate('registor.button.1',{lang: ctx.session.lang || "uz"})}`],
+          ])
+            .oneTime()
+            .resize(),
+        );
       }
+
     }
   }
 }

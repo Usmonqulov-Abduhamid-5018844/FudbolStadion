@@ -8,6 +8,8 @@ import { I18nModule, AcceptLanguageResolver, QueryResolver } from 'nestjs-i18n';
 
 import * as path from 'path';
 import { UtileModule } from './utils/utils.module';
+import { OwnersModule } from './owners/owners.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -28,7 +30,9 @@ import { UtileModule } from './utils/utils.module';
     }),
     PrismaModule,
     BotModule,
-    UtileModule
+    UtileModule,
+    OwnersModule,
+    UsersModule,
   ],
 })
 export class AppModule {}
