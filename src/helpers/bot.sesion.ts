@@ -1,11 +1,26 @@
-import { Context } from 'telegraf';
+import { Context } from "telegraf";
 
-export interface ISesion {
-  name: null | string;
-  lang: null | string;
-  step: null | string;
+export interface ISession {
+  name: string | null;
+  lang: string | null;
+  step: string | null;
+  owner_registor: registerOwner;
+  user_registor: registorUser;
+}
+
+export interface registerOwner {
+  full_name: string | null;
+  email: string | null;
+  phone: string | null;
+  step: string | null;
+}
+
+export interface registorUser {
+  full_name: string | null;
+  phone: string | null;
+  step: string | null;
 }
 
 export interface MyContext extends Context {
-  session: ISesion;
+  session: ISession;
 }

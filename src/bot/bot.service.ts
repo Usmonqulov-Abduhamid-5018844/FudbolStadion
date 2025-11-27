@@ -14,7 +14,7 @@ export class BotService {
   async start(ctx: MyContext) {
     ctx.session = ctx.session || {};
     ctx.reply(
-      `${this.i18n.translate('common.START', { lang: ctx.session.lang || 'uz' })}`,
+      `${this.i18n.translate('common.START', { lang: ctx.session.lang || ctx.from?.language_code})}`,
       Markup.inlineKeyboard([
         [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
         [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
@@ -34,16 +34,17 @@ export class BotService {
       if (!users) {
         ctx.session.step = 'registor';
         ctx.reply(
-          `${this.i18n.translate('registor.title', { lang: ctx.session.lang || 'uz' })}`,
+          `${this.i18n.translate('registor.title', { lang: ctx.session.lang || ctx.from?.language_code })}`,
           Markup.keyboard([
-            [`💼 ${this.i18n.translate('registor.button.0',{lang: ctx.session.lang || "uz"})}`],
-            [`🏃🏼 ${this.i18n.translate('registor.button.1',{lang: ctx.session.lang || "uz"})}`],
+            [`💼 ${this.i18n.translate('registor.button.0',{lang: ctx.session.lang || ctx.from?.language_code})}`],
+            [`🏃🏼 ${this.i18n.translate('registor.button.1',{lang: ctx.session.lang || ctx.from?.language_code})}`],
           ])
             .oneTime()
             .resize(),
         );
       }
-
+      
     }
+    ctx.reply("Owner")
   }
 }

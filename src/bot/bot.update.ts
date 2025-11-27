@@ -1,9 +1,11 @@
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from './bot.service';
-import { Action, Ctx, Hears, Message, Start, Update } from 'nestjs-telegraf';
+import { Action, Ctx, Hears, On, Start, Update } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
+import { OwnersService } from 'src/owners/owners.service';
+import { UsersService } from 'src/users/users.service';
 
 @Update()
 export class BotUpdate {
@@ -11,6 +13,8 @@ export class BotUpdate {
     private readonly botService: BotService,
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
+    private readonly ownerService: OwnersService,
+    private readonly userService: UsersService,
   ) {}
 
   @Start()
@@ -40,8 +44,49 @@ export class BotUpdate {
     }
     return this.botService.checket(ctx);
   }
-  @Hears("register")
-  async register(@Ctx() ctx: MyContext){
 
+    @On("contact")
+  async onContact(@Ctx() ctx:MyContext){
+    
+    if(ctx.session.step == "owner_registor"){
+      return this.ownerService.registor_step(ctx)
+    }
+  }
+
+  @On('message')
+  async Message(@Ctx() ctx: MyContext) {
+    try {
+      if (ctx.message && 'text' in ctx.message) {
+        if (ctx.session.step == 'registor') {
+          if (
+            ctx.message.text ===
+            `💼 ${this.i18n.translate('registor.button.0', {
+              lang: ctx.session.lang || ctx.from?.language_code,
+            })}`
+          ) {
+            return this.ownerService.registor(ctx);
+          } else if (
+            ctx.message.text ===
+            `💼 ${this.i18n.translate('registor.button.1', {
+              lang: ctx.session.lang || ctx.from?.language_code,
+            })}`
+          ) {
+            return this.userService.registor(ctx);
+          } else {
+            ctx.reply(
+              `${this.i18n.translate('error.worning', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+            );
+          }
+          return;
+        }
+        if (ctx.session.step == 'owner_registor') {
+          return this.ownerService.registor_step(ctx)
+        }
+      }
+    } catch (error) {
+      ctx.reply(
+        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+      );
+    }
   }
 }
