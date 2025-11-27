@@ -1,5 +1,11 @@
 {
   "title": "Thank you for registering in our bot! How would you like to register — as a stadium owner or as a user?",
 
-  "button": ["Stadium Owner", "User"]
+  "button": ["Stadium Owner", "User"],
+  "name": "📛 Please enter your full name!",
+  "email": "📧 Please enter your email address!",
+  "email_format": "📧 Please enter your email in the correct format!\nKindly try again.",
+  "phone": "📞 Please send your phone number",
+  "send_phone": "📱 Send phone number",
+  "finish":"🎉 Congratulations! You have successfully registered!"
 }

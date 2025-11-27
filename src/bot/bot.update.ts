@@ -28,22 +28,11 @@ export class BotUpdate {
       ctx.session = ctx.session || {};
       ctx.session.lang = (ctx.callbackQuery?.data).split('_')[1];
 
-      const welcomeMessage = this.i18n.translate('common.HELLO', {
-        lang: ctx.session.lang,
-        args: {
-          name: isCkecked(ctx.from?.first_name)
-            ? ctx.from?.first_name
-            : `${this.i18n.translate('common.firstName', { lang: ctx.session.lang })}`,
-        },
-      });
-      await ctx.reply(
-        `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
-          lang: ctx.session.lang,
-        })}`,
-      );
     }
     return this.botService.checket(ctx);
   }
+
+
 
     @On("contact")
   async onContact(@Ctx() ctx:MyContext){
@@ -51,7 +40,11 @@ export class BotUpdate {
     if(ctx.session.step == "owner_registor"){
       return this.ownerService.registor_step(ctx)
     }
+    if(ctx.session.step == "user_registor"){
+      return this.userService.registor_step(ctx)
+    }
   }
+
 
   @On('message')
   async Message(@Ctx() ctx: MyContext) {
@@ -67,7 +60,7 @@ export class BotUpdate {
             return this.ownerService.registor(ctx);
           } else if (
             ctx.message.text ===
-            `💼 ${this.i18n.translate('registor.button.1', {
+            `🏃🏼 ${this.i18n.translate('registor.button.1', {
               lang: ctx.session.lang || ctx.from?.language_code,
             })}`
           ) {
@@ -81,6 +74,9 @@ export class BotUpdate {
         }
         if (ctx.session.step == 'owner_registor') {
           return this.ownerService.registor_step(ctx)
+        }
+        if(ctx.session.step == "user_registor"){
+          return this.userService.registor_step(ctx)
         }
       }
     } catch (error) {

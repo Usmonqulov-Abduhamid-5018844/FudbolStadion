@@ -1,5 +1,12 @@
 {
   "title": "Bizning botimizda ro'yxatdan o'tayotganingiz uchun rahmat! Kim sifatida ro'yxatdan o'tmoqchisiz — stadion egasimi yoki foydalanuvchimi?",
 
-  "button": ["Stadion egasi", "Foydalanuvchi"]
+  "button": ["Stadion egasi", "Foydalanuvchi"],
+
+  "name": "📛 Iltimos, to'liq ism va familiyangizni kiriting!",
+  "email": "📧 Iltimos, email manzilingizni kiriting!",
+  "email_format": "📧 Email manzilingizni to'g'ri formatda kiriting!\nIltimos, qaytadan kiriting.",
+  "phone": "📞 Iltimos, telefon raqamingizni yuboring",
+  "send_phone": "📱 Telefon raqamni yuborish",
+  "finish": "🎉 Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz!"
 }

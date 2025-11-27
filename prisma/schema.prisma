@@ -45,10 +45,10 @@ model Owners {
 
 model Users {
   id           Int           @id @default(autoincrement())
-  username     String
+  username     String?
   phone        String
   full_name    String
-  chatId       String        @unique
+  chatID       String        @unique
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   tranzaktions Tranzaktion[]

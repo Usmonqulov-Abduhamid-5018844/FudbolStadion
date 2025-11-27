@@ -10,17 +10,18 @@ import * as path from 'path';
 import { UtileModule } from './utils/utils.module';
 import { OwnersModule } from './owners/owners.module';
 import { UsersModule } from './users/users.module';
+import { MailService } from './mail/mail.service';
 
 @Module({
+  providers: [MailService],
   imports: [
     I18nModule.forRoot({
       fallbackLanguage: 'uz',
       loaderOptions: {
-         path: path.join(__dirname, '../src/i18n/'),
+        path: path.join(__dirname, '../src/i18n/'),
         watch: true,
       },
-      resolvers: [AcceptLanguageResolver, new QueryResolver(['lang']),
-    ],
+      resolvers: [AcceptLanguageResolver, new QueryResolver(['lang'])],
     }),
 
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
