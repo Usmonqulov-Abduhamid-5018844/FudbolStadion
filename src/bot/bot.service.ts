@@ -49,24 +49,25 @@ export class BotService {
         );
         return;
       }
-         const welcomeMessage = this.i18n.translate('common.HELLO', {
-      lang: ctx.session.lang || ctx.from?.language_code,
-      args: {
-        name: isCkecked(ctx.from?.first_name)
-          ? ctx.from?.first_name
-          : `${this.i18n.translate('common.firstName', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      },
-    });
-    await ctx.reply(
-      `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
+      const welcomeMessage = this.i18n.translate('common.HELLO', {
         lang: ctx.session.lang || ctx.from?.language_code,
-      } )}`,Markup.keyboard([
-        ['test', 'test'],
-        ['⚙️ Sozlamalar', '❓ Yordam'],
-      ])
-        .resize()
-        .oneTime(),
-    );
+        args: {
+          name: isCkecked(ctx.from?.first_name)
+            ? ctx.from?.first_name
+            : `${this.i18n.translate('common.firstName', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+        },
+      });
+      await ctx.reply(
+        `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
+          lang: ctx.session.lang || ctx.from?.language_code,
+        })}`,
+        Markup.keyboard([
+          ['test', 'test'],
+          ['⚙️ Sozlamalar', '❓ Yordam'],
+        ])
+          .resize()
+          .oneTime(),
+      );
       return;
     }
     const welcomeMessage = this.i18n.translate('common.HELLO', {
@@ -80,9 +81,16 @@ export class BotService {
     await ctx.reply(
       `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
         lang: ctx.session.lang || ctx.from?.language_code,
-      } )}`,Markup.keyboard([
-        ['🏟 Stadionlarim', '📅 Bronlar'],
-        ['⚙️ Sozlamalar', '❓ Yordam'],
+      })}`,
+      Markup.keyboard([
+        [
+          `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+        ],
+        [
+          `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          `${this.i18n.translate('menyu.buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+        ],
       ])
         .resize()
         .oneTime(),

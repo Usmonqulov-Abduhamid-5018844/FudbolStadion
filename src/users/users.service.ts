@@ -3,6 +3,7 @@ import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { Markup } from 'telegraf';
 @Injectable()
 export class UsersService {
   constructor(
@@ -61,12 +62,17 @@ export class UsersService {
             phone: String(ctx.session.user_registor.phone),
             chatID: String(ctx.from!.id),
           };
-          let owner = await this.prisma.users.create({ data: { ...data } });
+          await this.prisma.users.create({ data: { ...data } });
 
           ctx.reply(
             `${this.i18n.translate('registor.finish', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+            Markup.keyboard([
+              ['test', 'test'],
+              ['⚙️ Sozlamalar', '❓ Yordam'],
+            ])
+              .resize()
+              .oneTime(),
           );
-          console.log(owner);
         } catch (error) {
           ctx.reply(
             `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,

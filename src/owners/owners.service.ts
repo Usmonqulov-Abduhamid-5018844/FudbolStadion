@@ -82,8 +82,14 @@ export class OwnersService {
           ctx.reply(
             `${this.i18n.translate('registor.finish', { lang: ctx.session.lang || ctx.from?.language_code })}`,
             Markup.keyboard([
-              ['🏟 Stadionlarim', '📅 Bronlar'],
-              ['⚙️ Sozlamalar', '❓ Yordam'],
+              [
+                `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              ],
+              [
+                `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu.buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              ],
             ])
               .resize()
               .oneTime(),
