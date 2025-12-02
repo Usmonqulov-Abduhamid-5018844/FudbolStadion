@@ -2,5 +2,7 @@
     "stadion": "🔍 Sizga tegishli stadionlar topilmadi!",
     "add":"➕ Yangi stadion qo'shish",
     "back": "⬅️ Orqaga",
-    "select": "🏟️ Stadionni tanlang:"
+    "select": "🏟️ Stadionni tanlang:",
+    "stadion_region": "📍 Iltimos, stadioningiz joylashgan viloyatni tanlang!",
+    "region_items": "📍 Iltimos, tumanni tanlang!"
 }

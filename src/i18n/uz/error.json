@@ -1,4 +1,5 @@
 {
     "error": "Kutilmagan xatolik yuz berdi 😔\nIltimos, birozdan so'ng qayta urinib ko'ring. Agar muammo davom etsa, bizga xabar bering 🙏",
-    "worning": "Iltimos, faqat tugmalardan birini tanlang 👇\n O'zingiz yozib yubormang."
+    "worning": "Iltimos, faqat tugmalardan birini tanlang 👇\n O'zingiz yozib yubormang.",
+    "else": "❗Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\nSiz yozdingiz: {text}\n\n"
 }

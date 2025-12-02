@@ -15,8 +15,10 @@ enum Payments {
 
 enum Booking_status {
   PENDING
-  CONFIRMED
-  CANCELLED
+  APPROVED
+  CANCELED
+  PAID
+  COMPLETED
 }
 
 enum Pay_method {
@@ -74,9 +76,11 @@ model Stadion {
   stadionChedules Stadion_chedule[]
   bookings        Booking[]
 
-  region       Region      @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  region_items Region_item @relation(fields: [region_item_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  owner        Owners      @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  region                  Region                     @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  region_items            Region_item                @relation(fields: [region_item_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  owner                   Owners                     @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  stadionOffDays          stadion_off_days[]
+  stadionSpecialSchedules stadion_special_schedule[]
 }
 
 model Stadion_chedule {
@@ -88,9 +92,28 @@ model Stadion_chedule {
   stadion     Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
+model stadion_off_days {
+  id         Int      @id @default(autoincrement())
+  stadion_id Int
+  date       DateTime
+  title      String
+  createdAt  DateTime @default(now())
+  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model stadion_special_schedule {
+  id         Int      @id @default(autoincrement())
+  stadion_id Int
+  date       DateTime
+  start_time DateTime @db.Time()
+  end_time   DateTime @db.Time()
+  is_active  Boolean  @default(true)
+  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
 model Region {
   id          Int           @id @default(autoincrement())
-  name        String
+  name        String @unique
   regionItems Region_item[]
   stadions    Stadion[]
 }
@@ -101,6 +124,7 @@ model Region_item {
   region_id Int
   region    Region    @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
   stadions  Stadion[]
+  @@unique([name, region_id])
 }
 
 model Owner_card {
