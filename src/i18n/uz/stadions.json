@@ -4,5 +4,8 @@
     "back": "⬅️ Orqaga",
     "select": "🏟️ Stadionni tanlang:",
     "stadion_region": "📍 Iltimos, stadioningiz joylashgan viloyatni tanlang!",
-    "region_items": "📍 Iltimos, tumanni tanlang!"
+    "region_items": "📍 Iltimos, tumanni tanlang!",
+    "name": "🏟 Stadioningizga nom bering!\n Iltimos, stadion nomini qisqa, tushunarli va esda qoladigan qilib kiriting.",
+    "location": "📍 Stadioningiz joylashgan manzilni kiriting!\n Iltimos, stadionning aniq manzil yoki lokatsiyasini yuboring.",
+    "send_location": "📍 Lokatsiya yuborish"
 }

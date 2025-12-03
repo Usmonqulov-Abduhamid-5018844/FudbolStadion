@@ -195,6 +195,18 @@ export class BotUpdate {
   }
   @Action(/region_(.+)/)
   async region_items(@Ctx() ctx: MyContext) {
+    ctx.session.stadion = ctx.session.stadion || {
+      image: null,
+      length: null,
+      lockation: null,
+      name: null,
+      owner_id: null,
+      payments_type: null,
+      price: null,
+      region_id: null,
+      region_item_id: null,
+      width: null,
+    };
     try {
       ctx.answerCbQuery();
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
@@ -221,6 +233,7 @@ export class BotUpdate {
         );
         return;
       }
+      ctx.session.stadion.region_id = regionId;
       const button: InlineKeyboardButton[][] = region_items.map((item) => [
         { text: item.name, callback_data: `regions_item_${item.id}` },
       ]);
@@ -245,6 +258,19 @@ export class BotUpdate {
 
   @Action(/regions_item_(.+)/)
   async onStadions(@Ctx() ctx: MyContext) {
+    ctx.session.stadion = ctx.session.stadion || {
+      image: null,
+      length: null,
+      lockation: null,
+      name: null,
+      owner_id: null,
+      payments_type: null,
+      price: null,
+      region_id: null,
+      region_item_id: null,
+      width: null,
+    };
+    ctx.session.stadion_step = ctx.session.stadion_step || null;
     try {
       ctx.answerCbQuery();
 
@@ -260,12 +286,16 @@ export class BotUpdate {
         );
         return;
       }
-      ctx.reply("Ok")
+      ctx.session.stadion.region_item_id = region_item_id;
+      await ctx.reply(
+        `${this.i18n.translate('stadions.name', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+      );
+      ctx.session.stadion_step = 'stadion';
+      ctx.session.stadion.name = 'N';
     } catch (error) {
       ctx.reply(
         `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
       );
-      console.log(error.message);
     }
   }
 
@@ -278,9 +308,34 @@ export class BotUpdate {
       return this.userService.registor_step(ctx);
     }
   }
+  @On('location')
+  async onLocation(@Ctx() ctx: MyContext) {
+    console.log('Location');
+
+    // if (
+    //   ctx.session.stadion_step === 'stadion' &&
+    //   ctx.session.stadion.lockation === 'L'
+    // ) {
+    //   if (ctx.message && 'location' in ctx.message) {
+    //     console.log(ctx.message.location);
+    //   }
+    // }
+  }
 
   @On('message')
   async Message(@Ctx() ctx: MyContext) {
+    ctx.session.stadion = ctx.session.stadion || {
+      image: null,
+      length: null,
+      lockation: null,
+      name: null,
+      owner_id: null,
+      payments_type: null,
+      price: null,
+      region_id: null,
+      region_item_id: null,
+      width: null,
+    };
     try {
       if (ctx.message && 'text' in ctx.message) {
         if (ctx.session.step == 'registor') {
@@ -377,6 +432,54 @@ export class BotUpdate {
               reply_markup: { inline_keyboard: button },
             },
           );
+        }
+
+        if (ctx.session.stadion_step === 'stadion') {
+          if (ctx.session.stadion.name === 'N') {
+            ctx.session.stadion.name = ctx.message.text;
+
+            await ctx.reply(
+              `${this.i18n.translate('stadions.location', {
+                lang: ctx.session.lang || ctx.from?.language_code,
+              })}`,
+              {
+                reply_markup: {
+                  keyboard: [
+                    [
+                      {
+                        text: `${this.i18n.translate('stadions.send_location', {
+                          lang: ctx.session.lang || ctx.from?.language_code,
+                        })}`,
+                        request_location: true,
+                      },
+                    ],
+                  ],
+                  resize_keyboard: true,
+                  one_time_keyboard: true,
+                },
+              },
+            );
+
+            ctx.session.stadion.lockation = 'L';
+            return;
+          }
+
+          if (ctx.session.stadion.lockation === 'L') {
+            console.log('AAA');
+
+            if (ctx.message && 'location' in ctx.message) {
+              console.log('LLL');
+              console.log(ctx.message.location);
+
+              await ctx.reply(
+                '📌 Lokatsiya qabul qilindi! Endi davom etamiz...',
+              );
+
+              return;
+            }
+            await ctx.reply('📍 Iltimos, lokatsiya yuborish tugmasini bosing!');
+            return;
+          }
         } else {
           ctx.reply(
             `${this.i18n.translate('error.else', { lang: ctx.session.lang || ctx.from?.language_code, args: { text: ctx.message.text } })}`,
