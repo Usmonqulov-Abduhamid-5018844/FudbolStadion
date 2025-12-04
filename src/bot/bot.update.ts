@@ -21,6 +21,23 @@ export class BotUpdate {
 
   @Start()
   onStart(@Ctx() ctx: MyContext) {
+              ctx.session.step = null;
+          ctx.session.stadion_step = null;
+          ctx.session.stadion || {
+            image: null,
+            length: null,
+            lockation: null,
+            name: null,
+            owner_id: null,
+            max_count: null,
+            payments_type: null,
+            latitude: null,
+            longitude: null,
+            price: null,
+            region_id: null,
+            region_item_id: null,
+            width: null,
+          };
     return this.botService.start(ctx);
   }
   @Action(/lang_(.+)/)
@@ -146,12 +163,34 @@ export class BotUpdate {
                 },
               ]);
 
-              await ctx.reply(`${this.i18n.translate("stadions.stadion_region",{lang})}`, {
-                reply_markup: { inline_keyboard: button },
-              });
+              await ctx.reply(
+                `${this.i18n.translate('stadions.stadion_region', { lang })}`,
+                {
+                  reply_markup: { inline_keyboard: button },
+                },
+              );
             } catch (error) {
               ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
             }
+          }
+          break;
+        case '4':
+          {
+            ctx.session.stadion.price = 'price';
+            ctx.session.stadion.step = 7;
+            ctx.reply(`${this.i18n.translate('stadions.price', { lang })}`, {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    },
+                  ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+              },
+            });
           }
           break;
         default: {
@@ -166,6 +205,7 @@ export class BotUpdate {
     ctx.answerCbQuery();
     try {
       const region = await this.prisma.region.findMany();
+
       if (!region.length) {
         throw new Error();
       }
@@ -173,6 +213,7 @@ export class BotUpdate {
       const button: InlineKeyboardButton[][] = region.map((r) => [
         { text: r.name, callback_data: `region_${r.id}` },
       ]);
+
       button.push([
         {
           text: `${this.i18n.translate('stadions.back', { lang })}`,
@@ -187,8 +228,6 @@ export class BotUpdate {
         },
       );
     } catch (error) {
-      console.log("ERROR", error.message);
-      
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
@@ -198,6 +237,7 @@ export class BotUpdate {
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
+      step: 0,
       lockation: null,
       name: null,
       owner_id: null,
@@ -233,6 +273,7 @@ export class BotUpdate {
         return;
       }
       ctx.session.stadion.region_id = regionId;
+      ctx.session.stadion.step = 1;
       const button: InlineKeyboardButton[][] = region_items.map((item) => [
         { text: item.name, callback_data: `regions_item_${item.id}` },
       ]);
@@ -260,6 +301,7 @@ export class BotUpdate {
       lockation: null,
       latitude: null,
       longitude: null,
+      step: 0,
       name: null,
       owner_id: null,
       payments: null,
@@ -278,11 +320,13 @@ export class BotUpdate {
         ctx.callbackQuery.data.split('_')[2],
         10,
       );
+
       if (isNaN(region_item_id)) {
         ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
         return;
       }
       ctx.session.stadion.region_item_id = region_item_id;
+      ctx.session.stadion.step = 2;
       await ctx.reply(`${this.i18n.translate('stadions.name', { lang })}`);
       ctx.session.stadion_step = 'stadion';
       ctx.session.stadion.name = 'N';
@@ -294,17 +338,30 @@ export class BotUpdate {
   @Action(/payments_(.+)/)
   async onPayments(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
-     const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = ctx.session.lang || ctx.from?.language_code;
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    if(ctx.session.stadion_step === "stadion" && ctx.session.stadion.payments === "payments"){
-      ctx.session.stadion.payments_type = ctx.callbackQuery.data.split('_')[1] as Payments;
-      ctx.session.stadion.image = "image"
-      ctx.reply(`${this.i18n.translate("stadions.image",{lang})}`)
-      ctx.session.stadion.payments = null
-      return
-    }
-    else{
-      ctx.reply(`${this.i18n.translate("error.sesion",{lang})}`)
+    if (
+      ctx.session.stadion_step === 'stadion' &&
+      ctx.session.stadion.payments === 'payments'
+    ) {
+      ctx.session.stadion.payments_type = ctx.callbackQuery.data.split(
+        '_',
+      )[1] as Payments;
+      ctx.session.stadion.image = 'image';
+      ctx.session.stadion.step = 9;
+      ctx.reply(`${this.i18n.translate('stadions.image', { lang })}`, {
+        reply_markup: {
+          keyboard: [
+            [{ text: `${this.i18n.translate('stadions.back', { lang })}` }],
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      });
+      ctx.session.stadion.payments = null;
+      return;
+    } else {
+      ctx.reply(`${this.i18n.translate('error.sesion', { lang })}`);
     }
   }
   @On('contact')
@@ -326,8 +383,22 @@ export class BotUpdate {
           ctx.session.stadion.latitude = latitude;
           ctx.session.stadion.longitude = longitude;
           ctx.session.stadion.lockation = null;
+          ctx.session.stadion.step = 4;
           await ctx.reply(
             `${this.i18n.translate('stadions.location_text', { lang })}`,
+            {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    },
+                  ],
+                ],
+                one_time_keyboard: true,
+                resize_keyboard: true,
+              },
+            },
           );
           ctx.session.stadion.max_count = 0;
           return;
@@ -341,20 +412,26 @@ export class BotUpdate {
       ctx.reply(`${this.i18n.translate('error.warning_locate', { lang })}`);
     }
   }
-  @On("photo")
-  async onPhoto(@Ctx() ctx:MyContext){
-    const lang = ctx.session.lang || ctx.from?.language_code
-    if(ctx.session.stadion_step === "stadion" && ctx.session.stadion.image === "image"){
-      if(ctx.message && "photo" in ctx.message && ctx.message.photo.length > 0){
-        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id
-        ctx.session.stadion.image = image
-        ctx.session.stadion_step = null
-        return this.botService.createStadion(ctx)
+  @On('photo')
+  async onPhoto(@Ctx() ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
+    if (
+      ctx.session.stadion_step === 'stadion' &&
+      ctx.session.stadion.image === 'image'
+    ) {
+      if (
+        ctx.message &&
+        'photo' in ctx.message &&
+        ctx.message.photo.length > 0
+      ) {
+        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        ctx.session.stadion.image = image;
+        ctx.session.stadion.step = 10;
+        ctx.session.stadion_step = null;
+        return this.botService.createStadion(ctx);
       }
-      
-    }
-    else{
-      ctx.reply(`${this.i18n.translate("error.warning_image",{lang})}`)
+    } else {
+      ctx.reply(`${this.i18n.translate('error.warning_image', { lang })}`);
     }
   }
 
@@ -378,6 +455,167 @@ export class BotUpdate {
     const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (ctx.message && 'text' in ctx.message) {
+        if (ctx.session.step === 'menyu') {
+          await ctx.reply(
+            `${this.i18n.translate('common.WELCOME', {
+              lang: ctx.session.lang || ctx.from?.language_code,
+            })}`,
+            Markup.keyboard([
+              [
+                `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              ],
+              [
+                `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu_buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              ],
+            ])
+              .resize()
+              .oneTime(),
+          );
+          ctx.session.step = null;
+          ctx.session.stadion_step = null;
+          ctx.session.stadion || {
+            image: null,
+            length: null,
+            lockation: null,
+            name: null,
+            owner_id: null,
+            max_count: null,
+            payments_type: null,
+            latitude: null,
+            longitude: null,
+            price: null,
+            region_id: null,
+            region_item_id: null,
+            width: null,
+          };
+          return
+        }
+        if (
+          ctx.message.text ===
+          `${this.i18n.translate('stadions.back', { lang })}`
+        ) {
+          switch (ctx.session.stadion.step) {
+            case 4: {
+              await ctx.reply(
+                `${this.i18n.translate('stadions.location', {
+                  lang,
+                })}`,
+                {
+                  reply_markup: {
+                    keyboard: [
+                      [
+                        {
+                          text: `${this.i18n.translate(
+                            'stadions.send_location',
+                            {
+                              lang,
+                            },
+                          )}`,
+                          request_location: true,
+                        },
+                      ],
+                    ],
+                    resize_keyboard: true,
+                    one_time_keyboard: true,
+                  },
+                },
+              );
+
+              ctx.session.stadion.lockation = 'L';
+              return;
+            }
+
+            case 5: {
+              await ctx.reply(
+                `${this.i18n.translate('stadions.location_back', { lang })}`,
+              );
+              ctx.session.stadion.max_count = 0;
+              return;
+            }
+
+            case 6: {
+              ctx.session.stadion.length = 'length';
+              ctx.session.stadion.step = 5;
+              ctx.reply(`${this.i18n.translate('stadions.length', { lang })}`, {
+                reply_markup: {
+                  keyboard: [
+                    [
+                      {
+                        text: `${this.i18n.translate('stadions.back', { lang })}`,
+                      },
+                    ],
+                  ],
+                  resize_keyboard: true,
+                  one_time_keyboard: true,
+                },
+              });
+              return;
+            }
+            case 7: {
+              ctx.session.stadion.width = 'width';
+              ctx.session.stadion.step = 6;
+              ctx.reply(`${this.i18n.translate('stadions.width', { lang })}`, {
+                reply_markup: {
+                  keyboard: [
+                    [
+                      {
+                        text: `${this.i18n.translate('stadions.back', { lang })}`,
+                      },
+                    ],
+                  ],
+                  resize_keyboard: true,
+                  one_time_keyboard: true,
+                },
+              });
+              return;
+            }
+            case 9: {
+              ctx.session.stadion.payments = 'payments';
+              ctx.session.stadion.step = 8;
+              ctx.reply(
+                `${this.i18n.translate('stadions.paymenst_type', { lang })}`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.card', { lang })}`,
+                          callback_data: `payments_${Payments.CARD}`,
+                        },
+                      ],
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.cash', { lang })}`,
+                          callback_data: `payments_${Payments.CASH}`,
+                        },
+                      ],
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.both', { lang })}`,
+                          callback_data: `payments_${Payments.GIBRID}`,
+                        },
+                      ],
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.back', { lang })}`,
+                          callback_data: 'back_owner_4',
+                        },
+                      ],
+                    ],
+                  },
+                },
+              );
+              return;
+            }
+
+            default: {
+              break;
+            }
+          }
+        }
+
         if (ctx.session.step == 'registor') {
           if (
             ctx.message.text ===
@@ -439,40 +677,46 @@ export class BotUpdate {
               },
             );
             return;
+          } else {
+            const button: InlineKeyboardButton[][] = [];
+
+            stadion.forEach((s) => {
+              button.push([
+                {
+                  text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
+                  callback_data: `stadion_${s.id}`,
+                },
+              ]);
+            });
+
+            button.push(
+              [
+                {
+                  text: `${this.i18n.translate('stadions.add', { lang })}`,
+                  callback_data: 'add_stadion',
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('stadions.back', { lang })}`,
+                  callback_data: 'back_owner_1',
+                },
+              ],
+            );
+            await ctx.reply(
+              `${this.i18n.translate('stadions.select', { lang })}`,
+              {
+                reply_markup: { inline_keyboard: button },
+              },
+            );
+            return;
           }
-          const button: InlineKeyboardButton[][] = [];
-
-          stadion.forEach((s) => {
-            button.push([
-              { text: `🏟 ${s.name}`, callback_data: `stadion_${s.id}` },
-            ]);
-          });
-
-          button.push(
-            [
-              {
-                text: `${this.i18n.translate('stadions.add', { lang })}`,
-                callback_data: 'add_stadion',
-              },
-            ],
-            [
-              {
-                text: `${this.i18n.translate('stadions.back', { lang })}`,
-                callback_data: 'back_owner_1',
-              },
-            ],
-          );
-          await ctx.reply(
-            `${this.i18n.translate('stadions.select', { lang })}`,
-            {
-              reply_markup: { inline_keyboard: button },
-            },
-          );
         }
 
         if (ctx.session.stadion_step === 'stadion') {
           if (ctx.session.stadion.name === 'N') {
             ctx.session.stadion.name = ctx.message.text;
+            ctx.session.stadion.step = 3;
 
             await ctx.reply(
               `${this.i18n.translate('stadions.location', {
@@ -509,9 +753,20 @@ export class BotUpdate {
             }
             ctx.session.stadion.max_count = count;
             ctx.session.stadion.length = 'length';
-            ctx.reply(
-              `${this.i18n.translate("stadions.length",{lang})}`,
-            );
+            ctx.session.stadion.step = 5;
+            ctx.reply(`${this.i18n.translate('stadions.length', { lang })}`, {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    },
+                  ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+              },
+            });
             return;
           }
           if (ctx.session.stadion.length === 'length') {
@@ -524,9 +779,20 @@ export class BotUpdate {
             }
             ctx.session.stadion.length = length;
             ctx.session.stadion.width = 'width';
-            ctx.reply(
-              `${this.i18n.translate("stadions.width",{lang})}`,
-            );
+            ctx.session.stadion.step = 6;
+            ctx.reply(`${this.i18n.translate('stadions.width', { lang })}`, {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    },
+                  ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+              },
+            });
             return;
           }
           if (ctx.session.stadion.width === 'width') {
@@ -539,9 +805,20 @@ export class BotUpdate {
             }
             ctx.session.stadion.width = width;
             ctx.session.stadion.price = 'price';
-            ctx.reply(
-              `${this.i18n.translate("stadions.price", {lang})}`,
-            );
+            ctx.session.stadion.step = 7;
+            ctx.reply(`${this.i18n.translate('stadions.price', { lang })}`, {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    },
+                  ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+              },
+            });
             return;
           }
           if (ctx.session.stadion.price === 'price') {
@@ -554,34 +831,41 @@ export class BotUpdate {
             }
             ctx.session.stadion.price = price;
             ctx.session.stadion.payments = 'payments';
+            ctx.session.stadion.step = 8;
             ctx.reply(
-              `${this.i18n.translate("stadions.paymenst_type",{lang})}`,
+              `${this.i18n.translate('stadions.paymenst_type', { lang })}`,
               {
                 reply_markup: {
                   inline_keyboard: [
                     [
                       {
-                        text: `${this.i18n.translate("stadions.card",{lang})}`,
+                        text: `${this.i18n.translate('stadions.card', { lang })}`,
                         callback_data: `payments_${Payments.CARD}`,
                       },
                     ],
                     [
                       {
-                        text: `${this.i18n.translate("stadions.cash",{lang})}`,
+                        text: `${this.i18n.translate('stadions.cash', { lang })}`,
                         callback_data: `payments_${Payments.CASH}`,
                       },
                     ],
                     [
                       {
-                        text: `${this.i18n.translate("stadions.both",{lang})}`,
+                        text: `${this.i18n.translate('stadions.both', { lang })}`,
                         callback_data: `payments_${Payments.GIBRID}`,
+                      },
+                    ],
+                    [
+                      {
+                        text: `${this.i18n.translate('stadions.back', { lang })}`,
+                        callback_data: 'back_owner_4',
                       },
                     ],
                   ],
                 },
               },
             );
-            return
+            return;
           }
         } else {
           ctx.reply(

@@ -11,6 +11,7 @@ export interface ISession {
   stadion: Stadion;
 }
 export interface Stadion {
+  step: number
   name: string | null;
   lockation: string | null;
   latitude: number | null;
