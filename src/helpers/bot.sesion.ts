@@ -1,3 +1,4 @@
+import { Payments } from '@prisma/client';
 import { Context } from 'telegraf';
 
 export interface ISession {
@@ -12,14 +13,18 @@ export interface ISession {
 export interface Stadion {
   name: string | null;
   lockation: string | null;
-  price: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  price: string | null | number;
+  max_count: number | null;
   image: string | null;
   region_id: number | null;
   region_item_id: number | null;
   owner_id: number | null;
-  length: string | null;
-  width: string | null;
-  payments_type: string | null;
+  length: string | null | number;
+  width: string | null | number;
+  payments_type: Payments;
+  payments: string | null;
 }
 
 export interface registerOwner {

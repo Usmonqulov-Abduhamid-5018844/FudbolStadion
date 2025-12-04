@@ -7,6 +7,7 @@ import { OwnersService } from 'src/owners/owners.service';
 import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
+import { Payments } from '@prisma/client';
 
 @Update()
 export class BotUpdate {
@@ -34,21 +35,22 @@ export class BotUpdate {
   @Action(/back_owner_(.+)/)
   async backup(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
+    const lang = ctx.session.lang || ctx.from?.language_code;
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const back_type = ctx.callbackQuery.data.split('_')[2];
       switch (back_type) {
         case '1':
           {
             ctx.reply(
-              `${this.i18n.translate('menyu_buttons.menu', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              `${this.i18n.translate('menyu_buttons.menu', { lang })}`,
               Markup.keyboard([
                 [
-                  `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                  `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                  `${this.i18n.translate('menyu_buttons.stadion', { lang })}`,
+                  `${this.i18n.translate('menyu_buttons.bron', { lang })}`,
                 ],
                 [
-                  `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                  `${this.i18n.translate('menyu_buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                  `${this.i18n.translate('menyu_buttons.settings', { lang })}`,
+                  `${this.i18n.translate('menyu_buttons.help', { lang })}`,
                 ],
               ])
                 .resize()
@@ -70,19 +72,19 @@ export class BotUpdate {
               });
               if (!stadion.length) {
                 await ctx.reply(
-                  `${this.i18n.translate('stadions.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                  `${this.i18n.translate('stadions.stadion', { lang })}`,
                   {
                     reply_markup: {
                       inline_keyboard: [
                         [
                           {
-                            text: `${this.i18n.translate('stadions.add', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                            text: `${this.i18n.translate('stadions.add', { lang })}`,
                             callback_data: 'add_stadion',
                           },
                         ],
                         [
                           {
-                            text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                            text: `${this.i18n.translate('stadions.back', { lang })}`,
                             callback_data: 'back_owner_1',
                           },
                         ],
@@ -103,27 +105,25 @@ export class BotUpdate {
               button.push(
                 [
                   {
-                    text: `${this.i18n.translate('stadions.add', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                    text: `${this.i18n.translate('stadions.add', { lang })}`,
                     callback_data: 'add_stadion',
                   },
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                    text: `${this.i18n.translate('stadions.back', { lang })}`,
                     callback_data: 'back_owner_1',
                   },
                 ],
               );
               await ctx.reply(
-                `${this.i18n.translate('stadions.select', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('stadions.select', { lang })}`,
                 {
                   reply_markup: { inline_keyboard: button },
                 },
               );
             } catch (error) {
-              ctx.reply(
-                `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-              );
+              ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
             }
           }
           break;
@@ -141,18 +141,16 @@ export class BotUpdate {
               ]);
               button.push([
                 {
-                  text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                  text: `${this.i18n.translate('stadions.back', { lang })}`,
                   callback_data: 'back_owner_2',
                 },
               ]);
 
-              await ctx.reply('Stadioningiz joylashgan Viloyatni tanlayng!', {
+              await ctx.reply(`${this.i18n.translate("stadions.stadion_region",{lang})}`, {
                 reply_markup: { inline_keyboard: button },
               });
             } catch (error) {
-              ctx.reply(
-                `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-              );
+              ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
             }
           }
           break;
@@ -164,6 +162,7 @@ export class BotUpdate {
   }
   @Action(/add_stadion/)
   async add_stadion(@Ctx() ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
     ctx.answerCbQuery();
     try {
       const region = await this.prisma.region.findMany();
@@ -176,32 +175,36 @@ export class BotUpdate {
       ]);
       button.push([
         {
-          text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          text: `${this.i18n.translate('stadions.back', { lang })}`,
           callback_data: 'back_owner_2',
         },
       ]);
 
       await ctx.reply(
-        `${this.i18n.translate('stadions.stadion_region', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+        `${this.i18n.translate('stadions.stadion_region', { lang })}`,
         {
           reply_markup: { inline_keyboard: button },
         },
       );
     } catch (error) {
-      ctx.reply(
-        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      console.log("ERROR", error.message);
+      
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
   @Action(/region_(.+)/)
   async region_items(@Ctx() ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
       lockation: null,
       name: null,
       owner_id: null,
-      payments_type: null,
+      payments: null,
+      max_count: null,
+      latitude: null,
+      longitude: null,
       price: null,
       region_id: null,
       region_item_id: null,
@@ -216,9 +219,7 @@ export class BotUpdate {
         10,
       );
       if (isNaN(regionId)) {
-        ctx.reply(
-          `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-        );
+        ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
         return;
       }
       const region_items = await this.prisma.region_item.findMany({
@@ -228,9 +229,7 @@ export class BotUpdate {
       });
 
       if (!region_items.length) {
-        ctx.reply(
-          `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-        );
+        ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
         return;
       }
       ctx.session.stadion.region_id = regionId;
@@ -243,28 +242,27 @@ export class BotUpdate {
           callback_data: 'back_owner_3',
         },
       ]);
-      ctx.reply(
-        `${this.i18n.translate('stadions.region_items', { lang: ctx.session.lang || ctx.from?.last_name })}`,
-        {
-          reply_markup: { inline_keyboard: button },
-        },
-      );
+      ctx.reply(`${this.i18n.translate('stadions.region_items', { lang })}`, {
+        reply_markup: { inline_keyboard: button },
+      });
     } catch (error) {
-      ctx.reply(
-        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 
   @Action(/regions_item_(.+)/)
   async onStadions(@Ctx() ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
+      max_count: null,
       lockation: null,
+      latitude: null,
+      longitude: null,
       name: null,
       owner_id: null,
-      payments_type: null,
+      payments: null,
       price: null,
       region_id: null,
       region_item_id: null,
@@ -281,24 +279,34 @@ export class BotUpdate {
         10,
       );
       if (isNaN(region_item_id)) {
-        ctx.reply(
-          `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-        );
+        ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
         return;
       }
       ctx.session.stadion.region_item_id = region_item_id;
-      await ctx.reply(
-        `${this.i18n.translate('stadions.name', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      await ctx.reply(`${this.i18n.translate('stadions.name', { lang })}`);
       ctx.session.stadion_step = 'stadion';
       ctx.session.stadion.name = 'N';
     } catch (error) {
-      ctx.reply(
-        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 
+  @Action(/payments_(.+)/)
+  async onPayments(@Ctx() ctx: MyContext) {
+    ctx.answerCbQuery();
+     const lang = ctx.session.lang || ctx.from?.language_code;
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    if(ctx.session.stadion_step === "stadion" && ctx.session.stadion.payments === "payments"){
+      ctx.session.stadion.payments_type = ctx.callbackQuery.data.split('_')[1] as Payments;
+      ctx.session.stadion.image = "image"
+      ctx.reply(`${this.i18n.translate("stadions.image",{lang})}`)
+      ctx.session.stadion.payments = null
+      return
+    }
+    else{
+      ctx.reply(`${this.i18n.translate("error.sesion",{lang})}`)
+    }
+  }
   @On('contact')
   async onContact(@Ctx() ctx: MyContext) {
     if (ctx.session.step == 'owner_registor') {
@@ -310,16 +318,44 @@ export class BotUpdate {
   }
   @On('location')
   async onLocation(@Ctx() ctx: MyContext) {
-    console.log('Location');
-
-    // if (
-    //   ctx.session.stadion_step === 'stadion' &&
-    //   ctx.session.stadion.lockation === 'L'
-    // ) {
-    //   if (ctx.message && 'location' in ctx.message) {
-    //     console.log(ctx.message.location);
-    //   }
-    // }
+    const lang = ctx.session.lang || ctx.from?.language_code;
+    if (ctx.session.stadion_step === 'stadion') {
+      if (ctx.session.stadion.lockation === 'L') {
+        if (ctx.message && 'location' in ctx.message) {
+          const { latitude, longitude } = ctx.message.location;
+          ctx.session.stadion.latitude = latitude;
+          ctx.session.stadion.longitude = longitude;
+          ctx.session.stadion.lockation = null;
+          await ctx.reply(
+            `${this.i18n.translate('stadions.location_text', { lang })}`,
+          );
+          ctx.session.stadion.max_count = 0;
+          return;
+        }
+        await ctx.reply(
+          `${this.i18n.translate('stadions.location_else', { lang })}`,
+        );
+        return;
+      }
+    } else {
+      ctx.reply(`${this.i18n.translate('error.warning_locate', { lang })}`);
+    }
+  }
+  @On("photo")
+  async onPhoto(@Ctx() ctx:MyContext){
+    const lang = ctx.session.lang || ctx.from?.language_code
+    if(ctx.session.stadion_step === "stadion" && ctx.session.stadion.image === "image"){
+      if(ctx.message && "photo" in ctx.message && ctx.message.photo.length > 0){
+        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id
+        ctx.session.stadion.image = image
+        ctx.session.stadion_step = null
+        return this.botService.createStadion(ctx)
+      }
+      
+    }
+    else{
+      ctx.reply(`${this.i18n.translate("error.warning_image",{lang})}`)
+    }
   }
 
   @On('message')
@@ -330,33 +366,33 @@ export class BotUpdate {
       lockation: null,
       name: null,
       owner_id: null,
+      max_count: null,
       payments_type: null,
+      latitude: null,
+      longitude: null,
       price: null,
       region_id: null,
       region_item_id: null,
       width: null,
     };
+    const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (ctx.message && 'text' in ctx.message) {
         if (ctx.session.step == 'registor') {
           if (
             ctx.message.text ===
-            `💼 ${this.i18n.translate('registor.button.0', {
-              lang: ctx.session.lang || ctx.from?.language_code,
-            })}`
+            `💼 ${this.i18n.translate('registor.button.0', { lang })}`
           ) {
             return this.ownerService.registor(ctx);
           } else if (
             ctx.message.text ===
             `🏃🏼 ${this.i18n.translate('registor.button.1', {
-              lang: ctx.session.lang || ctx.from?.language_code,
+              lang,
             })}`
           ) {
             return this.userService.registor(ctx);
           } else {
-            ctx.reply(
-              `${this.i18n.translate('error.worning', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-            );
+            ctx.reply(`${this.i18n.translate('error.worning', { lang })}`);
           }
           return;
         }
@@ -369,7 +405,7 @@ export class BotUpdate {
 
         if (
           ctx.message.text ==
-          `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`
+          `${this.i18n.translate('menyu_buttons.stadion', { lang })}`
         ) {
           const owner = await this.prisma.owners.findUnique({
             where: { chatID: String(ctx.from?.id) },
@@ -382,19 +418,19 @@ export class BotUpdate {
           });
           if (!stadion.length) {
             await ctx.reply(
-              `${this.i18n.translate('stadions.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              `${this.i18n.translate('stadions.stadion', { lang })}`,
               {
                 reply_markup: {
                   inline_keyboard: [
                     [
                       {
-                        text: `${this.i18n.translate('stadions.add', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                        text: `${this.i18n.translate('stadions.add', { lang })}`,
                         callback_data: 'add_stadion',
                       },
                     ],
                     [
                       {
-                        text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                        text: `${this.i18n.translate('stadions.back', { lang })}`,
                         callback_data: 'back_owner_1',
                       },
                     ],
@@ -415,19 +451,19 @@ export class BotUpdate {
           button.push(
             [
               {
-                text: `${this.i18n.translate('stadions.add', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                text: `${this.i18n.translate('stadions.add', { lang })}`,
                 callback_data: 'add_stadion',
               },
             ],
             [
               {
-                text: `${this.i18n.translate('stadions.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                text: `${this.i18n.translate('stadions.back', { lang })}`,
                 callback_data: 'back_owner_1',
               },
             ],
           );
           await ctx.reply(
-            `${this.i18n.translate('stadions.select', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+            `${this.i18n.translate('stadions.select', { lang })}`,
             {
               reply_markup: { inline_keyboard: button },
             },
@@ -440,7 +476,7 @@ export class BotUpdate {
 
             await ctx.reply(
               `${this.i18n.translate('stadions.location', {
-                lang: ctx.session.lang || ctx.from?.language_code,
+                lang,
               })}`,
               {
                 reply_markup: {
@@ -448,7 +484,7 @@ export class BotUpdate {
                     [
                       {
                         text: `${this.i18n.translate('stadions.send_location', {
-                          lang: ctx.session.lang || ctx.from?.language_code,
+                          lang,
                         })}`,
                         request_location: true,
                       },
@@ -463,33 +499,98 @@ export class BotUpdate {
             ctx.session.stadion.lockation = 'L';
             return;
           }
-
-          if (ctx.session.stadion.lockation === 'L') {
-            console.log('AAA');
-
-            if (ctx.message && 'location' in ctx.message) {
-              console.log('LLL');
-              console.log(ctx.message.location);
-
-              await ctx.reply(
-                '📌 Lokatsiya qabul qilindi! Endi davom etamiz...',
+          if (ctx.session.stadion.max_count === 0) {
+            const count = parseInt(ctx.message.text);
+            if (isNaN(count)) {
+              ctx.reply(
+                `${this.i18n.translate('error.number_error', { lang })}`,
               );
-
               return;
             }
-            await ctx.reply('📍 Iltimos, lokatsiya yuborish tugmasini bosing!');
+            ctx.session.stadion.max_count = count;
+            ctx.session.stadion.length = 'length';
+            ctx.reply(
+              `${this.i18n.translate("stadions.length",{lang})}`,
+            );
             return;
+          }
+          if (ctx.session.stadion.length === 'length') {
+            const length = parseInt(ctx.message.text);
+            if (isNaN(length)) {
+              ctx.reply(
+                `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+            ctx.session.stadion.length = length;
+            ctx.session.stadion.width = 'width';
+            ctx.reply(
+              `${this.i18n.translate("stadions.width",{lang})}`,
+            );
+            return;
+          }
+          if (ctx.session.stadion.width === 'width') {
+            const width = parseInt(ctx.message.text);
+            if (isNaN(width)) {
+              ctx.reply(
+                `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+            ctx.session.stadion.width = width;
+            ctx.session.stadion.price = 'price';
+            ctx.reply(
+              `${this.i18n.translate("stadions.price", {lang})}`,
+            );
+            return;
+          }
+          if (ctx.session.stadion.price === 'price') {
+            const price = parseInt(ctx.message.text);
+            if (isNaN(price)) {
+              ctx.reply(
+                `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+            ctx.session.stadion.price = price;
+            ctx.session.stadion.payments = 'payments';
+            ctx.reply(
+              `${this.i18n.translate("stadions.paymenst_type",{lang})}`,
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: `${this.i18n.translate("stadions.card",{lang})}`,
+                        callback_data: `payments_${Payments.CARD}`,
+                      },
+                    ],
+                    [
+                      {
+                        text: `${this.i18n.translate("stadions.cash",{lang})}`,
+                        callback_data: `payments_${Payments.CASH}`,
+                      },
+                    ],
+                    [
+                      {
+                        text: `${this.i18n.translate("stadions.both",{lang})}`,
+                        callback_data: `payments_${Payments.GIBRID}`,
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+            return
           }
         } else {
           ctx.reply(
-            `${this.i18n.translate('error.else', { lang: ctx.session.lang || ctx.from?.language_code, args: { text: ctx.message.text } })}`,
+            `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
           );
         }
       }
     } catch (error) {
-      ctx.reply(
-        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 }

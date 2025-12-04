@@ -1,5 +1,9 @@
 {
   "error": "An unexpected error occurred 😔\n Please try again later. If the issue persists, feel free to contact us 🙏",
   "worning": "Please select one of the buttons below 👇\n Do not send your own text.",
-  "else": "❗You can only choose using the buttons.\nYou wrote: {text}"
+  "else": "❗You can only choose using the buttons.\nYou wrote: {text}",
+  "sesion": "⏳ Session time has expired. Please enter /start to continue.",
+  "warning_locate": "⚠️ You cannot send your location to the bot at any time!",
+  "number_error": "❌ Please enter numbers only!",
+  "warning_image": "⚠️ You cannot send a photo at any time."
 }

@@ -1,12 +1,21 @@
 {
-    "stadion": "🔍 No stadiums belonging to you were found!",
-    "add":"➕ Add new stadium",
-    "back": "⬅️ Back",
-    "select": "🏟️ Select a stadium:",
-    "stadion_region": "📍 Please choose the region of your stadium!",
-    "region_items": "📍 Please choose the district!",
-    "name":"🏟 Choose a name for your stadium!\n Please enter a short, clear, and memorable name.",
-    "location":"📍 Enter the location of your stadium!\n Please send the exact address or location of your stadium.",
-     "send_location": "📍 Send Location"
-
+  "stadion": "🔍 No stadiums belonging to you were found!",
+  "add": "➕ Add new stadium",
+  "back": "⬅️ Back",
+  "select": "🏟️ Select a stadium:",
+  "stadion_region": "📍 Please choose the region of your stadium!",
+  "region_items": "📍 Please choose the district!",
+  "name": "🏟 Choose a name for your stadium!\n Please enter a short, clear, and memorable name.",
+  "location": "📍 Please enter your stadium's location!\nKindly send the exact address or location of the stadium. If you are on a desktop, please enter your location manually.",
+  "send_location": "📍 Send Location",
+  "location_text": "📌 Location received!\n\nHow many people can play at your stadium at the same time? Please enter numbers only. For example: 6, 10, 15, etc.",
+  "location_else": "📍 Please press the button to send your location!",
+  "length": "📏 Please enter the length of your stadium (numbers only). For example: 25, 30, 40, etc.",
+  "width": "📐 Please enter the width of your stadium (numbers only). For example: 15, 20, 34, etc.",
+  "price": "💰 Please enter your stadium's hourly price (numbers only). For example: 80000, 100000, etc.",
+  "paymenst_type": "💳 How would you like to accept payment for your stadium?",
+  "card": "💳 Card",
+  "cash": "💵 Cash",
+  "both": "💳💵 Both",
+  "image": "🖼 Please send a photo of your stadium!"
 }

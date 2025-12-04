@@ -60,10 +60,12 @@ model Users {
 model Stadion {
   id              Int               @id @default(autoincrement())
   name            String
-  lockation       String
+  latitude        Float
+  longitude       Float
   image           String
   price           Int
   region_id       Int
+  max_count       Int
   region_item_id  Int
   owner_id        Int
   working_status  Boolean           @default(true)
@@ -113,7 +115,7 @@ model stadion_special_schedule {
 
 model Region {
   id          Int           @id @default(autoincrement())
-  name        String @unique
+  name        String        @unique
   regionItems Region_item[]
   stadions    Stadion[]
 }
@@ -124,6 +126,7 @@ model Region_item {
   region_id Int
   region    Region    @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
   stadions  Stadion[]
+
   @@unique([name, region_id])
 }
 

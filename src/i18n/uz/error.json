@@ -1,5 +1,9 @@
 {
     "error": "Kutilmagan xatolik yuz berdi 😔\nIltimos, birozdan so'ng qayta urinib ko'ring. Agar muammo davom etsa, bizga xabar bering 🙏",
     "worning": "Iltimos, faqat tugmalardan birini tanlang 👇\n O'zingiz yozib yubormang.",
-    "else": "❗Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\nSiz yozdingiz: {text}\n\n"
+    "else": "❗Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\nSiz yozdingiz: {text}\n\n",
+    "sesion": "⏳ Sessiya vaqti tugadi. Iltimos, davom etish uchun /start buyrug'ini qayta kiriting.",
+    "warning_locate": "⚠️ Siz botga istalgan vaqtda joylashuvingizni yubora olmaysiz!",
+    "number_error": "❌ Iltimos, faqat raqam kiriting!",
+    "warning_image": "⚠️ Siz hozir istalgan vaqtda rasm yubora olmaysiz."
 }

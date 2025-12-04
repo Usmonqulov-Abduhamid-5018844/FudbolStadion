@@ -1,14 +1,8 @@
-/*
-  Warnings:
-
-  - You are about to drop the `Admin` table. If the table is not empty, all the data it contains will be lost.
-
-*/
 -- CreateEnum
 CREATE TYPE "Payments" AS ENUM ('CASH', 'CARD', 'GIBRID');
 
 -- CreateEnum
-CREATE TYPE "Booking_status" AS ENUM ('PENDING', 'CONFIRMED', 'CANCELLED');
+CREATE TYPE "Booking_status" AS ENUM ('PENDING', 'APPROVED', 'CANCELED', 'PAID', 'COMPLETED');
 
 -- CreateEnum
 CREATE TYPE "Pay_method" AS ENUM ('CASH', 'CARD');
@@ -16,16 +10,14 @@ CREATE TYPE "Pay_method" AS ENUM ('CASH', 'CARD');
 -- CreateEnum
 CREATE TYPE "Tranzaktion_status" AS ENUM ('PENDING', 'PAID', 'FAILED');
 
--- DropTable
-DROP TABLE "Admin";
-
 -- CreateTable
 CREATE TABLE "Owners" (
     "id" SERIAL NOT NULL,
     "full_name" TEXT NOT NULL,
-    "username" TEXT NOT NULL,
+    "username" TEXT,
     "chatID" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
+    "email" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -35,10 +27,10 @@ CREATE TABLE "Owners" (
 -- CreateTable
 CREATE TABLE "Users" (
     "id" SERIAL NOT NULL,
-    "username" TEXT NOT NULL,
+    "username" TEXT,
     "phone" TEXT NOT NULL,
     "full_name" TEXT NOT NULL,
-    "chatId" TEXT NOT NULL,
+    "chatID" TEXT NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -49,10 +41,12 @@ CREATE TABLE "Users" (
 CREATE TABLE "Stadion" (
     "id" SERIAL NOT NULL,
     "name" TEXT NOT NULL,
-    "lockation" TEXT NOT NULL,
+    "latitude" DOUBLE PRECISION NOT NULL,
+    "longitude" DOUBLE PRECISION NOT NULL,
     "image" TEXT NOT NULL,
     "price" INTEGER NOT NULL,
     "region_id" INTEGER NOT NULL,
+    "max_count" INTEGER NOT NULL,
     "region_item_id" INTEGER NOT NULL,
     "owner_id" INTEGER NOT NULL,
     "working_status" BOOLEAN NOT NULL DEFAULT true,
@@ -75,6 +69,29 @@ CREATE TABLE "Stadion_chedule" (
     "end_time" TEXT NOT NULL,
 
     CONSTRAINT "Stadion_chedule_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "stadion_off_days" (
+    "id" SERIAL NOT NULL,
+    "stadion_id" INTEGER NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "title" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "stadion_off_days_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "stadion_special_schedule" (
+    "id" SERIAL NOT NULL,
+    "stadion_id" INTEGER NOT NULL,
+    "date" TIMESTAMP(3) NOT NULL,
+    "start_time" TIME NOT NULL,
+    "end_time" TIME NOT NULL,
+    "is_active" BOOLEAN NOT NULL DEFAULT true,
+
+    CONSTRAINT "stadion_special_schedule_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -140,6 +157,21 @@ CREATE TABLE "Tranzaktion" (
     CONSTRAINT "Tranzaktion_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateIndex
+CREATE UNIQUE INDEX "Owners_chatID_key" ON "Owners"("chatID");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Owners_email_key" ON "Owners"("email");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Users_chatID_key" ON "Users"("chatID");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Region_name_key" ON "Region"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Region_item_name_region_id_key" ON "Region_item"("name", "region_id");
+
 -- AddForeignKey
 ALTER TABLE "Stadion" ADD CONSTRAINT "Stadion_region_id_fkey" FOREIGN KEY ("region_id") REFERENCES "Region"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
@@ -151,6 +183,12 @@ ALTER TABLE "Stadion" ADD CONSTRAINT "Stadion_owner_id_fkey" FOREIGN KEY ("owner
 
 -- AddForeignKey
 ALTER TABLE "Stadion_chedule" ADD CONSTRAINT "Stadion_chedule_stadion_id_fkey" FOREIGN KEY ("stadion_id") REFERENCES "Stadion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "stadion_off_days" ADD CONSTRAINT "stadion_off_days_stadion_id_fkey" FOREIGN KEY ("stadion_id") REFERENCES "Stadion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "stadion_special_schedule" ADD CONSTRAINT "stadion_special_schedule_stadion_id_fkey" FOREIGN KEY ("stadion_id") REFERENCES "Stadion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Region_item" ADD CONSTRAINT "Region_item_region_id_fkey" FOREIGN KEY ("region_id") REFERENCES "Region"("id") ON DELETE CASCADE ON UPDATE CASCADE;
