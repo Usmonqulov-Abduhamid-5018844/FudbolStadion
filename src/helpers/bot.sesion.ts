@@ -11,7 +11,7 @@ export interface ISession {
   stadion: Stadion;
 }
 export interface Stadion {
-  step: number
+  step: number;
   name: string | null;
   lockation: string | null;
   latitude: number | null;
@@ -26,6 +26,8 @@ export interface Stadion {
   width: string | null | number;
   payments_type: Payments;
   payments: string | null;
+  schedule_day: null | number;
+  id: number | null
 }
 
 export interface registerOwner {

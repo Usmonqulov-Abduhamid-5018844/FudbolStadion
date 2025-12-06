@@ -21,23 +21,23 @@ export class BotUpdate {
 
   @Start()
   onStart(@Ctx() ctx: MyContext) {
-              ctx.session.step = null;
-          ctx.session.stadion_step = null;
-          ctx.session.stadion || {
-            image: null,
-            length: null,
-            lockation: null,
-            name: null,
-            owner_id: null,
-            max_count: null,
-            payments_type: null,
-            latitude: null,
-            longitude: null,
-            price: null,
-            region_id: null,
-            region_item_id: null,
-            width: null,
-          };
+    ctx.session.step = null;
+    ctx.session.stadion_step = null;
+    ctx.session.stadion || {
+      image: null,
+      length: null,
+      lockation: null,
+      name: null,
+      owner_id: null,
+      max_count: null,
+      payments_type: null,
+      latitude: null,
+      longitude: null,
+      price: null,
+      region_id: null,
+      region_item_id: null,
+      width: null,
+    };
     return this.botService.start(ctx);
   }
   @Action(/lang_(.+)/)
@@ -364,6 +364,271 @@ export class BotUpdate {
       ctx.reply(`${this.i18n.translate('error.sesion', { lang })}`);
     }
   }
+
+  //Test Actioin
+  @Action(/.+/)
+  async parseAction(@Ctx() ctx: MyContext) {
+    ctx.answerCbQuery();
+    let data: { type: string; id: number; day: number };
+    const lang = ctx.session.lang || ctx.from?.language_code;
+    try {
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      data = JSON.parse(ctx.callbackQuery.data);
+    } catch (error) {
+      ctx.reply(
+        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+      );
+      return;
+    }
+    while (true) {
+      switch (data.type) {
+        case 'stadion':
+          {
+            ctx.editMessageText('Stadionlarim', {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '🗓 Ish vaqti',
+                      callback_data: JSON.stringify({
+                        type: 'schedule',
+                        id: data.id,
+                      }),
+                    },
+                    {
+                      text: '💲 Narx',
+                      callback_data: JSON.stringify({
+                        type: 'price',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: '📍 Manzil',
+                      callback_data: JSON.stringify({
+                        type: 'lokation',
+                        id: data.id,
+                      }),
+                    },
+                    {
+                      text: '🖼 Rasm',
+                      callback_data: JSON.stringify({
+                        type: 'image',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: "❌ Stadionni o'chirish",
+                      callback_data: JSON.stringify({
+                        type: 'delete',
+                        id: data.id,
+                      }),
+                    },
+                    {
+                      text: '🔙 Orqaga',
+                      callback_data: JSON.stringify({
+                        type: 'back_1',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            });
+          }
+          break;
+        case 'back_1':
+          {
+            const owner = await this.prisma.owners.findUnique({
+              where: { chatID: String(ctx.from?.id) },
+            });
+            if (!owner) {
+              throw new Error();
+            }
+            const stadion = await this.prisma.stadion.findMany({
+              where: { owner_id: owner.id },
+            });
+            if (!stadion.length) {
+              await ctx.editMessageText(
+                `${this.i18n.translate('stadions.stadion', { lang })}`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.add', { lang })}`,
+                          callback_data: 'add_stadion',
+                        },
+                      ],
+                      [
+                        {
+                          text: `${this.i18n.translate('stadions.back', { lang })}`,
+                          callback_data: 'back_owner_1',
+                        },
+                      ],
+                    ],
+                  },
+                },
+              );
+              return;
+            } else {
+              const button: InlineKeyboardButton[][] = [];
+
+              stadion.forEach((s) => {
+                button.push([
+                  {
+                    text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
+                    callback_data: JSON.stringify({
+                      type: 'stadion',
+                      id: s.id,
+                    }),
+                  },
+                ]);
+              });
+
+              button.push(
+                [
+                  {
+                    text: `${this.i18n.translate('stadions.add', { lang })}`,
+                    callback_data: 'add_stadion',
+                  },
+                ],
+                [
+                  {
+                    text: `${this.i18n.translate('stadions.back', { lang })}`,
+                    callback_data: 'back_owner_1',
+                  },
+                ],
+              );
+              await ctx.editMessageText(
+                `${this.i18n.translate('stadions.select', { lang })}`,
+                {
+                  reply_markup: { inline_keyboard: button },
+                },
+              );
+            }
+          }
+          break;
+        case 'delete':
+          {
+            ctx.editMessageText("❗️ Ushbu stadionni o'chirmoqchimisiz?", {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: "👍 Ha, o'chir",
+                      callback_data: JSON.stringify({
+                        type: 'delete_yes',
+                        id: data.id,
+                      }),
+                    },
+                    {
+                      text: '🔙 Orqaga',
+                      callback_data: JSON.stringify({
+                        type: 'back_2',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            });
+          }
+          break;
+        case 'delete_yes':
+          {
+            try {
+              await this.prisma.stadion.delete({ where: { id: data.id } });
+              data.type = 'back_1';
+              continue;
+            } catch (error) {
+              console.log(error);
+
+              ctx.editMessageText(
+                `${this.i18n.translate('error.error', { lang })}`,
+              );
+            }
+          }
+          break;
+        case 'back_2': {
+          data.type = 'stadion';
+          continue;
+        }
+        case 'schedule':
+          {
+            await ctx.editMessageText(
+              '🕒 Stadioningiz ish vaqtlari va dam olish kunlarini boshqarish:',
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: '📅 1 haftalik ish jadvalini tuzish',
+                        callback_data: JSON.stringify({
+                          type: 'week_schedule',
+                          id: data.id,
+                        }),
+                      },
+                    ],
+                    [
+                      {
+                        text: '🌴 Dam olish kunlarini kiritish',
+                        callback_data: JSON.stringify({
+                          type: 'day_off',
+                          id: data.id,
+                        }),
+                      },
+                    ],
+                    [
+                      {
+                        text: '⭐ Maxsus kunlar uchun jadval tuzish',
+                        callback_data: JSON.stringify({
+                          type: 'special_table',
+                          id: data.id,
+                        }),
+                      },
+                    ],
+                    [
+                      {
+                        text: '🔙 Orqaga',
+                        callback_data: JSON.stringify({
+                          type: 'back_3',
+                          id: data.id,
+                        }),
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+          }
+          break;
+        case 'back_3': {
+          data.type = 'stadion';
+          continue;
+        }
+        case 'week_schedule': {
+          return this.botService.renderScheduleMenu(ctx, data.id);
+        }
+        case 'add_schedule_day': {
+          ctx.session.stadion.schedule_day = data.day;
+          ctx.reply(
+            `🕒 ${this.i18n.translate(`schedule.week_days.${data.day}`, { lang })} uchun ish boshlanish va tugash vaqtini kiriting (HH:MM-HH:MM):`,
+          );
+          ctx.session.step = 'enter_schedule_time';
+          ctx.session.stadion.id = data.id;
+        }
+        default: {
+          return;
+        }
+      }
+      break;
+    }
+  }
+
   @On('contact')
   async onContact(@Ctx() ctx: MyContext) {
     if (ctx.session.step == 'owner_registor') {
@@ -452,6 +717,7 @@ export class BotUpdate {
       region_item_id: null,
       width: null,
     };
+
     const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (ctx.message && 'text' in ctx.message) {
@@ -489,8 +755,10 @@ export class BotUpdate {
             region_id: null,
             region_item_id: null,
             width: null,
+            id: null,
+            schedule_day: null
           };
-          return
+          return;
         }
         if (
           ctx.message.text ===
@@ -642,7 +910,7 @@ export class BotUpdate {
         }
 
         if (
-          ctx.message.text ==
+          ctx.message.text ===
           `${this.i18n.translate('menyu_buttons.stadion', { lang })}`
         ) {
           const owner = await this.prisma.owners.findUnique({
@@ -684,7 +952,10 @@ export class BotUpdate {
               button.push([
                 {
                   text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
-                  callback_data: `stadion_${s.id}`,
+                  callback_data: JSON.stringify({
+                    type: 'stadion',
+                    id: s.id,
+                  }),
                 },
               ]);
             });
@@ -867,7 +1138,50 @@ export class BotUpdate {
             );
             return;
           }
+        }
+        if (ctx.session.step === 'enter_schedule_time') {
+
+          const timePattern =
+            /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
+          const match = ctx.message.text?.trim().match(timePattern);
+
+          if (!match) {
+             ctx.reply(
+              `❌ Format xato. Iltimos, to'g'ri formatda kiriting: 09:00-18:00`,
+            );
+            return
+            
+          }
+
+          const startTime = `${match[1]}:${match[2]}`;
+          const endTime = `${match[3]}:${match[4]}`;
+
+          if (startTime >= endTime) {
+             ctx.reply(
+              `❌ Xato: boshlanish vaqti tugash vaqtidan keyin bo'lishi mumkin emas.`,
+            );
+            return
+          }
+          try {
+            await this.prisma.stadion_chedule.create({
+              data: {
+                stadion_id: Number(ctx.session.stadion.id),
+                day_of_week: Number(ctx.session.stadion.schedule_day),
+                start_time: startTime,
+                end_time: endTime,
+              },
+            });
+          } catch (error) {
+            console.log(error);
+            return
+          }
+
+          ctx.session.step = null;
+          ctx.session.stadion.schedule_day = null;
+
+          await this.botService.renderScheduleMenu(ctx, Number(ctx.session.stadion.id));
         } else {
+          
           ctx.reply(
             `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
           );

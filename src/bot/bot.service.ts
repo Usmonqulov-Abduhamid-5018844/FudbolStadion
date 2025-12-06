@@ -5,6 +5,7 @@ import { MyContext } from 'src/helpers/bot.sesion';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Context, Markup } from 'telegraf';
+import { InlineKeyboardButton } from 'telegraf/types';
 import { string } from 'yaml/dist/schema/common/string';
 
 @Injectable()
@@ -145,4 +146,48 @@ export class BotService {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
+
+  async  renderScheduleMenu(ctx: MyContext, stadion_id: number) {
+  const lang = ctx.session.lang || ctx.from?.language_code;
+
+  try {
+    const existingSchedules = await this.prisma.stadion_chedule.findMany({
+    where: { stadion_id },
+    select: { day_of_week: true },
+  });
+
+  const existingDays = existingSchedules.map(s => s.day_of_week);
+
+  const allDays = [1,2,3,4,5,6,7];
+  const remainingDays = allDays.filter(day => !existingDays.includes(day));
+
+  let inlineKeyboard: InlineKeyboardButton[][] = [];
+
+  if (remainingDays.length) {
+    inlineKeyboard = remainingDays.map(day => [{
+      text: this.i18n.translate(`schedule.week_days.${day}`, { lang }),
+      callback_data: JSON.stringify({
+        type: 'add_schedule_day',
+        day,
+        id:stadion_id
+      }),
+    }]);
+  }
+
+  if (existingSchedules.length) {
+    inlineKeyboard.push([{
+      text: "📋 Jadvalni ko'rish",
+      callback_data: JSON.stringify({ type: "view_schedule", stadion_id })
+    }]);
+  }
+
+  await ctx.editMessageText("📆 Haftalik ish jadvalini boshqarish:", {
+    reply_markup: { inline_keyboard: inlineKeyboard }
+  });
+  } catch (error) {
+    console.log("ERROR", error);
+    
+  }
+}
+
 }
