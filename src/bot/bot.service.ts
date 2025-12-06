@@ -107,7 +107,9 @@ export class BotService {
   async createStadion(ctx: MyContext) {
     const lang = ctx.session.lang || ctx.from?.language_code;
 
-    await ctx.replyWithPhoto(String(ctx.session.stadion.image), { caption: 'Image' });
+    await ctx.replyWithPhoto(String(ctx.session.stadion.image), {
+      caption: 'Image',
+    });
     ctx.reply(
       `Name: ${ctx.session.stadion.name}\nUzunligi:${ctx.session.stadion.length}\nEni: ${ctx.session.stadion.width}\nNarxi: ${ctx.session.stadion.price}\nJoylashuvi: https://www.google.com/maps?q=${ctx.session.stadion.latitude},${ctx.session.stadion.longitude}\nTo'lov turi: ${ctx.session.stadion.payments_type}\nOdamlar soni: ${ctx.session.stadion.max_count}\n region_id: ${ctx.session.stadion.region_id}\n Tuman_id: ${ctx.session.stadion.region_item_id}`,
     );
@@ -127,12 +129,18 @@ export class BotService {
         width: Number(ctx.session.stadion.width),
         payments_type: ctx.session.stadion.payments_type,
       };
-      const cread = await this.prisma.stadion.create({data})
-      console.log(cread);
-      ctx.reply("🎉 Stadionni muvofiyaqatliy qo'shdingiz",{reply_markup:{keyboard:[[
-        {text: `${this.i18n.translate("stadions.menu",{lang})}`}
-      ]], resize_keyboard: true, one_time_keyboard: true}})
-      ctx.session.step = "menyu"
+      await this.prisma.stadion.create({ data });
+
+      ctx.reply("🎉 Stadionni muvofiyaqatliy qo'shdingiz.", {
+        reply_markup: {
+          keyboard: [
+            [{ text: `${this.i18n.translate('stadions.menu', { lang })}` }],
+          ],
+          resize_keyboard: true,
+          one_time_keyboard: true,
+        },
+      });
+      ctx.session.step = 'menyu';
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
