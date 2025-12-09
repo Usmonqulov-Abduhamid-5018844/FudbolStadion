@@ -369,7 +369,7 @@ export class BotUpdate {
   @Action(/.+/)
   async parseAction(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
-    let data: { type: string; id: number; day: number };
+    let data: { type: string; id: number; day: number, stadion_id: number };
     const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
@@ -421,7 +421,7 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: "❌ Stadionni o'chirish",
+                      text: "🗑 Stadionni o'chirish",
                       callback_data: JSON.stringify({
                         type: 'delete',
                         id: data.id,
@@ -620,6 +620,24 @@ export class BotUpdate {
           );
           ctx.session.step = 'enter_schedule_time';
           ctx.session.stadion.id = data.id;
+          
+        };break
+        case "add_schedule":{
+          
+          return this.botService.renderSchedule_week(ctx, data.id)
+        }
+        case "view_schedule":{
+          return this.botService.viewSchedule(ctx, data.id)
+        }
+        case "delete_schedule_day":{
+          try {
+            await this.prisma.stadion_chedule.delete({where: {id: data.id}})
+            return this.botService.renderScheduleMenu(ctx,data.stadion_id)
+          } catch (error) {
+             ctx.editMessageText(
+                `${this.i18n.translate('error.error', { lang })}`,
+              );
+          }
         }
         default: {
           return;
@@ -756,7 +774,7 @@ export class BotUpdate {
             region_item_id: null,
             width: null,
             id: null,
-            schedule_day: null
+            schedule_day: null,
           };
           return;
         }
@@ -1140,28 +1158,33 @@ export class BotUpdate {
           }
         }
         if (ctx.session.step === 'enter_schedule_time') {
+          const text = ctx.message.text?.trim();
 
           const timePattern =
             /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
-          const match = ctx.message.text?.trim().match(timePattern);
+          const match = text.match(timePattern);
 
           if (!match) {
-             ctx.reply(
-              `❌ Format xato. Iltimos, to'g'ri formatda kiriting: 09:00-18:00`,
-            );
-            return
-            
+             ctx.reply(`❌ Format xato. To'g'ri format: 09:00-18:00`);
+             return
           }
 
-          const startTime = `${match[1]}:${match[2]}`;
-          const endTime = `${match[3]}:${match[4]}`;
 
-          if (startTime >= endTime) {
+          const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
+          const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
+
+          const toMinutes = (t: string) => {
+            const [h, m] = t.split(':').map(Number);
+            return h * 60 + m;
+          };
+
+          if (toMinutes(startTime) >= toMinutes(endTime)) {
              ctx.reply(
-              `❌ Xato: boshlanish vaqti tugash vaqtidan keyin bo'lishi mumkin emas.`,
+              `❌ Xato: boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak.`,
             );
             return
           }
+
           try {
             await this.prisma.stadion_chedule.create({
               data: {
@@ -1171,21 +1194,23 @@ export class BotUpdate {
                 end_time: endTime,
               },
             });
+            await ctx.reply("👌 Malumot muvofiyaqatliy yaratildi.")
           } catch (error) {
-            // console.log(error);
-            return
+            console.log(error, 'ERROR');
+             ctx.reply('❌ Bazaga yozishda xatolik yuz berdi.');
+             return
           }
 
           ctx.session.step = null;
           ctx.session.stadion.schedule_day = null;
-
-          await this.botService.renderScheduleMenu(ctx, Number(ctx.session.stadion.id));
-        } else {
           
-          ctx.reply(
-            `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
+          return this.botService.renderScheduleMenu(
+            ctx,
+            Number(ctx.session.stadion.id),
           );
         }
+
+        ctx.reply(`Noma'lum komanda: ${ctx.message.text}`);
       }
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);

@@ -147,47 +147,206 @@ export class BotService {
     }
   }
 
-  async  renderScheduleMenu(ctx: MyContext, stadion_id: number) {
-  const lang = ctx.session.lang || ctx.from?.language_code;
+  async renderScheduleMenu(ctx: MyContext, stadion_id: number) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
 
-  try {
-    const existingSchedules = await this.prisma.stadion_chedule.findMany({
-    where: { stadion_id },
-    select: { day_of_week: true },
-  });
+    try {
+      const existingSchedules = await this.prisma.stadion_chedule.findMany({
+        where: { stadion_id },
+        select: { day_of_week: true },
+      });
 
-  const existingDays = existingSchedules.map(s => s.day_of_week);
+      const existingDays = existingSchedules.map((s) => s.day_of_week);
 
-  const allDays = [1,2,3,4,5,6,7];
-  const remainingDays = allDays.filter(day => !existingDays.includes(day));
+      const allDays = [1, 2, 3, 4, 5, 6, 7];
+      const remainingDays = allDays.filter(
+        (day) => !existingDays.includes(day),
+      );
 
-  let inlineKeyboard: InlineKeyboardButton[][] = [];
+      let inlineKeyboard: InlineKeyboardButton[][] = [];
 
-  if (remainingDays.length) {
-    inlineKeyboard = remainingDays.map(day => [{
-      text: this.i18n.translate(`schedule.week_days.${day}`, { lang }),
-      callback_data: JSON.stringify({
-        type: 'add_schedule_day',
-        day,
-        id:stadion_id
-      }),
-    }]);
+      if (!remainingDays.length) {
+        inlineKeyboard = [
+          [
+            {
+              text: "📋 Jadvalni ko'rish",
+              callback_data: JSON.stringify({
+                type: 'view_schedule',
+                id: stadion_id,
+              }),
+            },
+          ],
+          [
+            {
+              text: '🔄  Jadvalni yangilash',
+              callback_data: JSON.stringify({
+                type: 'update_schedule',
+                id: stadion_id,
+              }),
+            },
+          ],
+        ];
+        try {
+          await ctx.editMessageText('📆 Haftalik ish jadvalini boshqarish:', {
+            reply_markup: { inline_keyboard: inlineKeyboard },
+          });
+        } catch (e) {
+          if (e.description?.includes("can't be edited")) {
+            ctx.reply('📆 Haftalik ish jadvalini boshqarish:', {
+              reply_markup: { inline_keyboard: inlineKeyboard },
+            });
+          }
+        }
+        return;
+      } else if (existingSchedules.length) {
+        inlineKeyboard = [
+          [
+            {
+              text: "📋 Jadvalni ko'rish",
+              callback_data: JSON.stringify({
+                type: 'view_schedule',
+                id: stadion_id,
+              }),
+            },
+          ],
+          [
+            {
+              text: '➕ Yangi jadval yaratish',
+              callback_data: JSON.stringify({
+                type: 'add_schedule',
+                id: stadion_id,
+              }),
+            },
+          ],
+        ];
+        try {
+          await ctx.editMessageText('📆 Haftalik ish jadvalini boshqarish:', {
+            reply_markup: { inline_keyboard: inlineKeyboard },
+          });
+        } catch (e) {
+          if (e.description?.includes("can't be edited")) {
+            ctx.reply('📆 Haftalik ish jadvalini boshqarish:', {
+              reply_markup: { inline_keyboard: inlineKeyboard },
+            });
+          }
+        }
+        return;
+      } else {
+        inlineKeyboard = remainingDays.map((day) => [
+          {
+            text: this.i18n.translate(`schedule.week_days.${day}`, { lang }),
+            callback_data: JSON.stringify({
+              type: 'add_schedule_day',
+              day,
+              id: stadion_id,
+            }),
+          },
+        ]);
+      }
+
+      try {
+        await ctx.editMessageText('Haftalik ish jadvalini yaratish:', {
+          reply_markup: { inline_keyboard: inlineKeyboard },
+        });
+      } catch (e) {
+        if (e.description?.includes("can't be edited")) {
+          ctx.reply('Haftalik ish jadvalini yaratish:', {
+            reply_markup: { inline_keyboard: inlineKeyboard },
+          });
+        }
+      }
+    } catch (error) {
+      console.log('ERROR', error);
+    }
   }
 
-  if (existingSchedules.length) {
-    inlineKeyboard.push([{
-      text: "📋 Jadvalni ko'rish",
-      callback_data: JSON.stringify({ type: "view_schedule", stadion_id })
-    }]);
+  async renderSchedule_week(ctx: MyContext, stadion_id: number) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
+
+    try {
+      const existingSchedules = await this.prisma.stadion_chedule.findMany({
+        where: { stadion_id },
+        select: { day_of_week: true },
+      });
+
+      const existingDays = existingSchedules.map((s) => s.day_of_week);
+
+      const allDays = [1, 2, 3, 4, 5, 6, 7];
+      const remainingDays = allDays.filter(
+        (day) => !existingDays.includes(day),
+      );
+
+      let inlineKeyboard: InlineKeyboardButton[][] = [];
+
+      if (remainingDays.length) {
+        inlineKeyboard = remainingDays.map((day) => [
+          {
+            text: this.i18n.translate(`schedule.week_days.${day}`, { lang }),
+            callback_data: JSON.stringify({
+              type: 'add_schedule_day',
+              day,
+              id: stadion_id,
+            }),
+          },
+        ]);
+      }
+
+      try {
+        await ctx.editMessageText('Haftalik ish jadvalini yaratish:', {
+          reply_markup: { inline_keyboard: inlineKeyboard },
+        });
+      } catch (e) {
+        if (e.description?.includes("can't be edited")) {
+          ctx.reply('Haftalik ish jadvalini yaratish:', {
+            reply_markup: { inline_keyboard: inlineKeyboard },
+          });
+        }
+      }
+    } catch (error) {
+      console.log('ERROR', error);
+    }
   }
 
-  await ctx.editMessageText("📆 Haftalik ish jadvalini boshqarish:", {
-    reply_markup: { inline_keyboard: inlineKeyboard }
-  });
-  } catch (error) {
-    console.log("ERROR", error);
-    
+  async viewSchedule(ctx: MyContext, stadion_id: number) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
+    try {
+      const schedule = await this.prisma.stadion_chedule.findMany({
+        where: { stadion_id },
+        orderBy: { day_of_week: 'asc' },
+      });
+      if (schedule.length) {
+        const inlineKeyboard: InlineKeyboardButton[][] = schedule.map((sch) => [
+          {
+            text: `${this.i18n.translate(`schedule.week_days.${sch.day_of_week}`, { lang })} ⏰ ${sch.start_time}-${sch.end_time}`,
+            callback_data: JSON.stringify({
+              type: 'noop',
+              id: sch.id,
+              stadion_id: stadion_id,
+            }),
+          },
+          {
+            text: "🗑 O'chirish",
+            callback_data: JSON.stringify({
+              type: 'delete_schedule_day',
+              id: sch.id,
+              stadion_id: stadion_id,
+            }),
+          },
+        ]);
+        try {
+          await ctx.editMessageText('Haftalik ish jadvali', {
+            reply_markup: { inline_keyboard: inlineKeyboard },
+          });
+        } catch (e) {
+          if (e.description?.includes("can't be edited")) {
+            ctx.reply('Haftalik ish jadvali', {
+              reply_markup: { inline_keyboard: inlineKeyboard },
+            });
+          }
+        }
+      }
+    } catch (error) {
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+    }
   }
-}
-
 }
