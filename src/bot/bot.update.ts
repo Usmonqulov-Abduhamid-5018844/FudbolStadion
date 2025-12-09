@@ -369,7 +369,14 @@ export class BotUpdate {
   @Action(/.+/)
   async parseAction(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
-    let data: { type: string; id: number; day: number, stadion_id: number };
+    let data: {
+      type: string;
+      id: number;
+      day: number;
+      schedule_id: number;
+      stadion_off: number;
+      special_id: number;
+    };
     const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
@@ -384,19 +391,19 @@ export class BotUpdate {
       switch (data.type) {
         case 'stadion':
           {
-            ctx.editMessageText('Stadionlarim', {
+            ctx.editMessageText(`${this.i18n.translate('schedule.name')}`, {
               reply_markup: {
                 inline_keyboard: [
                   [
                     {
-                      text: '🗓 Ish vaqti',
+                      text: `${this.i18n.translate('schedule.working', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'schedule',
                         id: data.id,
                       }),
                     },
                     {
-                      text: '💲 Narx',
+                      text: `${this.i18n.translate('schedule.price', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'price',
                         id: data.id,
@@ -405,14 +412,14 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: '📍 Manzil',
+                      text: `${this.i18n.translate('schedule.location', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'lokation',
                         id: data.id,
                       }),
                     },
                     {
-                      text: '🖼 Rasm',
+                      text: `${this.i18n.translate('schedule.image', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'image',
                         id: data.id,
@@ -421,14 +428,14 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: "🗑 Stadionni o'chirish",
+                      text: `${this.i18n.translate('schedule.delete', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'delete',
                         id: data.id,
                       }),
                     },
                     {
-                      text: '🔙 Orqaga',
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'back_1',
                         id: data.id,
@@ -514,28 +521,31 @@ export class BotUpdate {
           break;
         case 'delete':
           {
-            ctx.editMessageText("❗️ Ushbu stadionni o'chirmoqchimisiz?", {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: "👍 Ha, o'chir",
-                      callback_data: JSON.stringify({
-                        type: 'delete_yes',
-                        id: data.id,
-                      }),
-                    },
-                    {
-                      text: '🔙 Orqaga',
-                      callback_data: JSON.stringify({
-                        type: 'back_2',
-                        id: data.id,
-                      }),
-                    },
+            ctx.editMessageText(
+              `${this.i18n.translate('schedule.type.delete', { lang })}`,
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: `${this.i18n.translate('schedule.yes', { lang })}`,
+                        callback_data: JSON.stringify({
+                          type: 'delete_yes',
+                          id: data.id,
+                        }),
+                      },
+                      {
+                        text: `${this.i18n.translate('schedule.back', { lang })}`,
+                        callback_data: JSON.stringify({
+                          type: 'back_2',
+                          id: data.id,
+                        }),
+                      },
+                    ],
                   ],
-                ],
+                },
               },
-            });
+            );
           }
           break;
         case 'delete_yes':
@@ -560,13 +570,13 @@ export class BotUpdate {
         case 'schedule':
           {
             await ctx.editMessageText(
-              '🕒 Stadioningiz ish vaqtlari va dam olish kunlarini boshqarish:',
+              `${this.i18n.translate('schedule.schedule.name', { lang })}`,
               {
                 reply_markup: {
                   inline_keyboard: [
                     [
                       {
-                        text: '📅 1 haftalik ish jadvalini tuzish',
+                        text: `${this.i18n.translate('schedule.schedule.one_week', { lang })}`,
                         callback_data: JSON.stringify({
                           type: 'week_schedule',
                           id: data.id,
@@ -575,7 +585,7 @@ export class BotUpdate {
                     ],
                     [
                       {
-                        text: '🌴 Dam olish kunlarini kiritish',
+                        text: `${this.i18n.translate('schedule.schedule.dey_off_dey', { lang })}`,
                         callback_data: JSON.stringify({
                           type: 'day_off',
                           id: data.id,
@@ -584,7 +594,7 @@ export class BotUpdate {
                     ],
                     [
                       {
-                        text: '⭐ Maxsus kunlar uchun jadval tuzish',
+                        text: `${this.i18n.translate('schedule.schedule.special_deys', { lang })}`,
                         callback_data: JSON.stringify({
                           type: 'special_table',
                           id: data.id,
@@ -593,7 +603,7 @@ export class BotUpdate {
                     ],
                     [
                       {
-                        text: '🔙 Orqaga',
+                        text: `${this.i18n.translate('schedule.back', { lang })}`,
                         callback_data: JSON.stringify({
                           type: 'back_3',
                           id: data.id,
@@ -613,30 +623,113 @@ export class BotUpdate {
         case 'week_schedule': {
           return this.botService.renderScheduleMenu(ctx, data.id);
         }
-        case 'add_schedule_day': {
-          ctx.session.stadion.schedule_day = data.day;
-          ctx.reply(
-            `🕒 ${this.i18n.translate(`schedule.week_days.${data.day}`, { lang })} uchun ish boshlanish va tugash vaqtini kiriting (HH:MM-HH:MM):`,
-          );
-          ctx.session.step = 'enter_schedule_time';
-          ctx.session.stadion.id = data.id;
-          
-        };break
-        case "add_schedule":{
-          
-          return this.botService.renderSchedule_week(ctx, data.id)
+        case 'add_schedule_day':
+          {
+            ctx.session.stadion.schedule_day = data.day;
+            ctx.reply(
+              this.i18n.translate('schedule.working_hours', {
+                lang,
+                args: {
+                  name: this.i18n.translate(`schedule.week_days.${data.day}`, {
+                    lang,
+                  }),
+                },
+              }),
+            );
+
+            ctx.session.step = 'enter_schedule_time';
+            ctx.session.stadion.id = data.id;
+          }
+          break;
+        case 'add_schedule': {
+          return this.botService.renderSchedule_week(ctx, data.id);
         }
-        case "view_schedule":{
-          return this.botService.viewSchedule(ctx, data.id)
+        case 'view_schedule': {
+          return this.botService.viewSchedule(ctx, data.id);
         }
-        case "delete_schedule_day":{
-          try {
-            await this.prisma.stadion_chedule.delete({where: {id: data.id}})
-            return this.botService.renderScheduleMenu(ctx,data.stadion_id)
-          } catch (error) {
-             ctx.editMessageText(
+        case 'delete_schedule_day':
+          {
+            try {
+              await this.prisma.stadion_chedule.delete({
+                where: { id: data.schedule_id },
+              });
+              ctx.session.step = null;
+              ctx.session.stadion.id = null;
+              ctx.session.stadion.schedule_id = null;
+              return this.botService.viewSchedule(ctx, data.id);
+            } catch (error) {
+              ctx.editMessageText(
                 `${this.i18n.translate('error.error', { lang })}`,
               );
+            }
+          }
+          break;
+        case 'edit_schedule':
+          {
+            ctx.session.stadion.schedule_day = data.day;
+            ctx.reply(
+              `${this.i18n.translate(`schedule.update_hours`, {
+                lang,
+                args: {
+                  day: this.i18n.translate(`schedule.week_days.${data.day}`, {
+                    lang,
+                  }),
+                },
+              })}`,
+            );
+            ctx.session.step = 'edit_schedule_time';
+            ctx.session.stadion.id = data.id;
+            ctx.session.stadion.schedule_id = data.schedule_id;
+          }
+          break;
+        case 'day_off': {
+          return this.botService.stadion_off_days(ctx, data.id);
+        }
+        case 'off_stadion':
+          {
+            ctx.session.step = 'add_off_stadion_week';
+            ctx.session.stadion.id = data.id;
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.add_day', { lang })}`,
+            );
+          }
+          break;
+        case 'delete_week':
+          {
+            try {
+              await this.prisma.stadion_off_days.delete({
+                where: { id: data.stadion_off },
+              });
+              return this.botService.stadion_off_days(ctx, data.id);
+            } catch (error) {
+              ctx.editMessageText(
+                `${this.i18n.translate('error.error', { lang })}`,
+              );
+            }
+          }
+          break;
+        case 'special_table': {
+          return this.botService.stadion_special(ctx, data.id);
+        }
+        case 'add_special':
+          {
+            ctx.session.step = 'add_special';
+            ctx.session.stadion.id = data.id;
+            await ctx.reply(
+              'Mahsuz kun uchun sanani kiriting quyidagi formadda (2025-12-12)',
+            );
+          }
+          break;
+        case 'special_delet': {
+          try {
+            await this.prisma.stadion_special_schedule.delete({
+              where: { id: data.special_id },
+            });
+            return this.botService.stadion_special(ctx, data.id);
+          } catch (error) {
+            ctx.editMessageText(
+              `${this.i18n.translate('error.error', { lang })}`,
+            );
           }
         }
         default: {
@@ -1157,7 +1250,11 @@ export class BotUpdate {
             return;
           }
         }
-        if (ctx.session.step === 'enter_schedule_time') {
+        if (
+          ctx.session.step === 'enter_schedule_time' ||
+          ctx.session.step === 'edit_schedule_time' ||
+          ctx.session.step == 'special_time'
+        ) {
           const text = ctx.message.text?.trim();
 
           const timePattern =
@@ -1165,10 +1262,11 @@ export class BotUpdate {
           const match = text.match(timePattern);
 
           if (!match) {
-             ctx.reply(`❌ Format xato. To'g'ri format: 09:00-18:00`);
-             return
+            ctx.reply(
+              `${this.i18n.translate('schedule.schedules.format', { lang })}`,
+            );
+            return;
           }
-
 
           const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
           const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
@@ -1179,38 +1277,134 @@ export class BotUpdate {
           };
 
           if (toMinutes(startTime) >= toMinutes(endTime)) {
-             ctx.reply(
-              `❌ Xato: boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak.`,
+            ctx.reply(
+              `${this.i18n.translate('schedule.schedules.error', { lang })}`,
             );
-            return
+            return;
           }
 
           try {
-            await this.prisma.stadion_chedule.create({
-              data: {
-                stadion_id: Number(ctx.session.stadion.id),
-                day_of_week: Number(ctx.session.stadion.schedule_day),
-                start_time: startTime,
-                end_time: endTime,
-              },
-            });
-            await ctx.reply("👌 Malumot muvofiyaqatliy yaratildi.")
+            if (ctx.session.step === 'special_time') {
+              await this.prisma.stadion_special_schedule.create({
+                data: {
+                  date: new Date(ctx.session.stadion.special),
+                  start_time: startTime,
+                  end_time: endTime,
+                  stadion_id: Number(ctx.session.stadion.id),
+                },
+              });
+              await ctx.reply(
+                `${this.i18n.translate('schedule.off_day.succses', { lang })}`,
+              );
+              ctx.session.step = null;
+              return this.botService.stadion_special(
+                ctx,
+                Number(ctx.session.stadion.id),
+              );
+            }
+            if (ctx.session.step === 'edit_schedule_time') {
+              await this.prisma.stadion_chedule.update({
+                where: { id: Number(ctx.session.stadion.schedule_id) },
+                data: { start_time: startTime, end_time: endTime },
+              });
+
+              await ctx.reply(
+                `${this.i18n.translate('schedule.schedules.updated', { lang })}`,
+              );
+            } else {
+              await this.prisma.stadion_chedule.create({
+                data: {
+                  stadion_id: Number(ctx.session.stadion.id),
+                  day_of_week: Number(ctx.session.stadion.schedule_day),
+                  start_time: startTime,
+                  end_time: endTime,
+                },
+              });
+
+              await ctx.reply(
+                `${this.i18n.translate('schedule.schedules.creat', { lang })}`,
+              );
+            }
           } catch (error) {
-            console.log(error, 'ERROR');
-             ctx.reply('❌ Bazaga yozishda xatolik yuz berdi.');
-             return
+            ctx.reply(
+              `${this.i18n.translate('schedule.schedules.creat_error', { lang })}`,
+            );
+            return;
           }
 
           ctx.session.step = null;
           ctx.session.stadion.schedule_day = null;
-          
+
           return this.botService.renderScheduleMenu(
             ctx,
             Number(ctx.session.stadion.id),
           );
         }
+        if (
+          ctx.session.step === 'add_off_stadion_week' ||
+          ctx.session.step === 'add_special'
+        ) {
+          const dateStr = ctx.message.text.trim();
 
-        ctx.reply(`Noma'lum komanda: ${ctx.message.text}`);
+          const isValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
+          if (!isValidFormat) {
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.format', { lang })}`,
+            );
+            return;
+          }
+
+          const [year, month, day] = dateStr.split('-').map(Number);
+          const date = new Date(dateStr);
+
+          const isRealDate =
+            date.getFullYear() === year &&
+            date.getMonth() + 1 === month &&
+            date.getDate() === day;
+
+          if (!isRealDate) {
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.not_fount_day', { lang })}`,
+            );
+            return;
+          }
+          if (ctx.session.step === 'add_special') {
+            await ctx.reply(
+              'Stadioningiz ish boshlanish va tugash vaqtini kriting quyidagi formadda: (HH:MM-HH:MM)',
+            );
+            ctx.session.stadion.special = date;
+            ctx.session.step = 'special_time';
+            return;
+          }
+
+          try {
+            await this.prisma.stadion_off_days.create({
+              data: {
+                stadion_id: Number(ctx.session.stadion.id),
+                date: date,
+              },
+            });
+
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.succses', { lang })}`,
+            );
+            ctx.session.step = null;
+            return this.botService.stadion_off_days(
+              ctx,
+              Number(ctx.session.stadion.id),
+            );
+          } catch (e) {
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.error', { lang })}`,
+            );
+          }
+
+          return;
+        }
+
+        ctx.reply(
+          `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
+        );
       }
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);

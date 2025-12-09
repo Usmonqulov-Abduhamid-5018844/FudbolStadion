@@ -27,7 +27,9 @@ export interface Stadion {
   payments_type: Payments;
   payments: string | null;
   schedule_day: null | number;
-  id: number | null
+  id: number | null;
+  schedule_id: number | null;
+  special: Date
 }
 
 export interface registerOwner {

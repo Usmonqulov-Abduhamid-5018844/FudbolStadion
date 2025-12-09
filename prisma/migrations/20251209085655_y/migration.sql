@@ -87,9 +87,8 @@ CREATE TABLE "stadion_special_schedule" (
     "id" SERIAL NOT NULL,
     "stadion_id" INTEGER NOT NULL,
     "date" TIMESTAMP(3) NOT NULL,
-    "start_time" TIME NOT NULL,
-    "end_time" TIME NOT NULL,
-    "is_active" BOOLEAN NOT NULL DEFAULT true,
+    "start_time" TEXT NOT NULL,
+    "end_time" TEXT NOT NULL,
 
     CONSTRAINT "stadion_special_schedule_pkey" PRIMARY KEY ("id")
 );

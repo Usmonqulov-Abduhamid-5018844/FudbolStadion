@@ -19,5 +19,7 @@
   "cash": "💵 Naqt",
   "both": "💳💵 Ikkalasi",
   "image": "🖼 Iltimos, stadioningizning rasmni yuboring!",
-  "menu": "🔙 Menyuga qaytish"
+  "menu": "🔙 Menyuga qaytish",
+
+  "stadion_added_success":"🎉 Stadionni muvofiyaqatli qo'shdingiz."
 }

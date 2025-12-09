@@ -19,5 +19,7 @@
   "cash": "💵 Cash",
   "both": "💳💵 Both",
   "image": "🖼 Please send a photo of your stadium!",
-  "menu": "🔙 Back to menu"
+  "menu": "🔙 Back to menu",
+
+  "stadion_added_success":"🎉 Stadium added successfully."
 }

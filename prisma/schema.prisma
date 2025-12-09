@@ -98,7 +98,6 @@ model stadion_off_days {
   id         Int      @id @default(autoincrement())
   stadion_id Int
   date       DateTime
-  title      String
   createdAt  DateTime @default(now())
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
@@ -107,9 +106,8 @@ model stadion_special_schedule {
   id         Int      @id @default(autoincrement())
   stadion_id Int
   date       DateTime
-  start_time DateTime @db.Time()
-  end_time   DateTime @db.Time()
-  is_active  Boolean  @default(true)
+  start_time String
+  end_time   String
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 

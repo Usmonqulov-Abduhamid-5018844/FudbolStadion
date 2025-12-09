@@ -7,5 +7,46 @@
     "5": "Juma",
     "6": "Shanba",
     "7": "Yakshanba"
-  }
+  },
+  "working_hours": "🕒 {name} uchun ish boshlanish va tugash vaqtini kiriting (HH:MM-HH:MM):",
+  "update_hours": "🕒 {day} uchun ish boshlanish va tugash vaqtini qaytadan kiriting (HH:MM-HH:MM):",
+
+  "name": "Stadionlarim",
+  "working": "🗓 Ish vaqti",
+  "price": "💲 Narx",
+  "location": "📍 Manzil",
+  "image": "🖼 Rasm",
+  "delete": "🗑 Stadionni o'chirish",
+  "back": "🔙 Orqaga",
+  "type": {
+    "delet": "❗️ Ushbu stadionni o'chirmoqchimisiz?",
+    "yes": "👍 Ha, o'chir"
+  },
+  "schedule": {
+    "name": "🕒 Stadioningiz ish vaqtlari va dam olish kunlarini boshqarish:",
+    "one_week": "📅 1 haftalik ish jadvalini tuzish",
+    "dey_off_dey": "🌴 Dam olish kunlarini kiritish",
+    "special_deys": "⭐ Maxsus kunlar uchun jadval tuzish"
+  },
+    "schedules":{
+    "format": "❌ Format xato. To'g'ri format: 09:00-18:00",
+    "error": "❌ Xato: boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak.",
+    "updated": "✅ Ma'lumot muvaffaqiyatli yangilandi.",
+    "creat": "👌 Ma'lumot muvaffaqiyatli yaratildi.",
+    "creat_error": "❌ Bazaga yozishda xatolik yuz berdi.",
+    "view_schedule": "📋 Jadvalni ko'rish",
+    "manager_weekli": "📆 Haftalik ish jadvalini boshqarish:",
+    "add_schedule": "➕ Yangi jadval yaratish",
+    "craed_week": "Haftalik ish jadvalini yaratish:",
+    "delet": "🗑 O'chirish",
+    "week": "Haftalik ish jadvali"
+    },
+        "off_day":{
+      "off": "🌴 Dam olish kunlari",
+      "format": "❌ Sana formati xato! To'g'ri format: 2026-02-15 📅",
+      "not_fount_day": "❌ Bunday sana mavjud emas! 📅",
+      "succses": "✅ Ma'lumot muvaffaqiyatli saqlandi! 🎉",
+      "error": "❌ Bazaga yozishda xatolik yuz berdi! ⚠️",
+      "add_day": "📅 Dam olish kuni uchun sanani kiriting, quyidagi formatda: 2025-12-09"
+    }
 }
