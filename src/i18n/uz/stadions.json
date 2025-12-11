@@ -7,7 +7,7 @@
   "region_items": "📍 Iltimos, tumanni tanlang!",
   "name": "🏟 Stadioningizga nom bering!\n Iltimos, stadion nomini qisqa, tushunarli va esda qoladigan qilib kiriting.",
   "location": "📍 Stadioningiz joylashgan manzilni kiriting!\nIltimos, stadionning aniq manzilini yaniy joylashuvini yuboring. Agar qurilmangiz desktop bo'lsa, joylashuvingizni qo'lda kiriting.",
-  "send_location": "📍 Lokatsiya yuborish",
+  "send_location": "📍 Joylashuvni yuborish",
   "location_text": "📌 Lokatsiya qabul qilindi!\n\nStadionda bir vaqtning o'zida nechta odam o'ynashi mumkin?\n🔢 Iltimos, faqat raqam kiriting. Masalan: 6, 10, 15.",
   "location_back": "Stadionda bir vaqtning o'zida nechta odam o'ynashi mumkin?\n🔢 Iltimos, faqat raqam kiriting. Masalan: 6, 10, 15.",
   "location_else": "📍 Iltimos, lokatsiya yuborish tugmasini bosing!",
@@ -21,5 +21,19 @@
   "image": "🖼 Iltimos, stadioningizning rasmni yuboring!",
   "menu": "🔙 Menyuga qaytish",
 
-  "stadion_added_success":"🎉 Stadionni muvofiyaqatli qo'shdingiz."
+  "stadion_added_success":"🎉 Stadionni muvofiyaqatli qo'shdingiz.",
+
+  "not_fount": "❌ Ma'lumot topilmadi!",
+
+  "menyu":{
+    "location": "📌 Joylashuvni yangilash",
+    "update": "📍 Joylashuv muvaffaqiyatli yangilandi!",
+    "update_text": "📍 Joylashuvni o'zgartirish",
+    "price": "💰 Sizning stadioningizning soatlik narxi {price} so'm",
+    "update_price": "💵 Narxni yangilash",
+    "update_image_text": "🖼️ Stadioningiz rasmini yangilang",
+    "update_image": "🔄 Yangilash",
+    "image_update": "✅ Stadioningiz rasmi muvaffaqiyatli yangilandi",
+    "all_data": "📄 Umumiy ma’lumotni ko‘rish"
+  }
 }

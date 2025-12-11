@@ -376,6 +376,7 @@ export class BotUpdate {
       schedule_id: number;
       stadion_off: number;
       special_id: number;
+      back: string;
     };
     const lang = ctx.session.lang || ctx.from?.language_code;
     try {
@@ -389,6 +390,11 @@ export class BotUpdate {
     }
     while (true) {
       switch (data.type) {
+        case 'noob': {
+          await ctx.answerCbQuery();
+          return;
+        }
+
         case 'stadion':
           {
             ctx.editMessageText(`${this.i18n.translate('schedule.name')}`, {
@@ -428,6 +434,15 @@ export class BotUpdate {
                   ],
                   [
                     {
+                      text: `${this.i18n.translate('stadions.menyu.all_data', { lang })}`,
+                      callback_data: JSON.stringify({
+                        type: 'all_data',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                  [
+                    {
                       text: `${this.i18n.translate('schedule.delete', { lang })}`,
                       callback_data: JSON.stringify({
                         type: 'delete',
@@ -457,6 +472,7 @@ export class BotUpdate {
             }
             const stadion = await this.prisma.stadion.findMany({
               where: { owner_id: owner.id },
+              orderBy: { updatedAt: 'desc' },
             });
             if (!stadion.length) {
               await ctx.editMessageText(
@@ -522,13 +538,13 @@ export class BotUpdate {
         case 'delete':
           {
             ctx.editMessageText(
-              `${this.i18n.translate('schedule.type.delete', { lang })}`,
+              `${this.i18n.translate('schedule.type.delet', { lang })}`,
               {
                 reply_markup: {
                   inline_keyboard: [
                     [
                       {
-                        text: `${this.i18n.translate('schedule.yes', { lang })}`,
+                        text: `${this.i18n.translate('schedule.type.yes', { lang })}`,
                         callback_data: JSON.stringify({
                           type: 'delete_yes',
                           id: data.id,
@@ -569,6 +585,9 @@ export class BotUpdate {
         }
         case 'schedule':
           {
+            if (data.back === 'back') {
+              ctx.session.step = null;
+            }
             await ctx.editMessageText(
               `${this.i18n.translate('schedule.schedule.name', { lang })}`,
               {
@@ -694,6 +713,16 @@ export class BotUpdate {
             );
           }
           break;
+        case 'week_edit':
+          {
+            ctx.session.step = 'week_edit';
+            ctx.session.stadion.off = data.stadion_off;
+            ctx.session.stadion.id = data.id;
+            await ctx.reply(
+              `${this.i18n.translate('schedule.off_day.add_day', { lang })}`,
+            );
+          }
+          break;
         case 'delete_week':
           {
             try {
@@ -716,10 +745,21 @@ export class BotUpdate {
             ctx.session.step = 'add_special';
             ctx.session.stadion.id = data.id;
             await ctx.reply(
-              'Mahsuz kun uchun sanani kiriting quyidagi formadda (2025-12-12)',
+              `${this.i18n.translate('schedule.specile', { lang })}`,
             );
           }
           break;
+        case 'special_edit':
+          {
+            ctx.session.step = 'edit_specile';
+            ctx.session.stadion.id = data.id;
+            ctx.session.stadion.schedule_id = data.special_id;
+            await ctx.reply(
+              `${this.i18n.translate('schedule.update', { lang })}`,
+            );
+          }
+          break;
+
         case 'special_delet': {
           try {
             await this.prisma.stadion_special_schedule.delete({
@@ -731,6 +771,51 @@ export class BotUpdate {
               `${this.i18n.translate('error.error', { lang })}`,
             );
           }
+        }
+        case 'lokation': {
+          return this.botService.location(ctx, data.id);
+        }
+        case 'update_location':
+          {
+            ctx.session.step = 'location';
+            ctx.session.stadion.id = data.id;
+            ctx.reply(`${this.i18n.translate('stadions.location', { lang })}`, {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.send_location', { lang })}`,
+                      request_location: true,
+                    },
+                  ],
+                ],
+                one_time_keyboard: true,
+                resize_keyboard: true,
+              },
+            });
+          }
+          break;
+        case 'price': {
+          return this.botService.stadion_price(ctx, data.id);
+        }
+        case 'Update_price':
+          {
+            ctx.session.step = 'price';
+            ctx.session.stadion.id = data.id;
+            ctx.reply(`${this.i18n.translate('stadions.price', { lang })}`);
+          }
+          break;
+        case 'image': {
+          return this.botService.stadion_image(ctx, data.id);
+        }
+        case 'update_image':
+          {
+            ((ctx.session.step = 'image'), (ctx.session.stadion.id = data.id));
+            ctx.reply(`${this.i18n.translate('stadions.image', { lang })}`);
+          }
+          break;
+        case 'all_data': {
+          return this.botService.all_data(ctx, data.id);
         }
         default: {
           return;
@@ -784,6 +869,24 @@ export class BotUpdate {
         );
         return;
       }
+    }
+    if (ctx.session.step === 'location') {
+      if (ctx.message && 'location' in ctx.message) {
+        const { latitude, longitude } = ctx.message.location;
+        try {
+          await this.prisma.stadion.update({
+            where: { id: Number(ctx.session.stadion.id) },
+            data: { latitude, longitude },
+          });
+          await ctx.reply(
+            `${this.i18n.translate('stadions.menyu.update', { lang })}`,
+          );
+          ctx.session.step = null;
+          return this.botService.location(ctx, Number(ctx.session.stadion.id));
+        } catch (error) {
+          ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+        }
+      }
     } else {
       ctx.reply(`${this.i18n.translate('error.warning_locate', { lang })}`);
     }
@@ -805,6 +908,29 @@ export class BotUpdate {
         ctx.session.stadion.step = 10;
         ctx.session.stadion_step = null;
         return this.botService.createStadion(ctx);
+      }
+    }
+    if (ctx.session.step === 'image') {
+      if (
+        ctx.message &&
+        'photo' in ctx.message &&
+        ctx.message.photo.length > 0
+      ) {
+        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+        try {
+          const stadion = await this.prisma.stadion.update({
+            where: { id: Number(ctx.session.stadion.id) },
+            data: { image },
+          });
+          ctx.reply(
+            `${this.i18n.translate('stadions.menyu.image_update', { lang })}`,
+          );
+          ctx.session.step = null;
+          return this.botService.stadion_image(ctx, stadion.id);
+        } catch (error) {
+          ctx.session.step = null;
+          ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+        }
       }
     } else {
       ctx.reply(`${this.i18n.translate('error.warning_image', { lang })}`);
@@ -1032,6 +1158,7 @@ export class BotUpdate {
           }
           const stadion = await this.prisma.stadion.findMany({
             where: { owner_id: owner.id },
+            orderBy: { updatedAt: 'desc' },
           });
           if (!stadion.length) {
             await ctx.reply(
@@ -1126,10 +1253,18 @@ export class BotUpdate {
             return;
           }
           if (ctx.session.stadion.max_count === 0) {
-            const count = parseInt(ctx.message.text);
-            if (isNaN(count)) {
-              ctx.reply(
+            const input = ctx.message.text.trim();
+            const count = Number(input);
+            if (!/^\d+$/.test(input)) {
+              await ctx.reply(
                 `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+
+            if (count <= 0) {
+              await ctx.reply(
+                `${this.i18n.translate('error.positive_number', { lang })}`,
               );
               return;
             }
@@ -1152,10 +1287,18 @@ export class BotUpdate {
             return;
           }
           if (ctx.session.stadion.length === 'length') {
-            const length = parseInt(ctx.message.text);
-            if (isNaN(length)) {
-              ctx.reply(
+            const input = ctx.message.text.trim();
+            const length = Number(input);
+            if (!/^\d+$/.test(input)) {
+              await ctx.reply(
                 `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+
+            if (length <= 0) {
+              await ctx.reply(
+                `${this.i18n.translate('error.positive_number', { lang })}`,
               );
               return;
             }
@@ -1178,10 +1321,18 @@ export class BotUpdate {
             return;
           }
           if (ctx.session.stadion.width === 'width') {
-            const width = parseInt(ctx.message.text);
-            if (isNaN(width)) {
-              ctx.reply(
+            const input = ctx.message.text.trim();
+            const width = Number(input);
+            if (!/^\d+$/.test(input)) {
+              await ctx.reply(
                 `${this.i18n.translate('error.number_error', { lang })}`,
+              );
+              return;
+            }
+
+            if (width <= 0) {
+              await ctx.reply(
+                `${this.i18n.translate('error.positive_number', { lang })}`,
               );
               return;
             }
@@ -1204,13 +1355,30 @@ export class BotUpdate {
             return;
           }
           if (ctx.session.stadion.price === 'price') {
-            const price = parseInt(ctx.message.text);
-            if (isNaN(price)) {
-              ctx.reply(
+            const input = ctx.message.text.trim();
+            const price = Number(input);
+
+            if (!/^\d+$/.test(input)) {
+              await ctx.reply(
                 `${this.i18n.translate('error.number_error', { lang })}`,
               );
               return;
             }
+
+            if (price <= 0) {
+              await ctx.reply(
+                `${this.i18n.translate('error.positive_number', { lang })}`,
+              );
+              return;
+            }
+
+            if (price > 1500000) {
+              await ctx.reply(
+                `${this.i18n.translate('error.too_large', { lang })}`,
+              );
+              return;
+            }
+
             ctx.session.stadion.price = price;
             ctx.session.stadion.payments = 'payments';
             ctx.session.stadion.step = 8;
@@ -1253,7 +1421,8 @@ export class BotUpdate {
         if (
           ctx.session.step === 'enter_schedule_time' ||
           ctx.session.step === 'edit_schedule_time' ||
-          ctx.session.step == 'special_time'
+          ctx.session.step === 'special_time' ||
+          ctx.session.step === 'special_time_edit'
         ) {
           const text = ctx.message.text?.trim();
 
@@ -1302,6 +1471,27 @@ export class BotUpdate {
                 Number(ctx.session.stadion.id),
               );
             }
+            if (ctx.session.step === 'special_time_edit') {
+              await this.prisma.stadion_special_schedule.update({
+                where: {
+                  id: Number(ctx.session.stadion.schedule_id),
+                },
+                data: {
+                  stadion_id: Number(ctx.session.stadion.id),
+                  start_time: startTime,
+                  end_time: endTime,
+                  date: ctx.session.stadion.special,
+                },
+              });
+              await ctx.reply(
+                `${this.i18n.translate('schedule.off_day.update', { lang })}`,
+              );
+              ctx.session.step = null;
+              return this.botService.stadion_special(
+                ctx,
+                Number(ctx.session.stadion.id),
+              );
+            }
             if (ctx.session.step === 'edit_schedule_time') {
               await this.prisma.stadion_chedule.update({
                 where: { id: Number(ctx.session.stadion.schedule_id) },
@@ -1342,7 +1532,9 @@ export class BotUpdate {
         }
         if (
           ctx.session.step === 'add_off_stadion_week' ||
-          ctx.session.step === 'add_special'
+          ctx.session.step === 'add_special' ||
+          ctx.session.step === 'week_edit' ||
+          ctx.session.step === 'edit_specile'
         ) {
           const dateStr = ctx.message.text.trim();
 
@@ -1370,14 +1562,37 @@ export class BotUpdate {
           }
           if (ctx.session.step === 'add_special') {
             await ctx.reply(
-              'Stadioningiz ish boshlanish va tugash vaqtini kriting quyidagi formadda: (HH:MM-HH:MM)',
+              `${this.i18n.translate('schedule.time_specile', { lang })}`,
             );
             ctx.session.stadion.special = date;
             ctx.session.step = 'special_time';
             return;
           }
+          if (ctx.session.step === 'edit_specile') {
+            await ctx.reply(
+              `${this.i18n.translate('schedule.update_time', { lang })}`,
+            );
+            ctx.session.stadion.special = date;
+            ctx.session.step = 'special_time_edit';
+            return;
+          }
 
           try {
+            if (ctx.session.step === 'week_edit') {
+              await this.prisma.stadion_off_days.update({
+                where: { id: Number(ctx.session.stadion.off) },
+                data: { date },
+              });
+              await ctx.reply(
+                `${this.i18n.translate('schedule.off_day.update', { lang })}`,
+              );
+              ctx.session.step = null;
+              return this.botService.stadion_off_days(
+                ctx,
+                Number(ctx.session.stadion.id),
+              );
+            }
+
             await this.prisma.stadion_off_days.create({
               data: {
                 stadion_id: Number(ctx.session.stadion.id),
@@ -1400,6 +1615,40 @@ export class BotUpdate {
           }
 
           return;
+        }
+        if (ctx.session.step === 'price') {
+          const input = ctx.message.text.trim();
+          const price = Number(input);
+
+          if (!/^\d+$/.test(input)) {
+            await ctx.reply(
+              `${this.i18n.translate('error.number_error', { lang })}`,
+            );
+            return;
+          }
+
+          if (price <= 0) {
+            await ctx.reply(
+              `${this.i18n.translate('error.positive_number', { lang })}`,
+            );
+            return;
+          }
+
+          if (price > 1500000) {
+            await ctx.reply(
+              `${this.i18n.translate('error.too_large', { lang })}`,
+            );
+            return;
+          }
+          try {
+            const stadion = await this.prisma.stadion.update({
+              where: { id: Number(ctx.session.stadion.id) },
+              data: { price },
+            });
+            return this.botService.stadion_price(ctx, stadion.id);
+          } catch (error) {
+            ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+          }
         }
 
         ctx.reply(

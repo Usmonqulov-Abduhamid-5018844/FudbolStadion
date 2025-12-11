@@ -30,6 +30,7 @@ export interface Stadion {
   id: number | null;
   schedule_id: number | null;
   special: Date
+  off: number | null
 }
 
 export interface registerOwner {

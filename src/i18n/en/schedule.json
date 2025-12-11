@@ -28,7 +28,7 @@
     "dey_off_dey": "🌴 Add day-off days",
     "special_deys": "⭐ Create schedule for special days"
   },
-  "schedules":{
+  "schedules": {
     "format": "❌ Invalid format. Correct format: 09:00-18:00",
     "error": "❌ Error: start time must be before end time.",
     "updated": "✅ Data successfully updated.",
@@ -40,13 +40,19 @@
     "craed_week": "Create Weekly Work Schedule:",
     "delet": "🗑 Delete",
     "week": "Weekly Schedule"
-    },
-    "off_day":{
-      "off": "🌴 Days Off",
-      "format": "❌ Incorrect date format! Correct format: 2026-02-15 📅",
-      "not_fount_day": "❌ This date does not exist! 📅",
-      "succses": "✅ Data saved successfully! 🎉",
-      "error": "❌ Error writing to the database! ⚠️",
-      "add_day": "📅 Enter the day off date in the following format: 2025-12-09"
-    }
+  },
+  "off_day": {
+    "off": "🌴 Days Off",
+    "format": "❌ Incorrect date format! Correct format: 2026-02-15 📅",
+    "not_fount_day": "❌ This date does not exist! 📅",
+    "succses": "✅ Data saved successfully! 🎉",
+    "update": "✅ Data updated successfully!",
+    "error": "❌ Error writing to the database! ⚠️",
+    "add_day": "📅 Enter the day off date in the following format: 2025-12-09"
+  },
+  "specile": "📅 Enter the date for the special day in the following format: 2025-12-12",
+  "update": "🗓️ Enter the new date for update. Format: 2025-12-12",
+  "time_specile": "⏰ Enter your stadium's opening and closing time in the following format: (HH:MM-HH:MM)",
+  "update_time": "🔄 Enter the new opening and closing time of your stadium. Format: (HH:MM-HH:MM)",
+  "specile_days": "📅 Special Days"
 }

@@ -21,5 +21,18 @@
   "image": "🖼 Please send a photo of your stadium!",
   "menu": "🔙 Back to menu",
 
-  "stadion_added_success":"🎉 Stadium added successfully."
+  "stadion_added_success":"🎉 Stadium added successfully.",
+  "not_fount": "❌ No data found!",
+
+  "menyu": {
+    "location": "📌 Update Location",
+    "update": "📍 Location has been successfully updated!",
+    "update_text": "📍 Change Location",
+    "price": "💰 Your stadium's hourly rate is 200,000 UZS",
+    "update_price": "💵 Update Price",
+    "update_image_text": "🖼️ Update your stadium image",
+    "update_image": "🔄 Update",
+    "image_update": "✅ Your stadium image has been updated successfully",
+    "all_data": "📄 View general information"
+  }
 }

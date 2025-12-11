@@ -5,5 +5,7 @@
   "sesion": "⏳ Session time has expired. Please enter /start to continue.",
   "warning_locate": "⚠️ You cannot send your location to the bot at any time!",
   "number_error": "❌ Please enter numbers only!",
-  "warning_image": "⚠️ You cannot send a photo at any time."
+  "warning_image": "⚠️ You cannot send a photo at any time.",
+  "positive_number": "❌ Please enter a positive number!",
+  "too_large": "❌ The entered value is too large!"
 }
