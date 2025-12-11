@@ -1,0 +1,18 @@
+{
+    "locate": "Location:",
+    "count": "👥 Количество игроков:",
+    "not": "❌ Not set",
+    "size": "📐 Size:",
+    "price": "💰 Price:",
+    "peyments": "💳 Payment type:",
+    "premium": "⭐ Premium:",
+    "status": "⚙️ Working status:",
+    "creted": "🗓 Created at:",
+    "update": "🗓 Last updated:",
+    "view":"📍 View",
+    "not_available": "❌ Not available",
+    "yes": "Yes",
+    "no": "No",
+    "active": "Active",
+    "inactive": "Inactive"
+}

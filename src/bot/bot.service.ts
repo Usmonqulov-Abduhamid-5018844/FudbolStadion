@@ -8,6 +8,7 @@ import { Context, Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { format } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
+import axios from 'axios';
 @Injectable()
 export class BotService {
   private ownerId: number;
@@ -130,7 +131,7 @@ export class BotService {
         width: Number(ctx.session.stadion.width),
         payments_type: ctx.session.stadion.payments_type,
       };
-      await this.prisma.stadion.create({ data });
+      const stadion = await this.prisma.stadion.create({ data });
 
       ctx.reply(
         `${this.i18n.translate('stadions.stadion_added_success', { lang })}`,
@@ -730,7 +731,7 @@ export class BotService {
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    let lang = ctx.session.lang || ctx.from?.language_code;
 
     try {
       const stadion = await this.prisma.stadion.findUnique({
@@ -765,32 +766,70 @@ export class BotService {
         timeZone: 'Asia/Tashkent',
       });
 
-      let locationText = '❌ Mavjud emas';
+      let locationText = `${this.i18n.translate("view.not_available",{lang})}`;
       if (stadion.latitude && stadion.longitude) {
         const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
-        locationText = `<a href="${mapsLink}">📍 Ko'rish</a>`;
+        locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
       }
 
       const message = `
 🏟 <b>${stadion.name}</b>
-Lokatsiya: ${locationText}
-👥 O'yinchilar soni: ${stadion.max_count || '❌ Belgilanmagan'}
-📐 O'lchami: ${stadion.length || '❌'} x ${stadion.width || '❌'}
-💰 Narx: ${stadion.price || '❌'}
-💳 To'lov turi: ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('stadions'))}
-⭐ Premium: ${stadion.is_premium ? 'Ha' : "Yo'q"}
-⚙️ Ishlash holati: ${stadion.working_status ? 'Faol' : 'Nofaol'}
-🗓 Yaratilgan sana: ${createdAt}
-🗓 Oxirgi yangilanish: ${updatedAt}
+${this.i18n.translate("view.locate",{lang})} ${locationText}
+${this.i18n.translate("view.count",{lang})} ${stadion.max_count || `${this.i18n.translate("view.not",{lang})}`}
+${this.i18n.translate("view.size",{lang})} ${stadion.length || '❌'} x ${stadion.width || '❌'}
+${this.i18n.translate("view.price",{lang})} ${stadion.price || '❌'}
+${this.i18n.translate("view.peyments",{lang})} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate("view.premium",{lang})} ${stadion.is_premium ? `${this.i18n.translate("view.yes",{lang})}` : `${this.i18n.translate("view.no",{lang})}`}
+${this,this.i18n.translate("view.status",{lang})} ${stadion.working_status ? `${this.i18n.translate("view.active",{lang})}` : `${this.i18n.translate("view.inactive",{lang})}`}
+${this.i18n.translate("view.creted",{lang})} ${createdAt}
+${this.i18n.translate("view.update",{lang})} ${updatedAt}
 `;
 
       if (stadion.image) {
-        await ctx.replyWithPhoto(
-          { url: stadion.image },
-          { caption: message, parse_mode: 'HTML' },
+        await ctx.replyWithPhoto(stadion.image, {
+          caption: message,
+          parse_mode: 'HTML',
+        });
+        ctx.reply(
+          `${this.i18n.translate('stadions.menyu.all_data', { lang })}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang })}`,
+                    callback_data: JSON.stringify({
+                      type: 'stadion',
+                      id: stadion_id,
+                    }),
+                  },
+                ],
+              ],
+            },
+          },
         );
       } else {
-        await ctx.reply(message, { parse_mode: 'HTML' });
+        await ctx.reply(message, {
+          parse_mode: 'HTML',
+        });
+        ctx.reply(
+          `${this.i18n.translate('stadions.menyu.all_data', { lang })}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang })}`,
+                    callback_data: JSON.stringify({
+                      type: 'stadion',
+                      id: stadion_id,
+                    }),
+                  },
+                ],
+              ],
+            },
+          },
+        );
       }
     } catch (error) {
       console.error(error);
