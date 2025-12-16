@@ -758,6 +758,10 @@ export class BotService {
           `${this.i18n.translate('stadions.not_found', { lang })}`,
         );
       }
+      const formatPrice = (price?: number | string) => {
+        if (!price) return '❌';
+        return new Intl.NumberFormat('uz-UZ').format(Number(price));
+      };
 
       const createdAt = format(stadion.createdAt, 'yyyy-MM-dd HH:mm', {
         timeZone: 'Asia/Tashkent',
@@ -766,7 +770,7 @@ export class BotService {
         timeZone: 'Asia/Tashkent',
       });
 
-      let locationText = `${this.i18n.translate("view.not_available",{lang})}`;
+      let locationText = `${this.i18n.translate('view.not_available', { lang })}`;
       if (stadion.latitude && stadion.longitude) {
         const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
         locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
@@ -774,15 +778,15 @@ export class BotService {
 
       const message = `
 🏟 <b>${stadion.name}</b>
-${this.i18n.translate("view.locate",{lang})} ${locationText}
-${this.i18n.translate("view.count",{lang})} ${stadion.max_count || `${this.i18n.translate("view.not",{lang})}`}
-${this.i18n.translate("view.size",{lang})} ${stadion.length || '❌'} x ${stadion.width || '❌'}
-${this.i18n.translate("view.price",{lang})} ${stadion.price || '❌'}
-${this.i18n.translate("view.peyments",{lang})} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
-${this.i18n.translate("view.premium",{lang})} ${stadion.is_premium ? `${this.i18n.translate("view.yes",{lang})}` : `${this.i18n.translate("view.no",{lang})}`}
-${this,this.i18n.translate("view.status",{lang})} ${stadion.working_status ? `${this.i18n.translate("view.active",{lang})}` : `${this.i18n.translate("view.inactive",{lang})}`}
-${this.i18n.translate("view.creted",{lang})} ${createdAt}
-${this.i18n.translate("view.update",{lang})} ${updatedAt}
+${this.i18n.translate('view.locate', { lang })} ${locationText}
+${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
+${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
+${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
+${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
+${(this, this.i18n.translate('view.status', { lang }))} ${stadion.working_status ? `${this.i18n.translate('view.active', { lang })}` : `${this.i18n.translate('view.inactive', { lang })}`}
+${this.i18n.translate('view.creted', { lang })} ${createdAt}
+${this.i18n.translate('view.update', { lang })} ${updatedAt}
 `;
 
       if (stadion.image) {

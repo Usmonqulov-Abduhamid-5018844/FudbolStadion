@@ -3,7 +3,7 @@
     "count": "👥 O'yinchilar soni:",
     "not" : "❌ Belgilanmagan",
     "size": "📐 O'lchami:",
-    "price": "💰 Price:",
+    "price": "💰 Narxi:",
     "peyments": "💳 To'lov turi:" ,
     "premium": "⭐ Premium:",
     "status" : "⚙️ Ishlash holati:",
@@ -11,7 +11,7 @@
     "update": "🗓 Oxirgi yangilanish:",
     "view": "📍 Ko'rish",
     "not_available": "❌ Mavjud emas",
-    "yes": "Ha",
+    "yes": "Bor",
     "no": "Yo'q",
     "active": "Faol",
     "inactive": "Nofaol"
