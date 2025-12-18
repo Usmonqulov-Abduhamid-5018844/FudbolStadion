@@ -6,7 +6,7 @@ import { isCkecked } from 'src/helpers/isChecked_firstName';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Context, Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { format } from 'date-fns-tz';
+import { format, formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import axios from 'axios';
 @Injectable()
@@ -32,6 +32,7 @@ export class BotService {
   }
 
   async checket(ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
     const owners = await this.prisma.owners.findUnique({
       where: { chatID: String(ctx.from?.id) },
     });
@@ -93,12 +94,12 @@ export class BotService {
       })}`,
       Markup.keyboard([
         [
-          `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-          `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          `${this.i18n.translate('menyu_buttons.stadion', { lang })}`,
+          `${this.i18n.translate('menyu_buttons.bron', { lang })}`,
         ],
         [
-          `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-          `${this.i18n.translate('menyu_buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          `${this.i18n.translate('menyu_buttons.settings', { lang })}`,
+          `${this.i18n.translate('menyu_buttons.help', { lang })}`,
         ],
       ])
         .resize()
@@ -750,6 +751,7 @@ export class BotService {
           working_status: true,
           createdAt: true,
           updatedAt: true,
+          owner_id: true,
         },
       });
 
@@ -758,17 +760,25 @@ export class BotService {
           `${this.i18n.translate('stadions.not_found', { lang })}`,
         );
       }
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: stadion.owner_id },
+      });
       const formatPrice = (price?: number | string) => {
         if (!price) return '❌';
         return new Intl.NumberFormat('uz-UZ').format(Number(price));
       };
 
-      const createdAt = format(stadion.createdAt, 'yyyy-MM-dd HH:mm', {
-        timeZone: 'Asia/Tashkent',
-      });
-      const updatedAt = format(stadion.updatedAt, 'yyyy-MM-dd HH:mm', {
-        timeZone: 'Asia/Tashkent',
-      });
+      const createdAt = formatInTimeZone(
+        stadion.createdAt,
+        'Asia/Tashkent',
+        'yyyy-MM-dd HH:mm',
+      );
+
+      const updatedAt = formatInTimeZone(
+        stadion.updatedAt,
+        'Asia/Tashkent',
+        'yyyy-MM-dd HH:mm',
+      );
 
       let locationText = `${this.i18n.translate('view.not_available', { lang })}`;
       if (stadion.latitude && stadion.longitude) {
@@ -777,12 +787,13 @@ export class BotService {
       }
 
       const message = `
-🏟 <b>${stadion.name}</b>
+🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
 ${(this, this.i18n.translate('view.status', { lang }))} ${stadion.working_status ? `${this.i18n.translate('view.active', { lang })}` : `${this.i18n.translate('view.inactive', { lang })}`}
 ${this.i18n.translate('view.creted', { lang })} ${createdAt}

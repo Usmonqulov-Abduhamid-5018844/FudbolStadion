@@ -1,5 +1,5 @@
 {
-    "locate": "Joylashuv:",
+    "locate": "📍 Joylashuv:",
     "count": "👥 O'yinchilar soni:",
     "not" : "❌ Belgilanmagan",
     "size": "📐 O'lchami:",
@@ -9,10 +9,11 @@
     "status" : "⚙️ Ishlash holati:",
     "creted": "🗓 Yaratilgan sana:",
     "update": "🗓 Oxirgi yangilanish:",
-    "view": "📍 Ko'rish",
+    "view": " Ko'rish",
     "not_available": "❌ Mavjud emas",
     "yes": "Bor",
     "no": "Yo'q",
     "active": "Faol",
-    "inactive": "Nofaol"
+    "inactive": "Nofaol",
+    "phone": "📞 Telefon raqam:"
 }

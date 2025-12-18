@@ -1650,10 +1650,75 @@ export class BotUpdate {
             ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
           }
         }
+        if (
+          ctx.message.text ===
+          `${this.i18n.translate('menyu_buttons.settings', { lang })}`
+        ) {
+          try {
+            const owner = await this.prisma.owners.findUnique({
+              where: { chatID: String(ctx.from?.id) },
+            });
+            if (!owner) {
+              ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+              return;
+            }
 
-        ctx.reply(
-          `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
-        );
+            ctx.reply(`${this.i18n.translate('settings.title', { lang })}`, {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.language')}`,
+                      callback_data: JSON.stringify({
+                        id: owner.id,
+                        type: 'language',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.notification')}`,
+                      callback_data: JSON.stringify({
+                        id: owner.id,
+                        type: 'notification',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.phone')}`,
+                      callback_data: JSON.stringify({
+                        id: owner.id,
+                        type: 'phone',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.account')}`,
+                      callback_data: JSON.stringify({
+                        id: owner.id,
+                        type: 'account',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back')}`,
+                      callback_data: 'back_owner_1',
+                    },
+                  ],
+                ],
+              },
+            });
+          } catch (error) {
+            ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+          }
+        } else {
+          ctx.reply(
+            `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
+          );
+        }
       }
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);

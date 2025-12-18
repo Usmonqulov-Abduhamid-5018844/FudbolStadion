@@ -1,5 +1,5 @@
 {
-    "locate": "Location:",
+    "locate": "📍 Location:",
     "count": "👥 Количество игроков:",
     "not": "❌ Not set",
     "size": "📐 Size:",
@@ -9,10 +9,11 @@
     "status": "⚙️ Working status:",
     "creted": "🗓 Created at:",
     "update": "🗓 Last updated:",
-    "view":"📍 View",
+    "view":" View",
     "not_available": "❌ Not available",
     "yes": "Yes",
     "no": "No",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "phone": "📞 Phone number:"
 }
