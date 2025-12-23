@@ -102,4 +102,40 @@ export class OwnersService {
       }
     }
   }
+  async ownerContakt(ctx: MyContext, owner_id: number) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
+    try {
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: owner_id },
+      });
+      if (owner) {
+        ctx.reply(`${this.i18n.translate("success.your_phone",{lang})} ${owner.phone}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: `${this.i18n.translate("success.edit",{lang})}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'phone_update',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('schedule.back', { lang })}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'phone_back',
+                  }),
+                },
+              ],
+            ],
+          },
+        });
+      }
+    } catch (error) {
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+    }
+  }
 }

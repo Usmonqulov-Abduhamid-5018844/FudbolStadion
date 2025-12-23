@@ -7,5 +7,7 @@
   "number_error": "❌ Please enter numbers only!",
   "warning_image": "⚠️ You cannot send a photo at any time.",
   "positive_number": "❌ Please enter a positive number!",
-  "too_large": "❌ The entered value is too large!"
+  "too_large": "❌ The entered value is too large!",
+  "phone_invalid": "❌ Invalid phone number. Correct format: +998901234567"
+
 }

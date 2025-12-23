@@ -1,0 +1,19 @@
+{
+  "help": {
+    "title": "🆘 Help section",
+    "menu": {
+      "about": "📌 About bot",
+      "start": "▶️ How to start",
+      "booking": "⚽ Stadium booking",
+      "payment": "💳 Payments",
+      "cancel": "❌ Cancel booking",
+      "contact": "📞 Contact admin"
+    },
+    "about": "⚽ With this bot you can find stadiums, view available time slots and book online.",
+    "start": "▶️ To get started, send the /start command and follow the instructions.",
+    "booking": "⚽ Select region → stadium → date and time → confirm the booking.",
+    "payment": "💳 Payments can be made by card, cash, or both.",
+    "cancel": "❌ You can cancel the booking before the start time.",
+    "contact": "📞 If you have any issues or questions, contact the admin."
+  }
+}

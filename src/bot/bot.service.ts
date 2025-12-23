@@ -20,9 +20,10 @@ export class BotService {
   ) {}
 
   async start(ctx: MyContext) {
+    const lang = ctx.session.lang || ctx.from?.language_code;
     ctx.session = ctx.session || {};
     ctx.reply(
-      `${this.i18n.translate('common.START', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+      `${this.i18n.translate('common.START',{lang})}`,
       Markup.inlineKeyboard([
         [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
         [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],

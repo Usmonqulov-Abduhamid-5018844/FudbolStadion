@@ -7,5 +7,6 @@
     "number_error": "❌ Iltimos, faqat raqam kiriting!",
     "warning_image": "⚠️ Siz hozir istalgan vaqtda rasm yubora olmaysiz.",
     "positive_number": "❌ Iltimos, musbat raqam kiriting!",
-    "too_large": "❌ Kiritilgan qiymat juda katta!"
+    "too_large": "❌ Kiritilgan qiymat juda katta!",
+    "phone_invalid": "❌ Telefon raqam noto‘g‘ri. To‘g‘ri format: +998901234567"
 }

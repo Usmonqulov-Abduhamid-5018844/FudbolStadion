@@ -1,6 +1,14 @@
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from './bot.service';
-import { Action, Ctx, Hears, On, Start, Update } from 'nestjs-telegraf';
+import {
+  Action,
+  Command,
+  Ctx,
+  Hears,
+  On,
+  Start,
+  Update,
+} from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { OwnersService } from 'src/owners/owners.service';
@@ -8,6 +16,8 @@ import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
 import { Payments } from '@prisma/client';
+import { helpMenuKeyboard } from 'src/helpers/Inline_keybort';
+import { log } from 'console';
 
 @Update()
 export class BotUpdate {
@@ -40,6 +50,11 @@ export class BotUpdate {
     };
     return this.botService.start(ctx);
   }
+
+  @Command('menu')
+  async onMenyu(@Ctx() ctx: MyContext) {
+    return this.botService.checket(ctx);
+  }
   @Action(/lang_(.+)/)
   async language(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
@@ -47,7 +62,72 @@ export class BotUpdate {
       ctx.session = ctx.session || {};
       ctx.session.lang = (ctx.callbackQuery?.data).split('_')[1];
     }
-    return this.botService.checket(ctx);
+    if (ctx.session.step === 'language') {
+      const lang = ctx.session.lang || ctx.from?.language_code;
+      try {
+        const owner = await this.prisma.owners.findUnique({
+          where: { chatID: String(ctx.from?.id) },
+        });
+        if (!owner) {
+          ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+          return;
+        }
+
+        ctx.reply(`${this.i18n.translate('settings.title', { lang })}`, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: `${this.i18n.translate('settings.language', { lang })}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'language',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('settings.notification', { lang })}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'notification',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('settings.phone', { lang })}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'phone',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('settings.account', { lang })}`,
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'account',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: `${this.i18n.translate('schedule.back', { lang })}`,
+                  callback_data: 'back_owner_1',
+                },
+              ],
+            ],
+          },
+        });
+        return;
+      } catch (error) {
+        ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+      }
+    } else {
+      return this.botService.checket(ctx);
+    }
   }
   @Action(/back_owner_(.+)/)
   async backup(@Ctx() ctx: MyContext) {
@@ -817,6 +897,91 @@ export class BotUpdate {
         case 'all_data': {
           return this.botService.all_data(ctx, data.id);
         }
+        case 'language':
+          {
+            ctx.reply(`${this.i18n.translate('common.START', { lang })}`, {
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
+                  [{ text: '🇷🇺 Русский', callback_data: 'lang_ru' }],
+                  [{ text: '🇬🇧 English', callback_data: 'lang_en' }],
+                ],
+              },
+            });
+            ctx.session.step = 'language';
+          }
+          break;
+        case 'phone': {
+          return this.ownerService.ownerContakt(ctx, data.id);
+        }
+        case 'phone_back':
+          {
+            ctx.reply(`${this.i18n.translate('settings.title', { lang })}`, {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.language', { lang })}`,
+                      callback_data: JSON.stringify({
+                        id: data.id,
+                        type: 'language',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.notification', { lang })}`,
+                      callback_data: JSON.stringify({
+                        id: data.id,
+                        type: 'notification',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.phone', { lang })}`,
+                      callback_data: JSON.stringify({
+                        id: data.id,
+                        type: 'phone',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('settings.account', { lang })}`,
+                      callback_data: JSON.stringify({
+                        id: data.id,
+                        type: 'account',
+                      }),
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
+                      callback_data: 'back_owner_1',
+                    },
+                  ],
+                ],
+              },
+            });
+          }
+          break;
+        case 'phone_update':
+          {
+            if (!ctx.session.owner_registor) {
+              ctx.session.owner_registor = {
+                email: null,
+                full_name: null,
+                id: 0,
+                phone: null,
+                step: null,
+              };
+            }
+            ctx.session.owner_registor.phone = 'update_phone';
+            ctx.session.owner_registor.id = data.id;
+            ctx.reply(`${this.i18n.translate('registor.phone', { lang })}`);
+          }
+          break;
         default: {
           return;
         }
@@ -961,16 +1126,16 @@ export class BotUpdate {
         if (ctx.session.step === 'menyu') {
           await ctx.reply(
             `${this.i18n.translate('common.WELCOME', {
-              lang: ctx.session.lang || ctx.from?.language_code,
+              lang,
             })}`,
             Markup.keyboard([
               [
-                `${this.i18n.translate('menyu_buttons.stadion', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                `${this.i18n.translate('menyu_buttons.bron', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu_buttons.stadion', { lang })}`,
+                `${this.i18n.translate('menyu_buttons.bron', { lang })}`,
               ],
               [
-                `${this.i18n.translate('menyu_buttons.settings', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                `${this.i18n.translate('menyu_buttons.help', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                `${this.i18n.translate('menyu_buttons.settings', { lang })}`,
+                `${this.i18n.translate('menyu_buttons.help', { lang })}`,
               ],
             ])
               .resize()
@@ -1668,7 +1833,7 @@ export class BotUpdate {
                 inline_keyboard: [
                   [
                     {
-                      text: `${this.i18n.translate('settings.language')}`,
+                      text: `${this.i18n.translate('settings.language', { lang })}`,
                       callback_data: JSON.stringify({
                         id: owner.id,
                         type: 'language',
@@ -1677,7 +1842,7 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: `${this.i18n.translate('settings.notification')}`,
+                      text: `${this.i18n.translate('settings.notification', { lang })}`,
                       callback_data: JSON.stringify({
                         id: owner.id,
                         type: 'notification',
@@ -1686,7 +1851,7 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: `${this.i18n.translate('settings.phone')}`,
+                      text: `${this.i18n.translate('settings.phone', { lang })}`,
                       callback_data: JSON.stringify({
                         id: owner.id,
                         type: 'phone',
@@ -1695,7 +1860,7 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: `${this.i18n.translate('settings.account')}`,
+                      text: `${this.i18n.translate('settings.account', { lang })}`,
                       callback_data: JSON.stringify({
                         id: owner.id,
                         type: 'account',
@@ -1704,16 +1869,67 @@ export class BotUpdate {
                   ],
                   [
                     {
-                      text: `${this.i18n.translate('schedule.back')}`,
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
                       callback_data: 'back_owner_1',
                     },
                   ],
                 ],
               },
             });
+            return;
           } catch (error) {
             ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
           }
+        }
+        if (ctx.session.owner_registor.phone === 'update_phone') {
+          try {
+            if (!ctx.session.owner_registor) ctx.session.owner_registor = {
+                email: null,
+                full_name: null,
+                id: 0,
+                phone: null,
+                step: null,
+            };
+
+            const phone = ctx.message.text?.trim();
+
+            const phoneRegex = /^(?:\+998|998)?[0-9]{9}$/;
+
+            if (!phone || !phoneRegex.test(phone)) {
+              ctx.reply(this.i18n.translate('error.phone_invalid', { lang }));
+              return;
+            }
+
+            let normalizedPhone = phone;
+
+            if (phone.length === 9) {
+              normalizedPhone = `+998${phone}`;
+            } else if (phone.startsWith('998')) {
+              normalizedPhone = `+${phone}`;
+            }
+
+            ctx.session.owner_registor.phone = null;
+            const id = Number(ctx.session.owner_registor.id);
+
+            await this.prisma.owners.update({
+              where: { id },
+              data: { phone: normalizedPhone },
+            });
+            ctx.reply(this.i18n.translate('success.phone_updated', { lang }));
+            return this.ownerService.ownerContakt(ctx, id);
+          } catch (error) {
+            ctx.reply(this.i18n.translate('error.error', { lang }));
+          }
+        }
+        if (
+          ctx.message.text ===
+          `${this.i18n.translate('menyu_buttons.help', { lang })}`
+        ) {
+          ctx.reply('Ok');
+          // ctx.reply(
+          //   this.i18n.translate('help.title', { lang }),
+          //   helpMenuKeyboard(this.i18n, String(lang))
+          // );
         } else {
           ctx.reply(
             `${this.i18n.translate('error.else', { lang, args: { text: ctx.message.text } })}`,
@@ -1721,6 +1937,8 @@ export class BotUpdate {
         }
       }
     } catch (error) {
+      console.log('Error', error);
+
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }

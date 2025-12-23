@@ -38,6 +38,7 @@ export interface registerOwner {
   email: string | null;
   phone: string | null;
   step: string | null;
+  id: number | null
 }
 
 export interface registorUser {

@@ -1,0 +1,19 @@
+{
+  "help": {
+    "title": "🆘 Yordam bo‘limi",
+    "menu": {
+      "about": "📌 Bot haqida",
+      "start": "▶️ Qanday boshlash",
+      "booking": "⚽ Stadion bron qilish",
+      "payment": "💳 To‘lovlar",
+      "cancel": "❌ Bronni bekor qilish",
+      "contact": "📞 Admin bilan bog‘lanish"
+    },
+    "about": "⚽ Ushbu bot orqali siz stadionlarni topish, bo‘sh vaqtlarni ko‘rish va onlayn bron qilish mumkin.",
+    "start": "▶️ Boshlash uchun /start buyrug‘ini yuboring va ko‘rsatmalarga amal qiling.",
+    "booking": "⚽ Regionni tanlang → stadionni tanlang → sana va vaqtni belgilang → bronni tasdiqlang.",
+    "payment": "💳 To‘lovlarni karta, naqd yoki ikkala usulda amalga oshirishingiz mumkin.",
+    "cancel": "❌ Bronni boshlanish vaqtidan oldin bekor qilishingiz mumkin.",
+    "contact": "📞 Muammo yoki savollar bo‘lsa, admin bilan bog‘laning."
+  }
+}
