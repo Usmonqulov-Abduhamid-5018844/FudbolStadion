@@ -1,16 +1,59 @@
 import { Markup } from 'telegraf';
 
+const cb = (type: string) => JSON.stringify({ type });
+
 export const helpMenuKeyboard = (i18n: any, lang: string) =>
   Markup.inlineKeyboard([
-    [Markup.button.callback(i18n.translate('help.menu.about', { lang }), 'HELP_ABOUT')],
-    [Markup.button.callback(i18n.translate('help.menu.start', { lang }), 'HELP_START')],
-    [Markup.button.callback(i18n.translate('help.menu.booking', { lang }), 'HELP_BOOKING')],
-    [Markup.button.callback(i18n.translate('help.menu.payment', { lang }), 'HELP_PAYMENT')],
-    [Markup.button.callback(i18n.translate('help.menu.cancel', { lang }), 'HELP_CANCEL')],
-    [Markup.button.callback(i18n.translate('help.menu.contact', { lang }), 'HELP_CONTACT')],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.about', { lang }),
+        cb('HELP_ABOUT'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.start', { lang }),
+        cb('HELP_START'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.booking', { lang }),
+        cb('HELP_BOOKING'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.payment', { lang }),
+        cb('HELP_PAYMENT'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.cancel', { lang }),
+        cb('HELP_CANCEL'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.contact', { lang }),
+        cb('HELP_CONTACT'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('schedule.back', { lang }),
+        'back_owner_1',
+      ),
+    ],
   ]);
 
-  export const backKeyboard = (i18n: any, lang: string) =>
+export const backKeyboard = (i18n: any, lang: string) =>
   Markup.inlineKeyboard([
-    [Markup.button.callback(i18n.translate('schedule.back', { lang }), 'back_owner_1')],
+    [
+      Markup.button.callback(
+        i18n.translate('schedule.back', { lang }),
+        'back_owner_help',
+      ),
+    ],
   ]);
