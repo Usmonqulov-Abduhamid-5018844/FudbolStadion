@@ -45,6 +45,7 @@ export interface registorUser {
   full_name: string | null;
   phone: string | null;
   step: string | null;
+  id: number | null
 }
 
 export interface MyContext extends Context {

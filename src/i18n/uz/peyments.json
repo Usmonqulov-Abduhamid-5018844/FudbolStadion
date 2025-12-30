@@ -1,5 +1,7 @@
 {
   "card": "💳 Karta",
   "cash": "💵 Naqt",
-  "both": "💳💵 Ikkalasi"
+  "both": "💳💵 Ikkalasi",
+  "cards": "➕ Yangi karta qo'shish",
+  "not_fount": "⚠️ Karta ma’lumotlaringiz topilmadi"
 }

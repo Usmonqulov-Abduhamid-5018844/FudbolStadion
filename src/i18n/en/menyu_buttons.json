@@ -1,9 +1,10 @@
 {
-    "user_stadion_booking": "Stadium Booking",
+    "user_stadion_booking": "🏟️ Book a Stadium",
     "stadion": "🏟 My stadiums",
     "bron":"📅 Bookings",
     "settings":"⚙️ Settings",
     "help": "❓ Help",
 
-    "menu": "📋 Menu"
+    "menu": "📋 Menu",
+    "card": "💳 Card Information"
 }

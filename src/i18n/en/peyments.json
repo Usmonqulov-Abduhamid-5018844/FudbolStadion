@@ -1,5 +1,9 @@
 {
   "card": "💳 Card",
   "cash": "💵 Cash",
-  "both": "💳💵 Both"
+  "both": "💳💵 Both",
+  "cards": "➕ Add New Card",
+  "not_fount": "⚠️ Your card information was not found"
 }
+
+

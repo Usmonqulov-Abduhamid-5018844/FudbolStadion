@@ -3,7 +3,7 @@ import { InlineKeyboardMarkup } from '@telegraf/types';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
-import { backKeyboard } from 'src/helpers/Inline_keybort';
+import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 
@@ -108,6 +108,34 @@ export class UtilisService implements OnModuleInit {
 
       if (canReply) {
         await ctx.reply(text, backKeyboard(this.i18n, String(lang)));
+        return;
+      }
+      throw e;
+    }
+  }
+
+  async safeEditHelpMenyuReply(ctx: MyContext, text: string) {
+    const lang = await this.langs(ctx);
+    try {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => {});
+      }
+
+      await ctx.editMessageText(text,  helpMenuKeyboard(this.i18n, String(lang)));
+    } catch (e) {
+      const description = e?.response?.description ?? '';
+
+      const safeErrors = [
+        'message is not modified',
+        'message to edit not found',
+        "message can't be edited",
+        'query is too old',
+      ];
+
+      const canReply = safeErrors.some((err) => description.includes(err));
+
+      if (canReply) {
+        await ctx.reply(text,  helpMenuKeyboard(this.i18n, String(lang)));
         return;
       }
       throw e;
