@@ -2377,7 +2377,10 @@ export class BotUpdate {
           if (await this.utils.isChecket(String(ctx.from?.id), ctx)) {
             return this.ownerService.ownerSettings(ctx, lang);
           }
-          break;
+          else{
+            ctx.reply("settings")
+            return
+          }
 
         case this.i18n.translate('menyu_buttons.help', { lang }):
           if (await this.utils.isChecket(String(ctx.from?.id), ctx)) {
@@ -2387,7 +2390,10 @@ export class BotUpdate {
             );
             return
           }
-          break;
+          else{
+            ctx.reply("Help")
+            return
+          }
       }
 
       if (ctx.session.owner_registor.phone === 'update_phone') {
@@ -2431,6 +2437,10 @@ export class BotUpdate {
         ctx.session.stadion.step
       ) {
         return this.ownerService.handleStadionBack(ctx, lang);
+      }
+      if(ctx.message.text === this.i18n.translate("menyu_buttons.user_stadion_booking",{lang})){
+        ctx.reply("Bron")
+        return
       }
 
        ctx.reply(
