@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { Payments } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Context, Markup } from 'telegraf';
+import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { format, formatInTimeZone } from 'date-fns-tz';
+import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
-import axios from 'axios';
+import { UtilisService } from 'src/utils/utile.service';
+
 @Injectable()
 export class BotService {
   private ownerId: number;
@@ -17,13 +17,14 @@ export class BotService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly utils: UtilisService,
   ) {}
 
   async start(ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     ctx.session = ctx.session || {};
     ctx.reply(
-      `${this.i18n.translate('common.START',{lang})}`,
+      `${this.i18n.translate('common.START', { lang })}`,
       Markup.inlineKeyboard([
         [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
         [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
@@ -33,7 +34,7 @@ export class BotService {
   }
 
   async checket(ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     const owners = await this.prisma.owners.findUnique({
       where: { chatID: String(ctx.from?.id) },
     });
@@ -44,14 +45,10 @@ export class BotService {
       if (!users) {
         ctx.session.step = 'registor';
         ctx.reply(
-          `${this.i18n.translate('registor.title', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          `${this.i18n.translate('registor.title', { lang })}`,
           Markup.keyboard([
-            [
-              `💼 ${this.i18n.translate('registor.button.0', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-            ],
-            [
-              `🏃🏼 ${this.i18n.translate('registor.button.1', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-            ],
+            [`💼 ${this.i18n.translate('registor.button.0', { lang })}`],
+            [`🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`],
           ])
             .oneTime()
             .resize(),
@@ -60,20 +57,25 @@ export class BotService {
       }
       this.userId = users.id;
       const welcomeMessage = this.i18n.translate('common.HELLO', {
-        lang: ctx.session.lang || ctx.from?.language_code,
+        lang,
         args: {
           name: isCkecked(ctx.from?.first_name)
             ? ctx.from?.first_name
-            : `${this.i18n.translate('common.firstName', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+            : `${this.i18n.translate('common.firstName', { lang })}`,
         },
       });
       await ctx.reply(
         `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
-          lang: ctx.session.lang || ctx.from?.language_code,
+          lang,
         })}`,
         Markup.keyboard([
-          ['test', 'test'],
-          ['⚙️ Sozlamalar', '❓ Yordam'],
+          [
+            `${this.i18n.translate('menyu_buttons.user_stadion_booking', { lang })}`,
+          ],
+          [
+            `${this.i18n.translate('menyu_buttons.settings', { lang })}`,
+            `${this.i18n.translate('menyu_buttons.help', { lang })}`,
+          ],
         ])
           .resize()
           .oneTime(),
@@ -82,16 +84,16 @@ export class BotService {
     }
     this.ownerId = owners.id;
     const welcomeMessage = this.i18n.translate('common.HELLO', {
-      lang: ctx.session.lang || ctx.from?.language_code,
+      lang,
       args: {
         name: isCkecked(ctx.from?.first_name)
           ? ctx.from?.first_name
-          : `${this.i18n.translate('common.firstName', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          : `${this.i18n.translate('common.firstName', { lang })}`,
       },
     });
     await ctx.reply(
       `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
-        lang: ctx.session.lang || ctx.from?.language_code,
+        lang,
       })}`,
       Markup.keyboard([
         [
@@ -109,14 +111,7 @@ export class BotService {
   }
 
   async createStadion(ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
-
-    await ctx.replyWithPhoto(String(ctx.session.stadion.image), {
-      caption: 'Image',
-    });
-    ctx.reply(
-      `Name: ${ctx.session.stadion.name}\nUzunligi:${ctx.session.stadion.length}\nEni: ${ctx.session.stadion.width}\nNarxi: ${ctx.session.stadion.price}\nJoylashuvi: https://www.google.com/maps?q=${ctx.session.stadion.latitude},${ctx.session.stadion.longitude}\nTo'lov turi: ${ctx.session.stadion.payments_type}\nOdamlar soni: ${ctx.session.stadion.max_count}\n region_id: ${ctx.session.stadion.region_id}\n Tuman_id: ${ctx.session.stadion.region_item_id}`,
-    );
+    const lang = await this.utils.langs(ctx);
 
     try {
       const data = {
@@ -148,13 +143,15 @@ export class BotService {
         },
       );
       ctx.session.step = 'menyu';
+
+      return this.all_data(ctx, stadion.id);
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 
   async renderScheduleMenu(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
 
     try {
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
@@ -201,7 +198,7 @@ export class BotService {
             },
           );
         } catch (e) {
-          if (e.description?.includes("can't be edited")) {
+          if (e.description?.includes("can't be edited") ||  e?.response?.description?.includes('message is not modified')) {
             ctx.reply(
               `${this.i18n.translate('schedule.schedules.manager_weekli', { lang })}`,
               {
@@ -250,7 +247,10 @@ export class BotService {
             },
           );
         } catch (e) {
-          if (e.description?.includes("can't be edited")) {
+          if (
+            e.description?.includes("can't be edited") ||
+            e?.response?.description?.includes('message is not modified')
+          ) {
             ctx.reply(
               `${this.i18n.translate('schedule.schedules.manager_weekli', { lang })}`,
               {
@@ -287,7 +287,7 @@ export class BotService {
           },
         );
       } catch (e) {
-        if (e.description?.includes("can't be edited")) {
+        if (e.description?.includes("can't be edited") ||  e?.response?.description?.includes('message is not modified')) {
           ctx.reply(
             `${this.i18n.translate('schedule.schedules.craed_week', { lang })}`,
             {
@@ -297,12 +297,12 @@ export class BotService {
         }
       }
     } catch (error) {
-      console.log('ERROR', error);
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 
   async renderSchedule_week(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
 
     try {
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
@@ -349,7 +349,7 @@ export class BotService {
           },
         );
       } catch (e) {
-        if (e.description?.includes("can't be edited")) {
+        if (e.description?.includes("can't be edited") ||  e?.response?.description?.includes('message is not modified')) {
           ctx.reply(
             `${this.i18n.translate('schedule.schedules.craed_week', { lang })}`,
             {
@@ -359,7 +359,7 @@ export class BotService {
         }
       }
     } catch (error) {
-      console.log('ERROR', error);
+      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }
 
@@ -408,7 +408,7 @@ export class BotService {
             },
           );
         } catch (e) {
-          if (e.description?.includes("can't be edited")) {
+          if (e.description?.includes("can't be edited") || e?.response?.description?.includes('message is not modified')) {
             ctx.reply(
               `${this.i18n.translate('schedule.schedules.week', { lang })}`,
               {
@@ -425,7 +425,7 @@ export class BotService {
     }
   }
   async stadion_off_days(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       const stadion_off_day = await this.prisma.stadion_off_days.findMany({
         where: { stadion_id },
@@ -483,7 +483,7 @@ export class BotService {
           },
         );
       } catch (e) {
-        if (e.description?.includes("can't be edited")) {
+        if (e.description?.includes("can't be edited") || e?.response?.description?.includes('message is not modified')) {
           ctx.reply(
             `${this.i18n.translate('schedule.off_day.off', { lang })}`,
             {
@@ -498,7 +498,7 @@ export class BotService {
   }
 
   async stadion_special(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       const data = await this.prisma.stadion_special_schedule.findMany({
         where: { stadion_id },
@@ -555,7 +555,7 @@ export class BotService {
           },
         );
       } catch (e) {
-        if (e.description?.includes("can't be edited")) {
+        if (e.description?.includes("can't be edited") || e?.response?.description?.includes('message is not modified')) {
           ctx.reply(`${this.i18n.translate('schedule.specile_days')}`, {
             reply_markup: { inline_keyboard: button },
           });
@@ -566,7 +566,7 @@ export class BotService {
     }
   }
   async location(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
@@ -622,7 +622,7 @@ export class BotService {
     }
   }
   async stadion_price(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
@@ -677,7 +677,7 @@ export class BotService {
     }
   }
   async stadion_image(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
@@ -733,7 +733,7 @@ export class BotService {
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {
-    let lang = ctx.session.lang || ctx.from?.language_code;
+    let lang = await this.utils.langs(ctx);
 
     try {
       const stadion = await this.prisma.stadion.findUnique({

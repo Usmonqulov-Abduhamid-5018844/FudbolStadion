@@ -68,7 +68,7 @@ model Stadion {
   max_count       Int
   region_item_id  Int
   owner_id        Int
-  working_status  Boolean           @default(true)
+  working_status  Boolean           @default(false)
   length          Int
   width           Int
   payments_type   Payments          @default(GIBRID)
@@ -172,4 +172,11 @@ model Tranzaktion {
   booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 
   owner_cards Owner_card @relation(fields: [owner_cred_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model sesion {
+  id      Int    @id @default(autoincrement())
+  lang    String?
+  step    String?
+  chat_id String @unique
 }

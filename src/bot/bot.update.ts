@@ -17,6 +17,7 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
 import { Payments } from '@prisma/client';
 import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
+import { UtilisService } from 'src/utils/utile.service';
 
 @Update()
 export class BotUpdate {
@@ -26,10 +27,11 @@ export class BotUpdate {
     private readonly prisma: PrismaService,
     private readonly ownerService: OwnersService,
     private readonly userService: UsersService,
+    private readonly utils: UtilisService,
   ) {}
 
   @Start()
-  onStart(@Ctx() ctx: MyContext) {
+  async onStart(@Ctx() ctx: MyContext) {
     ctx.session.step = null;
     ctx.session.stadion_step = null;
     ctx.session.stadion || {
@@ -47,22 +49,39 @@ export class BotUpdate {
       region_item_id: null,
       width: null,
     };
+    const data = await this.prisma.sesion.findUnique({
+      where: { chat_id: String(ctx.from?.id) },
+    });
+    if (data) {
+      ctx.session.lang = data.lang;
+      return this.botService.checket(ctx);
+    }
     return this.botService.start(ctx);
-  }
-
-  @Command('menu')
-  async onMenyu(@Ctx() ctx: MyContext) {
-    return this.botService.checket(ctx);
   }
   @Action(/lang_(.+)/)
   async language(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       ctx.session = ctx.session || {};
-      ctx.session.lang = (ctx.callbackQuery?.data).split('_')[1];
+      const lang = (ctx.callbackQuery?.data).split('_')[1];
+      const data = await this.prisma.sesion.findUnique({
+        where: { chat_id: String(ctx.from?.id) },
+      });
+      if (!data) {
+        await this.prisma.sesion.create({
+          data: { chat_id: String(ctx.from?.id), lang },
+        });
+        ctx.session.lang = lang;
+      } else {
+        const updateLang = await this.prisma.sesion.update({
+          where: { id: data.id },
+          data: { lang },
+        });
+        ctx.session.lang = updateLang.lang;
+      }
     }
     if (ctx.session.step === 'language') {
-      const lang = ctx.session.lang || ctx.from?.language_code;
+      const lang = await this.utils.langs(ctx);
       try {
         const owner = await this.prisma.owners.findUnique({
           where: { chatID: String(ctx.from?.id) },
@@ -131,7 +150,7 @@ export class BotUpdate {
   @Action(/back_owner_(.+)/)
   async backup(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const back_type = ctx.callbackQuery.data.split('_')[2];
       switch (back_type) {
@@ -272,12 +291,35 @@ export class BotUpdate {
             });
           }
           break;
-          case "help":{
-              ctx.editMessageText(
-            this.i18n.translate('help.help.title', { lang }),
-            helpMenuKeyboard(this.i18n, String(lang)),
-          );
+        case 'help':
+          {
+            ctx.editMessageText(
+              this.i18n.translate('help.help.title', { lang }),
+              helpMenuKeyboard(this.i18n, String(lang)),
+            );
           }
+          break;
+        case '5':
+          {
+            ctx.session.step = 'registor';
+            ctx.reply(
+              `${this.i18n.translate('registor.title', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+              Markup.keyboard([
+                [
+                  `💼 ${this.i18n.translate('registor.button.0', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                ],
+                [
+                  `🏃🏼 ${this.i18n.translate('registor.button.1', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                ],
+              ])
+                .oneTime()
+                .resize(),
+            );
+          }
+          break;
+        case '6': {
+          return this.ownerService.registor(ctx);
+        }
         default: {
           break;
         }
@@ -286,13 +328,14 @@ export class BotUpdate {
   }
   @Action(/add_stadion/)
   async add_stadion(@Ctx() ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     ctx.answerCbQuery();
     try {
       const region = await this.prisma.region.findMany();
 
       if (!region.length) {
-        throw new Error();
+        ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+        return;
       }
 
       const button: InlineKeyboardButton[][] = region.map((r) => [
@@ -318,7 +361,7 @@ export class BotUpdate {
   }
   @Action(/region_(.+)/)
   async region_items(@Ctx() ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
@@ -378,7 +421,7 @@ export class BotUpdate {
 
   @Action(/regions_item_(.+)/)
   async onStadions(@Ctx() ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
@@ -423,7 +466,7 @@ export class BotUpdate {
   @Action(/payments_(.+)/)
   async onPayments(@Ctx() ctx: MyContext) {
     ctx.answerCbQuery();
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     if (
       ctx.session.stadion_step === 'stadion' &&
@@ -463,7 +506,7 @@ export class BotUpdate {
       special_id: number;
       back: string;
     };
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
       data = JSON.parse(ctx.callbackQuery.data);
@@ -478,52 +521,45 @@ export class BotUpdate {
         await ctx.answerCbQuery();
         return;
       }
-      case 'HELP_ABOUT':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.about', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
+      case 'HELP_ABOUT':{
+        await this.utils.safeEditHelpReply(ctx, this.i18n.translate('help.help.about', { lang }) )
+      }
         break;
 
-      case 'HELP_START':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.start', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
+      case 'HELP_START':{
+        await this.utils.safeEditHelpReply(ctx,this.i18n.translate('help.help.start', { lang }) )
+      }
         break;
 
-      case 'HELP_BOOKING':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.booking', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
-        break;
-
-      case 'HELP_PAYMENT':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.payment', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
+      case 'HELP_PAYMENT':{
+        await this.utils.safeEditHelpReply(ctx,this.i18n.translate('help.help.payment', { lang }) )
+      }
         break;
 
       case 'HELP_CANCEL':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.cancel', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
+        {
+          await this.utils.safeEditHelpReply(
+            ctx,
+            this.i18n.translate('help.help.cancel', { lang }),
+          );
+        }
         break;
 
       case 'HELP_CONTACT':
-        await ctx.editMessageText(
-          this.i18n.translate('help.help.contact', { lang }),
-          backKeyboard(this.i18n, String(lang)),
-        );
+        {
+          await this.utils.safeEditHelpReply(
+            ctx,
+            this.i18n.translate('help.help.contact', { lang }),
+          );
+        }
         break;
 
       case 'stadion':
         {
-          ctx.editMessageText(`${this.i18n.translate('schedule.name')}`, {
-            reply_markup: {
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('schedule.name'),
+            {
               inline_keyboard: [
                 [
                   {
@@ -584,7 +620,7 @@ export class BotUpdate {
                 ],
               ],
             },
-          });
+          );
         }
         break;
       case 'back_1':
@@ -600,25 +636,24 @@ export class BotUpdate {
             orderBy: { updatedAt: 'desc' },
           });
           if (!stadion.length) {
-            await ctx.editMessageText(
-              `${this.i18n.translate('stadions.stadion', { lang })}`,
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('stadions.stadion', { lang }),
               {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: `${this.i18n.translate('stadions.add', { lang })}`,
-                        callback_data: 'add_stadion',
-                      },
-                    ],
-                    [
-                      {
-                        text: `${this.i18n.translate('stadions.back', { lang })}`,
-                        callback_data: 'back_owner_1',
-                      },
-                    ],
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.add', { lang })}`,
+                      callback_data: 'add_stadion',
+                    },
                   ],
-                },
+                  [
+                    {
+                      text: `${this.i18n.translate('stadions.back', { lang })}`,
+                      callback_data: 'back_owner_1',
+                    },
+                  ],
+                ],
               },
             );
             return;
@@ -651,63 +686,62 @@ export class BotUpdate {
                 },
               ],
             );
-            await ctx.editMessageText(
-              `${this.i18n.translate('stadions.select', { lang })}`,
-              {
-                reply_markup: { inline_keyboard: button },
-              },
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('stadions.select', { lang }),
+              { inline_keyboard: button },
             );
           }
         }
         break;
       case 'delete':
         {
-          ctx.editMessageText(
-            `${this.i18n.translate('schedule.type.delet', { lang })}`,
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('schedule.type.delet', { lang }),
             {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.type.yes', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'delete_yes',
-                        id: data.id,
-                      }),
-                    },
-                    {
-                      text: `${this.i18n.translate('schedule.back', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'back_2',
-                        id: data.id,
-                      }),
-                    },
-                  ],
+              inline_keyboard: [
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.type.yes', { lang })}`,
+                    callback_data: JSON.stringify({
+                      type: 'delete_yes',
+                      id: data.id,
+                    }),
+                  },
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang })}`,
+                    callback_data: JSON.stringify({
+                      type: 'back_2',
+                      id: data.id,
+                    }),
+                  },
                 ],
-              },
+              ],
             },
           );
+
         }
         break;
       case 'delete_yes':
         {
           try {
             await this.prisma.stadion.delete({ where: { id: data.id } });
-             const owner = await this.prisma.owners.findUnique({
-            where: { chatID: String(ctx.from?.id) },
-          });
-          if (!owner) {
-            throw new Error();
-          }
-          const stadion = await this.prisma.stadion.findMany({
-            where: { owner_id: owner.id },
-            orderBy: { updatedAt: 'desc' },
-          });
-          if (!stadion.length) {
-            await ctx.editMessageText(
-              `${this.i18n.translate('stadions.stadion', { lang })}`,
-              {
-                reply_markup: {
+            const owner = await this.prisma.owners.findUnique({
+              where: { chatID: String(ctx.from?.id) },
+            });
+            if (!owner) {
+              throw new Error();
+            }
+            const stadion = await this.prisma.stadion.findMany({
+              where: { owner_id: owner.id },
+              orderBy: { updatedAt: 'desc' },
+            });
+            if (!stadion.length) {
+              await this.utils.safeEditOrReply(
+                ctx,
+                this.i18n.translate('stadions.stadion', { lang }),
+                {
                   inline_keyboard: [
                     [
                       {
@@ -723,236 +757,246 @@ export class BotUpdate {
                     ],
                   ],
                 },
-              },
-            );
-            return;
-          } else {
-            const button: InlineKeyboardButton[][] = [];
+              );
 
-            stadion.forEach((s) => {
-              button.push([
-                {
-                  text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
-                  callback_data: JSON.stringify({
-                    type: 'stadion',
-                    id: s.id,
-                  }),
-                },
-              ]);
-            });
+              return;
+            } else {
+              const button: InlineKeyboardButton[][] = [];
 
-            button.push(
-              [
-                {
-                  text: `${this.i18n.translate('stadions.add', { lang })}`,
-                  callback_data: 'add_stadion',
-                },
-              ],
-              [
-                {
-                  text: `${this.i18n.translate('stadions.back', { lang })}`,
-                  callback_data: 'back_owner_1',
-                },
-              ],
-            );
-            await ctx.editMessageText(
-              `${this.i18n.translate('stadions.select', { lang })}`,
-              {
-                reply_markup: { inline_keyboard: button },
-              },
-            );
-          }
+              stadion.forEach((s) => {
+                button.push([
+                  {
+                    text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
+                    callback_data: JSON.stringify({
+                      type: 'stadion',
+                      id: s.id,
+                    }),
+                  },
+                ]);
+              });
+
+              button.push(
+                [
+                  {
+                    text: this.i18n.translate('stadions.add', { lang }),
+                    callback_data: 'add_stadion',
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('stadions.back', { lang }),
+                    callback_data: 'back_owner_1',
+                  },
+                ],
+              );
+              await this.utils.safeEditOrReply(
+                ctx,
+                this.i18n.translate('stadions.select', { lang }),
+                { inline_keyboard: button },
+              );
+            }
           } catch (error) {
-            console.log(error);
-
-            ctx.editMessageText(
-              `${this.i18n.translate('error.error', { lang })}`,
-            );
+            ctx.reply(this.i18n.translate('error.error', { lang }));
           }
         }
         break;
       case 'back_2': {
-          ctx.editMessageText(`${this.i18n.translate('schedule.name')}`, {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: `${this.i18n.translate('schedule.working', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'schedule',
-                      id: data.id,
-                    }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.price', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'price',
-                      id: data.id,
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: `${this.i18n.translate('schedule.location', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'lokation',
-                      id: data.id,
-                    }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.image', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'image',
-                      id: data.id,
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: `${this.i18n.translate('stadions.menyu.all_data', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'all_data',
-                      id: data.id,
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: `${this.i18n.translate('schedule.delete', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'delete',
-                      id: data.id,
-                    }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.back', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'back_1',
-                      id: data.id,
-                    }),
-                  },
-                ],
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('schedule.name'),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.working', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'schedule',
+                    id: data.id,
+                  }),
+                },
+                {
+                  text: this.i18n.translate('schedule.price', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'price',
+                    id: data.id,
+                  }),
+                },
               ],
-            },
-          });
-      }
+              [
+                {
+                  text: this.i18n.translate('schedule.location', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'lokation',
+                    id: data.id,
+                  }),
+                },
+                {
+                  text: this.i18n.translate('schedule.image', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'image',
+                    id: data.id,
+                  }),
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('stadions.menyu.all_data', {
+                    lang,
+                  }),
+                  callback_data: JSON.stringify({
+                    type: 'all_data',
+                    id: data.id,
+                  }),
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('schedule.delete', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'delete',
+                    id: data.id,
+                  }),
+                },
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'back_1',
+                    id: data.id,
+                  }),
+                },
+              ],
+            ],
+          },
+        );
+      } break;
       case 'schedule':
         {
           if (data.back === 'back') {
             ctx.session.step = null;
           }
-          await ctx.editMessageText(
-            `${this.i18n.translate('schedule.schedule.name', { lang })}`,
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('schedule.schedule.name', { lang }),
             {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.schedule.one_week', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'week_schedule',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.schedule.dey_off_dey', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'day_off',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.schedule.special_deys', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'special_table',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.back', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'back_3',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
-        break;
-      case 'back_3': {
-         ctx.editMessageText(`${this.i18n.translate('schedule.name')}`, {
-            reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: `${this.i18n.translate('schedule.working', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'schedule',
-                      id: data.id,
+                    text: this.i18n.translate('schedule.schedule.one_week', {
+                      lang,
                     }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.price', { lang })}`,
                     callback_data: JSON.stringify({
-                      type: 'price',
+                      type: 'week_schedule',
                       id: data.id,
                     }),
                   },
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('schedule.location', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'lokation',
-                      id: data.id,
+                    text: this.i18n.translate('schedule.schedule.dey_off_dey', {
+                      lang,
                     }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.image', { lang })}`,
                     callback_data: JSON.stringify({
-                      type: 'image',
+                      type: 'day_off',
                       id: data.id,
                     }),
                   },
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('stadions.menyu.all_data', { lang })}`,
+                    text: this.i18n.translate(
+                      'schedule.schedule.special_deys',
+                      { lang },
+                    ),
                     callback_data: JSON.stringify({
-                      type: 'all_data',
+                      type: 'special_table',
                       id: data.id,
                     }),
                   },
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('schedule.delete', { lang })}`,
+                    text: this.i18n.translate('schedule.back', { lang }),
                     callback_data: JSON.stringify({
-                      type: 'delete',
-                      id: data.id,
-                    }),
-                  },
-                  {
-                    text: `${this.i18n.translate('schedule.back', { lang })}`,
-                    callback_data: JSON.stringify({
-                      type: 'back_1',
+                      type: 'back_2',
                       id: data.id,
                     }),
                   },
                 ],
               ],
             },
-          });
-      }
+          );
+
+        }
+        break;
+      // case 'back_3': {
+      //   await this.utils.safeEditOrReply(
+      //     ctx,
+      //     this.i18n.translate('schedule.name'),
+      //     {
+      //       inline_keyboard: [
+      //         [
+      //           {
+      //             text: this.i18n.translate('schedule.working', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'schedule',
+      //               id: data.id,
+      //             }),
+      //           },
+      //           {
+      //             text: this.i18n.translate('schedule.price', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'price',
+      //               id: data.id,
+      //             }),
+      //           },
+      //         ],
+      //         [
+      //           {
+      //             text: this.i18n.translate('schedule.location', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'lokation',
+      //               id: data.id,
+      //             }),
+      //           },
+      //           {
+      //             text: this.i18n.translate('schedule.image', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'image',
+      //               id: data.id,
+      //             }),
+      //           },
+      //         ],
+      //         [
+      //           {
+      //             text: this.i18n.translate('stadions.menyu.all_data', {
+      //               lang,
+      //             }),
+      //             callback_data: JSON.stringify({
+      //               type: 'all_data',
+      //               id: data.id,
+      //             }),
+      //           },
+      //         ],
+      //         [
+      //           {
+      //             text: this.i18n.translate('schedule.delete', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'delete',
+      //               id: data.id,
+      //             }),
+      //           },
+      //           {
+      //             text: this.i18n.translate('schedule.back', { lang }),
+      //             callback_data: JSON.stringify({
+      //               type: 'back_1',
+      //               id: data.id,
+      //             }),
+      //           },
+      //         ],
+      //       ],
+      //     },
+      //   );
+      // }
       case 'week_schedule': {
         return this.botService.renderScheduleMenu(ctx, data.id);
       }
@@ -991,9 +1035,7 @@ export class BotUpdate {
             ctx.session.stadion.schedule_id = null;
             return this.botService.viewSchedule(ctx, data.id);
           } catch (error) {
-            ctx.editMessageText(
-              `${this.i18n.translate('error.error', { lang })}`,
-            );
+            ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
           }
         }
         break;
@@ -1045,9 +1087,7 @@ export class BotUpdate {
             });
             return this.botService.stadion_off_days(ctx, data.id);
           } catch (error) {
-            ctx.editMessageText(
-              `${this.i18n.translate('error.error', { lang })}`,
-            );
+            ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
           }
         }
         break;
@@ -1081,9 +1121,7 @@ export class BotUpdate {
           });
           return this.botService.stadion_special(ctx, data.id);
         } catch (error) {
-          ctx.editMessageText(
-            `${this.i18n.translate('error.error', { lang })}`,
-          );
+          ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
         }
       }
       case 'lokation': {
@@ -1150,12 +1188,14 @@ export class BotUpdate {
       }
       case 'phone_back':
         {
-          ctx.reply(`${this.i18n.translate('settings.title', { lang })}`, {
-            reply_markup: {
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('settings.title', { lang }),
+            {
               inline_keyboard: [
                 [
                   {
-                    text: `${this.i18n.translate('settings.language', { lang })}`,
+                    text: this.i18n.translate('settings.language', { lang }),
                     callback_data: JSON.stringify({
                       id: data.id,
                       type: 'language',
@@ -1164,7 +1204,9 @@ export class BotUpdate {
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('settings.notification', { lang })}`,
+                    text: this.i18n.translate('settings.notification', {
+                      lang,
+                    }),
                     callback_data: JSON.stringify({
                       id: data.id,
                       type: 'notification',
@@ -1173,7 +1215,7 @@ export class BotUpdate {
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('settings.phone', { lang })}`,
+                    text: this.i18n.translate('settings.phone', { lang }),
                     callback_data: JSON.stringify({
                       id: data.id,
                       type: 'phone',
@@ -1182,7 +1224,7 @@ export class BotUpdate {
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('settings.account', { lang })}`,
+                    text: this.i18n.translate('settings.account', { lang }),
                     callback_data: JSON.stringify({
                       id: data.id,
                       type: 'account',
@@ -1191,13 +1233,14 @@ export class BotUpdate {
                 ],
                 [
                   {
-                    text: `${this.i18n.translate('schedule.back', { lang })}`,
+                    text: this.i18n.translate('schedule.back', { lang }),
                     callback_data: 'back_owner_1',
                   },
                 ],
               ],
             },
-          });
+          );
+
         }
         break;
       case 'phone_update':
@@ -1233,7 +1276,7 @@ export class BotUpdate {
   }
   @On('location')
   async onLocation(@Ctx() ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     if (ctx.session.stadion_step === 'stadion') {
       if (ctx.session.stadion.lockation === 'L') {
         if (ctx.message && 'location' in ctx.message) {
@@ -1290,7 +1333,7 @@ export class BotUpdate {
   }
   @On('photo')
   async onPhoto(@Ctx() ctx: MyContext) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx);
     if (
       ctx.session.stadion_step === 'stadion' &&
       ctx.session.stadion.image === 'image'
@@ -1336,6 +1379,7 @@ export class BotUpdate {
 
   @On('message')
   async Message(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
     ctx.session.stadion = ctx.session.stadion || {
       image: null,
       length: null,
@@ -1360,7 +1404,6 @@ export class BotUpdate {
         step: null,
       };
 
-    const lang = ctx.session.lang || ctx.from?.language_code;
     try {
       if (ctx.message && 'text' in ctx.message) {
         if (ctx.session.step === 'menyu') {
@@ -1542,6 +1585,31 @@ export class BotUpdate {
           } else {
             ctx.reply(`${this.i18n.translate('error.worning', { lang })}`);
           }
+          return;
+        }
+        if (
+          ctx.session.owner_registor.step === 'phone' &&
+          ctx.message.text ===
+            `${this.i18n.translate('schedule.back', { lang })}`
+        ) {
+          console.log('sesion_4');
+
+          ctx.session.owner_registor.step = 'email';
+          ctx.reply(
+            `${this.i18n.translate('registor.email', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                      callback_data: 'back_owner_6',
+                    },
+                  ],
+                ],
+              },
+            },
+          );
           return;
         }
         if (ctx.session.step == 'owner_registor') {
@@ -2057,7 +2125,8 @@ export class BotUpdate {
         }
         if (
           ctx.message.text ===
-          `${this.i18n.translate('menyu_buttons.settings', { lang })}`
+            `${this.i18n.translate('menyu_buttons.settings', { lang })}` &&
+          (await this.utils.isChecket(String(ctx.from?.id), ctx))
         ) {
           try {
             const owner = await this.prisma.owners.findUnique({
@@ -2155,7 +2224,8 @@ export class BotUpdate {
         }
         if (
           ctx.message.text ===
-          `${this.i18n.translate('menyu_buttons.help', { lang })}`
+            `${this.i18n.translate('menyu_buttons.help', { lang })}` &&
+          (await this.utils.isChecket(String(ctx.from?.id), ctx))
         ) {
           ctx.reply(
             this.i18n.translate('help.help.title', { lang }),
@@ -2168,8 +2238,6 @@ export class BotUpdate {
         }
       }
     } catch (error) {
-      console.log('Error', error);
-
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
     }
   }

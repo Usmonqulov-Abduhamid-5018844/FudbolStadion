@@ -4,16 +4,14 @@
     "menu": {
       "about": "📌 About bot",
       "start": "▶️ How to start",
-      "booking": "⚽ Stadium booking",
       "payment": "💳 Payments",
       "cancel": "❌ Cancel booking",
       "contact": "📞 Contact admin"
     },
-    "about": "⚽ With this bot you can find stadiums, view available time slots and book online.",
-    "start": "▶️ To get started, send the /start command and follow the instructions.",
-    "booking": "⚽ Select region → stadium → date and time → confirm the booking.",
-    "payment": "💳 Payments can be made by card, cash, or both.",
-    "cancel": "❌ You can cancel the booking before the start time.",
-    "contact": "📞 If you have any issues or questions, contact the admin."
+    "about": "⚽ Stadion Bron Bot is a convenient platform for stadium owners designed to manage their stadium and control bookings online.\n\n🛠 With this bot, you can:\n• Add and edit your stadium\n• Set working hours and days off\n• Configure prices and payment methods (cash, card, or both)\n• View customer bookings in real time\n• Clearly monitor available and booked time slots\n\n📅 Booking management:\nAll bookings are displayed by date and time, making stadium planning easier\n\n📊 Easy control:\nThe bot allows you to continuously monitor your stadium’s status without unnecessary complexity\n\n🚀 Our goal is to simplify stadium management as much as possible, save time, and increase revenue for stadium owners\n\nIf you have any questions or need assistance, feel free to contact us through the bot ⚽",
+    "start": "▶️ How to start (Stadium owner)\n\nTo start using the bot as a stadium owner, send the /start command.\n\n📲 After that, you will:\n• Verify your profile\n• Add your stadium or select an existing one\n• Set the stadium working hours\n• Configure prices and payment methods\n• Monitor bookings in real time\n\n🧭 The bot will guide you step by step, making stadium management easy and convenient.\n\nSend the /start command and start managing your stadium now ⚽",
+    "payment": "💳 Payments\n\nYou can configure payment methods for your stadium.\nCustomers can pay:\n• 💳 By card\n• 💵 In cash\n• 💳💵 By card and cash (both methods)\n\nYou decide which payment methods to accept.",
+    "cancel": "❌ Cancel booking\n\nAs a stadium owner, you can cancel customer bookings when necessary.\n\n⏰ Important rule:\nIf the customer has made a payment, the booking can only be canceled at least 1 hour before the start time.\n\n💳 Payment refund:\nWhen a booking is canceled within the allowed time, the paid amount is automatically refunded to the customer.\n\n⚠️ Note:\nBookings with less than 1 hour remaining before the start time cannot be canceled.\nCanceled bookings will automatically free up the selected time slot in the schedule.",
+    "contact": "📞 Contact Admin\n\nIf you encounter any issues or have questions while using the bot, please contact the admin.\nThey will assist you with all technical and management-related matters.\n\n💬 Admin username: @Abduhamid_1852"
   }
 }

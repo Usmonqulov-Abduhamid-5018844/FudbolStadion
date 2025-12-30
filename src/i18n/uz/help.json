@@ -4,16 +4,14 @@
     "menu": {
       "about": "📌 Bot haqida",
       "start": "▶️ Qanday boshlash",
-      "booking": "⚽ Stadion bron qilish",
       "payment": "💳 To‘lovlar",
       "cancel": "❌ Bronni bekor qilish",
       "contact": "📞 Admin bilan bog‘lanish"
     },
-    "about": "⚽ Ushbu bot orqali siz stadionlarni topish, bo‘sh vaqtlarni ko‘rish va onlayn bron qilish mumkin.",
-    "start": "▶️ Boshlash uchun /start buyrug‘ini yuboring va ko‘rsatmalarga amal qiling.",
-    "booking": "⚽ Regionni tanlang → stadionni tanlang → sana va vaqtni belgilang → bronni tasdiqlang.",
-    "payment": "💳 To‘lovlarni karta, naqd yoki ikkala usulda amalga oshirishingiz mumkin.",
-    "cancel": "❌ Bronni boshlanish vaqtidan oldin bekor qilishingiz mumkin.",
-    "contact": "📞 Muammo yoki savollar bo‘lsa, admin bilan bog‘laning."
+    "about": "⚽ Stadion Bron Bot — stadion egasi uchun stadionni onlayn boshqarish va bronlarni nazorat qilishga mo‘ljallangan qulay platforma.\n\n🛠 Bot orqali siz:\n• O‘z stadioningizni tizimga qo‘shishingiz va tahrirlashingiz\n• Stadion ish vaqtlarini va dam olish kunlarini belgilashingiz\n• Narxlarni hamda to‘lov turlarini (naqd, karta yoki ikkala) sozlashingiz\n• Mijozlar tomonidan qilingan bronlarni real vaqt rejimida ko‘rishingiz\n• Bo‘sh va band vaqtlarni aniq nazorat qilishingiz mumkin\n\n📅 Bronlar boshqaruvi:\nBarcha bronlar sana va vaqt bo‘yicha tartiblangan holda ko‘rsatiladi, bu esa stadion ishini rejalashtirishni osonlashtiradi\n\n📊 Qulay nazorat:\nBot orqali stadioningiz holatini doimiy kuzatib borasiz va ortiqcha chalkashliklarsiz ishlaysiz\n\n🚀 Maqsadimiz — stadion egasi uchun boshqaruv jarayonini maksimal darajada soddalashtirish, vaqtni tejash va daromadni oshirish\n\nAgar savol yoki yordam kerak bo‘lsa, bot orqali bemalol murojaat qilishingiz mumkin ⚽",
+    "start": "▶️ Qanday boshlash (Stadion egasi)\n\nBotdan stadion egasi sifatida foydalanishni boshlash uchun /start buyrug‘ini yuboring.\n\n📲 Shundan so‘ng siz:\n• Profilingizni tasdiqlaysiz\n• Stadioningizni qo‘shasiz yoki mavjud stadionni tanlaysiz\n• Stadion ish vaqtlarini belgilaysiz\n• Narxlarni va to‘lov turlarini sozlaysiz\n• Kelib tushgan bronlarni real vaqt rejimida kuzatib borasiz\n\n🧭 Bot sizni bosqichma-bosqich yo‘naltiradi va stadioningizni boshqarish jarayoni oson va qulay bo‘ladi.\n\nBoshlash uchun hoziroq /start buyrug‘ini yuboring ⚽",
+    "payment": "💳 To‘lovlar\n\nSiz stadioningiz uchun to‘lov usullarini sozlashingiz mumkin.\nMijozlar to‘lovni:\n• 💳 Karta orqali\n• 💵 Naqd pulda\n• 💳💵 Karta va naqd (ikkala usulda)\n\nqaysi usullarni qabul qilishingizni o‘zingiz belgilaysiz.",
+    "cancel": "❌ Bronni bekor qilish\n\nStadion egasi sifatida siz mijozlar tomonidan qilingan bronlarni zarurat bo‘lganda bekor qilishingiz mumkin.\n\n⏰ Muhim qoida:\nAgar mijoz bron uchun oldindan to‘lov qilgan bo‘lsa, bron faqat boshlanish vaqtidan kamida 1 soat oldin bekor qilinadi.\n\n💳 To‘lov qaytarilishi:\nBelgilangan muddatdan oldin bekor qilingan bronlar uchun to‘langan summa avtomatik ravishda foydalanuvchiga qaytariladi.\n\n⚠️ Eslatma:\nBoshlanish vaqtidan 1 soat kam qolgan bronlarni bekor qilib bo‘lmaydi.\nBekor qilingan bronlar jadvalda avtomatik tarzda bo‘sh vaqt sifatida ko‘rsatiladi.",
+    "contact": "📞 Admin bilan bog‘lanish\n\nAgar botni ishlatishda muammo yoki savollar bo‘lsa, iltimos admin bilan bog‘laning.\nU sizga barcha texnik va boshqaruv masalalarida yordam beradi.\n\n💬 Admin username: @Abduhamid_1852"
   }
 }

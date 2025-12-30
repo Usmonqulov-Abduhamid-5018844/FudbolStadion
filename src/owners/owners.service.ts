@@ -20,10 +20,24 @@ export class OwnersService {
       full_name: null,
       email: null,
       phone: null,
-      step: 'full_name',
+      step: null,
     };
+    ctx.session.owner_registor.step = 'full_name';
+
     ctx.reply(
       `${this.i18n.translate('registor.name', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: `${this.i18n.translate('schedule.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                callback_data: 'back_owner_5',
+              },
+            ],
+          ],
+        },
+      },
     );
   }
 
@@ -32,8 +46,21 @@ export class OwnersService {
       if (ctx.session.owner_registor.step === 'full_name') {
         ctx.session.owner_registor.full_name = ctx.message.text;
         ctx.session.owner_registor.step = 'email';
+
         ctx.reply(
           `${this.i18n.translate('registor.email', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang: ctx.session.lang || ctx.from?.language_code })}`,
+                    callback_data: 'back_owner_6',
+                  },
+                ],
+              ],
+            },
+          },
         );
         return;
       } else if (ctx.session.owner_registor.step === 'email') {
@@ -54,6 +81,11 @@ export class OwnersService {
                   {
                     text: `${this.i18n.translate('registor.send_phone', { lang: ctx.session.lang || ctx.from?.language_code })}`,
                     request_contact: true,
+                  },
+                ],
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang: ctx.session.lang || ctx.from?.language_code })}`
                   },
                 ],
               ],
@@ -109,30 +141,33 @@ export class OwnersService {
         where: { id: owner_id },
       });
       if (owner) {
-        ctx.reply(`${this.i18n.translate("success.your_phone",{lang})} ${owner.phone}`, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: `${this.i18n.translate("success.edit",{lang})}`,
-                  callback_data: JSON.stringify({
-                    id: owner.id,
-                    type: 'phone_update',
-                  }),
-                },
+        ctx.reply(
+          `${this.i18n.translate('success.your_phone', { lang })} ${owner.phone}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: `${this.i18n.translate('success.edit', { lang })}`,
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'phone_update',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: `${this.i18n.translate('schedule.back', { lang })}`,
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'phone_back',
+                    }),
+                  },
+                ],
               ],
-              [
-                {
-                  text: `${this.i18n.translate('schedule.back', { lang })}`,
-                  callback_data: JSON.stringify({
-                    id: owner.id,
-                    type: 'phone_back',
-                  }),
-                },
-              ],
-            ],
+            },
           },
-        });
+        );
       }
     } catch (error) {
       ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
