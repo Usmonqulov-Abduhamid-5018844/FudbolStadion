@@ -49,6 +49,12 @@ export class BotUpdate {
       region_item_id: null,
       width: null,
     };
+    ctx.session.user_registor = {
+      id: null,
+      full_name: null,
+      phone: null,
+      step: null,
+    };
     const data = await this.prisma.sesion.findUnique({
       where: { chat_id: String(ctx.from?.id) },
     });
@@ -84,8 +90,8 @@ export class BotUpdate {
         ctx.session.lang = updateLang.lang;
       }
     }
+    const lang = await this.utils.langs(ctx);
     if (ctx.session.step === 'language') {
-      const lang = await this.utils.langs(ctx);
       try {
         const owner = await this.prisma.owners.findUnique({
           where: { chatID: String(ctx.from?.id) },
@@ -147,12 +153,15 @@ export class BotUpdate {
       } catch (error) {
         ctx.reply(this.i18n.translate('error.error', { lang }));
       }
+    } else if (ctx.session.step === 'user_langs') {
+      return this.userService.settings(ctx, lang);
     } else {
       return this.botService.checket(ctx);
     }
   }
-  @Action(/back_owner_(.+)/)
-  async backup(@Ctx() ctx: MyContext) {
+
+  @Action(/^back_(owner|user)_(.+)$/)
+  async brckAll(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
         await ctx.answerCbQuery();
@@ -160,193 +169,30 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const back_type = ctx.callbackQuery.data.split('_')[2];
-      switch (back_type) {
-        case '1':
-          {
-            ctx.reply(
-              this.i18n.translate('menyu_buttons.menu', { lang }),
-              Markup.keyboard([
-                [
-                  this.i18n.translate('menyu_buttons.stadion', { lang }),
-                  this.i18n.translate('menyu_buttons.bron', { lang }),
-                ],
-                [
-                  this.i18n.translate('menyu_buttons.settings', { lang }),
-                  this.i18n.translate('menyu_buttons.help', { lang }),
-                ],
-                [this.i18n.translate('menyu_buttons.card', { lang })],
-              ])
-                .resize()
-                .oneTime(),
-            );
-          }
-          break;
-        case '2':
-          {
-            try {
-              const owner = await this.prisma.owners.findUnique({
-                where: { chatID: String(ctx.from?.id) },
-              });
-              if (!owner) {
-                throw new Error();
-              }
-              const stadion = await this.prisma.stadion.findMany({
-                where: { owner_id: owner.id },
-              });
-              if (!stadion.length) {
-                await ctx.reply(
-                  this.i18n.translate('stadions.stadion', { lang }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('stadions.add', { lang }),
-                            callback_data: 'add_stadion',
-                          },
-                        ],
-                        [
-                          {
-                            text: this.i18n.translate('stadions.back', {
-                              lang,
-                            }),
-                            callback_data: 'back_owner_1',
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                return;
-              }
-              const button: InlineKeyboardButton[][] = [];
-
-              stadion.forEach((s) => {
-                button.push([
-                  { text: `🏟 ${s.name}`, callback_data: `stadion_${s.id}` },
-                ]);
-              });
-
-              button.push(
-                [
-                  {
-                    text: this.i18n.translate('stadions.add', { lang }),
-                    callback_data: 'add_stadion',
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('stadions.back', { lang }),
-                    callback_data: 'back_owner_1',
-                  },
-                ],
-              );
-              await ctx.reply(
-                this.i18n.translate('stadions.select', { lang }),
-                {
-                  reply_markup: { inline_keyboard: button },
-                },
-              );
-            } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
-            }
-          }
-          break;
-        case '3':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch {}
-            }
-            try {
-              const region = await this.prisma.region.findMany();
-              if (!region.length) {
-                throw new Error();
-              }
-
-              const button: InlineKeyboardButton[][] = region.map((r) => [
-                { text: r.name, callback_data: `region_${r.id}` },
-              ]);
-              button.push([
-                {
-                  text: this.i18n.translate('stadions.back', { lang }),
-                  callback_data: 'back_owner_2',
-                },
-              ]);
-
-              await ctx.reply(
-                this.i18n.translate('stadions.stadion_region', { lang }),
-                {
-                  reply_markup: { inline_keyboard: button },
-                },
-              );
-            } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
-            }
-          }
-          break;
-        case '4':
-          {
-            ctx.session.stadion.price = 'price';
-            ctx.session.stadion.step = 7;
-            ctx.reply(this.i18n.translate('stadions.price', { lang }), {
-              reply_markup: {
-                keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('stadions.back', { lang }),
-                    },
-                  ],
-                ],
-                resize_keyboard: true,
-                one_time_keyboard: true,
-              },
-            });
-          }
-          break;
-        case 'help':
-          {
-            try {
-              await this.utils.safeEditHelpMenyuReply(
-                ctx,
-                this.i18n.translate('help.help.title', { lang }),
-              );
-            } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
-            }
-          }
-          break;
-        case '5':
-          {
-            ctx.session.step = 'registor';
-            ctx.reply(
-              this.i18n.translate('registor.title', {
-                lang: ctx.session.lang || ctx.from?.language_code,
-              }),
-              Markup.keyboard([
-                [
-                  `💼 ${this.i18n.translate('registor.button.0', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                ],
-                [
-                  `🏃🏼 ${this.i18n.translate('registor.button.1', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-                ],
-              ])
-                .oneTime()
-                .resize(),
-            );
-          }
-          break;
-        case '6': {
-          return this.ownerService.registor(ctx);
-        }
-        default: {
-          break;
-        }
+      const [_, role, data] = ctx.callbackQuery.data.split('_');
+      if (role === 'owner') {
+        return this.ownerService.ownerBackSwitch(ctx, data, lang);
+      } else if (role === 'user') {
+        return this.userService.userBackSwitch(ctx, data, lang);
       }
     }
   }
+  @Action(/^user_(.+)$/)
+  async userSetting(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    const lang = await this.utils.langs(ctx);
+
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const data = ctx.callbackQuery.data.split('_')[1];
+
+      return this.userService.userSwitch(ctx, data, lang);
+    }
+  }
+
   @Action(/add_stadion/)
   async add_stadion(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -530,7 +376,6 @@ export class BotUpdate {
     }
   }
 
-  //Test Actioin
   @Action(/.+/)
   async parseAction(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -1220,6 +1065,15 @@ export class BotUpdate {
                 [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
                 [{ text: '🇷🇺 Русский', callback_data: 'lang_ru' }],
                 [{ text: '🇬🇧 English', callback_data: 'lang_en' }],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: JSON.stringify({
+                      type: 'phone_back',
+                      id: data.id,
+                    }),
+                  },
+                ],
               ],
             },
           });
@@ -1313,11 +1167,12 @@ export class BotUpdate {
 
   @On('contact')
   async onContact(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
     if (ctx.session.step == 'owner_registor') {
-      return this.ownerService.registor_step(ctx);
+      return this.ownerService.registor_step(ctx, lang);
     }
     if (ctx.session.step == 'user_registor') {
-      return this.userService.registor_step(ctx);
+      return this.userService.registor_step(ctx, lang);
     }
   }
   @On('location')
@@ -1423,864 +1278,6 @@ export class BotUpdate {
     }
   }
 
-  // @On('message')
-  // async Message(@Ctx() ctx: MyContext) {
-  //   const lang = await this.utils.langs(ctx);
-  //   ctx.session.stadion = ctx.session.stadion || {
-  //     image: null,
-  //     length: null,
-  //     lockation: null,
-  //     name: null,
-  //     owner_id: null,
-  //     max_count: null,
-  //     payments_type: null,
-  //     latitude: null,
-  //     longitude: null,
-  //     price: null,
-  //     region_id: null,
-  //     region_item_id: null,
-  //     width: null,
-  //   };
-  //   if (!ctx.session.owner_registor)
-  //     ctx.session.owner_registor = {
-  //       email: null,
-  //       full_name: null,
-  //       id: 0,
-  //       phone: null,
-  //       step: null,
-  //     };
-
-  //   try {
-  //     if (ctx.message && 'text' in ctx.message) {
-  //       if (ctx.session.step === 'menyu') {
-  //         await ctx.reply(
-  //           this.i18n.translate('common.WELCOME', {
-  //             lang,
-  //           }),
-  //           Markup.keyboard([
-  //             [
-  //               this.i18n.translate('menyu_buttons.stadion', { lang }),
-  //               this.i18n.translate('menyu_buttons.bron', { lang }),
-  //             ],
-  //             [
-  //               this.i18n.translate('menyu_buttons.settings', { lang }),
-  //               this.i18n.translate('menyu_buttons.help', { lang }),
-  //             ],
-  //             [this.i18n.translate('menyu_buttons.card', { lang })],
-  //           ])
-  //             .resize()
-  //             .oneTime(),
-  //         );
-  //         ctx.session.step = null;
-  //         ctx.session.stadion_step = null;
-  //         ctx.session.stadion || {
-  //           image: null,
-  //           length: null,
-  //           lockation: null,
-  //           name: null,
-  //           owner_id: null,
-  //           max_count: null,
-  //           payments_type: null,
-  //           latitude: null,
-  //           longitude: null,
-  //           price: null,
-  //           region_id: null,
-  //           region_item_id: null,
-  //           width: null,
-  //           id: null,
-  //           schedule_day: null,
-  //         };
-  //         return;
-  //       }
-  //       if (
-  //         ctx.message.text === this.i18n.translate('stadions.back', { lang })
-  //       ) {
-  //         switch (ctx.session.stadion.step) {
-  //           case 4: {
-  //             await ctx.reply(
-  //               this.i18n.translate('stadions.location', {
-  //                 lang,
-  //               }),
-  //               {
-  //                 reply_markup: {
-  //                   keyboard: [
-  //                     [
-  //                       {
-  //                         text: this.i18n.translate('stadions.send_location', {
-  //                           lang,
-  //                         }),
-  //                         request_location: true,
-  //                       },
-  //                     ],
-  //                   ],
-  //                   resize_keyboard: true,
-  //                   one_time_keyboard: true,
-  //                 },
-  //               },
-  //             );
-
-  //             ctx.session.stadion.lockation = 'L';
-  //             return;
-  //           }
-
-  //           case 5: {
-  //             await ctx.reply(
-  //               this.i18n.translate('stadions.location_back', { lang }),
-  //             );
-  //             ctx.session.stadion.max_count = 0;
-  //             return;
-  //           }
-
-  //           case 6: {
-  //             ctx.session.stadion.length = 'length';
-  //             ctx.session.stadion.step = 5;
-  //             ctx.reply(this.i18n.translate('stadions.length', { lang }), {
-  //               reply_markup: {
-  //                 keyboard: [
-  //                   [
-  //                     {
-  //                       text: this.i18n.translate('stadions.back', { lang }),
-  //                     },
-  //                   ],
-  //                 ],
-  //                 resize_keyboard: true,
-  //                 one_time_keyboard: true,
-  //               },
-  //             });
-  //             return;
-  //           }
-  //           case 7: {
-  //             ctx.session.stadion.width = 'width';
-  //             ctx.session.stadion.step = 6;
-  //             ctx.reply(this.i18n.translate('stadions.width', { lang }), {
-  //               reply_markup: {
-  //                 keyboard: [
-  //                   [
-  //                     {
-  //                       text: this.i18n.translate('stadions.back', { lang }),
-  //                     },
-  //                   ],
-  //                 ],
-  //                 resize_keyboard: true,
-  //                 one_time_keyboard: true,
-  //               },
-  //             });
-  //             return;
-  //           }
-  //           case 9: {
-  //             ctx.session.stadion.payments = 'payments';
-  //             ctx.session.stadion.step = 8;
-  //             ctx.reply(
-  //               this.i18n.translate('stadions.paymenst_type', { lang }),
-  //               {
-  //                 reply_markup: {
-  //                   inline_keyboard: [
-  //                     [
-  //                       {
-  //                         text: this.i18n.translate('stadions.card', { lang }),
-  //                         callback_data: `payments_${Payments.CARD}`,
-  //                       },
-  //                     ],
-  //                     [
-  //                       {
-  //                         text: this.i18n.translate('stadions.cash', { lang }),
-  //                         callback_data: `payments_${Payments.CASH}`,
-  //                       },
-  //                     ],
-  //                     [
-  //                       {
-  //                         text: this.i18n.translate('stadions.both', { lang }),
-  //                         callback_data: `payments_${Payments.GIBRID}`,
-  //                       },
-  //                     ],
-  //                     [
-  //                       {
-  //                         text: this.i18n.translate('stadions.back', { lang }),
-  //                         callback_data: 'back_owner_4',
-  //                       },
-  //                     ],
-  //                   ],
-  //                 },
-  //               },
-  //             );
-  //             return;
-  //           }
-
-  //           default: {
-  //             break;
-  //           }
-  //         }
-  //       }
-
-  //       if (ctx.session.step == 'registor') {
-  //         if (
-  //           ctx.message.text ===
-  //           `💼 ${this.i18n.translate('registor.button.0', { lang })}`
-  //         ) {
-  //           return this.ownerService.registor(ctx);
-  //         } else if (
-  //           ctx.message.text ===
-  //           `🏃🏼 ${this.i18n.translate('registor.button.1', {
-  //             lang,
-  //           })}`
-  //         ) {
-  //           return this.userService.registor(ctx);
-  //         } else {
-  //           ctx.reply(this.i18n.translate('error.worning', { lang }));
-  //         }
-  //         return;
-  //       }
-  //       if (
-  //         ctx.session.owner_registor.step === 'phone' &&
-  //         ctx.message.text === this.i18n.translate('schedule.back', { lang })
-  //       ) {
-  //         ctx.session.owner_registor.step = 'email';
-  //         ctx.reply(this.i18n.translate('registor.email', { lang }), {
-  //           reply_markup: {
-  //             inline_keyboard: [
-  //               [
-  //                 {
-  //                   text: this.i18n.translate('schedule.back', { lang }),
-  //                   callback_data: 'back_owner_6',
-  //                 },
-  //               ],
-  //             ],
-  //           },
-  //         });
-  //         return;
-  //       }
-  //       if (ctx.session.step == 'owner_registor') {
-  //         return this.ownerService.registor_step(ctx);
-  //       }
-  //       if (ctx.session.step == 'user_registor') {
-  //         return this.userService.registor_step(ctx);
-  //       }
-
-  //       if (
-  //         ctx.message.text ===
-  //         this.i18n.translate('menyu_buttons.stadion', { lang })
-  //       ) {
-  //         const owner = await this.prisma.owners.findUnique({
-  //           where: { chatID: String(ctx.from?.id) },
-  //         });
-  //         if (!owner) {
-  //           throw new Error();
-  //         }
-  //         const stadion = await this.prisma.stadion.findMany({
-  //           where: { owner_id: owner.id },
-  //           orderBy: { updatedAt: 'desc' },
-  //         });
-  //         if (!stadion.length) {
-  //           await ctx.reply(this.i18n.translate('stadions.stadion', { lang }), {
-  //             reply_markup: {
-  //               inline_keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.add', { lang }),
-  //                     callback_data: 'add_stadion',
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.back', { lang }),
-  //                     callback_data: 'back_owner_1',
-  //                   },
-  //                 ],
-  //               ],
-  //             },
-  //           });
-  //           return;
-  //         } else {
-  //           const button: InlineKeyboardButton[][] = [];
-
-  //           stadion.forEach((s) => {
-  //             button.push([
-  //               {
-  //                 text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
-  //                 callback_data: JSON.stringify({
-  //                   type: 'stadion',
-  //                   id: s.id,
-  //                 }),
-  //               },
-  //             ]);
-  //           });
-
-  //           button.push(
-  //             [
-  //               {
-  //                 text: this.i18n.translate('stadions.add', { lang }),
-  //                 callback_data: 'add_stadion',
-  //               },
-  //             ],
-  //             [
-  //               {
-  //                 text: this.i18n.translate('stadions.back', { lang }),
-  //                 callback_data: 'back_owner_1',
-  //               },
-  //             ],
-  //           );
-  //           await ctx.reply(this.i18n.translate('stadions.select', { lang }), {
-  //             reply_markup: { inline_keyboard: button },
-  //           });
-  //           return;
-  //         }
-  //       }
-
-  //       if (ctx.session.stadion_step === 'stadion') {
-  //         if (ctx.session.stadion.name === 'N') {
-  //           ctx.session.stadion.name = ctx.message.text;
-  //           ctx.session.stadion.step = 3;
-
-  //           await ctx.reply(
-  //             this.i18n.translate('stadions.location', {
-  //               lang,
-  //             }),
-  //             {
-  //               reply_markup: {
-  //                 keyboard: [
-  //                   [
-  //                     {
-  //                       text: this.i18n.translate('stadions.send_location', {
-  //                         lang,
-  //                       }),
-  //                       request_location: true,
-  //                     },
-  //                   ],
-  //                 ],
-  //                 resize_keyboard: true,
-  //                 one_time_keyboard: true,
-  //               },
-  //             },
-  //           );
-
-  //           ctx.session.stadion.lockation = 'L';
-  //           return;
-  //         }
-  //         if (ctx.session.stadion.max_count === 0) {
-  //           const input = ctx.message.text.trim();
-  //           const count = Number(input);
-  //           if (!/^\d+$/.test(input)) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.number_error', { lang }),
-  //             );
-  //             return;
-  //           }
-
-  //           if (count <= 0) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.positive_number', { lang }),
-  //             );
-  //             return;
-  //           }
-  //           ctx.session.stadion.max_count = count;
-  //           ctx.session.stadion.length = 'length';
-  //           ctx.session.stadion.step = 5;
-  //           ctx.reply(this.i18n.translate('stadions.length', { lang }), {
-  //             reply_markup: {
-  //               keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.back', { lang }),
-  //                   },
-  //                 ],
-  //               ],
-  //               resize_keyboard: true,
-  //               one_time_keyboard: true,
-  //             },
-  //           });
-  //           return;
-  //         }
-  //         if (ctx.session.stadion.length === 'length') {
-  //           const input = ctx.message.text.trim();
-  //           const length = Number(input);
-  //           if (!/^\d+$/.test(input)) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.number_error', { lang }),
-  //             );
-  //             return;
-  //           }
-
-  //           if (length <= 0) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.positive_number', { lang }),
-  //             );
-  //             return;
-  //           }
-  //           ctx.session.stadion.length = length;
-  //           ctx.session.stadion.width = 'width';
-  //           ctx.session.stadion.step = 6;
-  //           ctx.reply(this.i18n.translate('stadions.width', { lang }), {
-  //             reply_markup: {
-  //               keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.back', { lang }),
-  //                   },
-  //                 ],
-  //               ],
-  //               resize_keyboard: true,
-  //               one_time_keyboard: true,
-  //             },
-  //           });
-  //           return;
-  //         }
-  //         if (ctx.session.stadion.width === 'width') {
-  //           const input = ctx.message.text.trim();
-  //           const width = Number(input);
-  //           if (!/^\d+$/.test(input)) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.number_error', { lang }),
-  //             );
-  //             return;
-  //           }
-
-  //           if (width <= 0) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.positive_number', { lang }),
-  //             );
-  //             return;
-  //           }
-  //           ctx.session.stadion.width = width;
-  //           ctx.session.stadion.price = 'price';
-  //           ctx.session.stadion.step = 7;
-  //           ctx.reply(this.i18n.translate('stadions.price', { lang }), {
-  //             reply_markup: {
-  //               keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.back', { lang }),
-  //                   },
-  //                 ],
-  //               ],
-  //               resize_keyboard: true,
-  //               one_time_keyboard: true,
-  //             },
-  //           });
-  //           return;
-  //         }
-  //         if (ctx.session.stadion.price === 'price') {
-  //           const input = ctx.message.text.trim();
-  //           const price = Number(input);
-
-  //           if (!/^\d+$/.test(input)) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.number_error', { lang }),
-  //             );
-  //             return;
-  //           }
-
-  //           if (price <= 0) {
-  //             await ctx.reply(
-  //               this.i18n.translate('error.positive_number', { lang }),
-  //             );
-  //             return;
-  //           }
-
-  //           if (price > 1500000) {
-  //             await ctx.reply(this.i18n.translate('error.too_large', { lang }));
-  //             return;
-  //           }
-
-  //           ctx.session.stadion.price = price;
-  //           ctx.session.stadion.payments = 'payments';
-  //           ctx.session.stadion.step = 8;
-  //           ctx.reply(this.i18n.translate('stadions.paymenst_type', { lang }), {
-  //             reply_markup: {
-  //               inline_keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.card', { lang }),
-  //                     callback_data: `payments_${Payments.CARD}`,
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.cash', { lang }),
-  //                     callback_data: `payments_${Payments.CASH}`,
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.both', { lang }),
-  //                     callback_data: `payments_${Payments.GIBRID}`,
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('stadions.back', { lang }),
-  //                     callback_data: 'back_owner_4',
-  //                   },
-  //                 ],
-  //               ],
-  //             },
-  //           });
-  //           return;
-  //         }
-  //       }
-  //       if (
-  //         ctx.session.step === 'enter_schedule_time' ||
-  //         ctx.session.step === 'edit_schedule_time' ||
-  //         ctx.session.step === 'special_time' ||
-  //         ctx.session.step === 'special_time_edit'
-  //       ) {
-  //         const text = ctx.message.text?.trim();
-
-  //         const timePattern =
-  //           /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
-  //         const match = text.match(timePattern);
-
-  //         if (!match) {
-  //           ctx.reply(
-  //             this.i18n.translate('schedule.schedules.format', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
-  //         const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
-
-  //         const toMinutes = (t: string) => {
-  //           const [h, m] = t.split(':').map(Number);
-  //           return h * 60 + m;
-  //         };
-
-  //         if (toMinutes(startTime) >= toMinutes(endTime)) {
-  //           ctx.reply(
-  //             this.i18n.translate('schedule.schedules.error', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         try {
-  //           if (ctx.session.step === 'special_time') {
-  //             await this.prisma.stadion_special_schedule.create({
-  //               data: {
-  //                 date: new Date(ctx.session.stadion.special),
-  //                 start_time: startTime,
-  //                 end_time: endTime,
-  //                 stadion_id: Number(ctx.session.stadion.id),
-  //               },
-  //             });
-  //             await ctx.reply(
-  //               this.i18n.translate('schedule.off_day.succses', { lang }),
-  //             );
-  //             ctx.session.step = null;
-  //             return this.botService.stadion_special(
-  //               ctx,
-  //               Number(ctx.session.stadion.id),
-  //             );
-  //           }
-  //           if (ctx.session.step === 'special_time_edit') {
-  //             await this.prisma.stadion_special_schedule.update({
-  //               where: {
-  //                 id: Number(ctx.session.stadion.schedule_id),
-  //               },
-  //               data: {
-  //                 stadion_id: Number(ctx.session.stadion.id),
-  //                 start_time: startTime,
-  //                 end_time: endTime,
-  //                 date: ctx.session.stadion.special,
-  //               },
-  //             });
-  //             await ctx.reply(
-  //               this.i18n.translate('schedule.off_day.update', { lang }),
-  //             );
-  //             ctx.session.step = null;
-  //             return this.botService.stadion_special(
-  //               ctx,
-  //               Number(ctx.session.stadion.id),
-  //             );
-  //           }
-  //           if (ctx.session.step === 'edit_schedule_time') {
-  //             await this.prisma.stadion_chedule.update({
-  //               where: { id: Number(ctx.session.stadion.schedule_id) },
-  //               data: { start_time: startTime, end_time: endTime },
-  //             });
-
-  //             await ctx.reply(
-  //               this.i18n.translate('schedule.schedules.updated', { lang }),
-  //             );
-  //           } else {
-  //             await this.prisma.stadion_chedule.create({
-  //               data: {
-  //                 stadion_id: Number(ctx.session.stadion.id),
-  //                 day_of_week: Number(ctx.session.stadion.schedule_day),
-  //                 start_time: startTime,
-  //                 end_time: endTime,
-  //               },
-  //             });
-
-  //             await ctx.reply(
-  //               this.i18n.translate('schedule.schedules.creat', { lang }),
-  //             );
-  //           }
-  //         } catch (error) {
-  //           ctx.reply(
-  //             this.i18n.translate('schedule.schedules.creat_error', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         ctx.session.step = null;
-  //         ctx.session.stadion.schedule_day = null;
-
-  //         return this.botService.renderScheduleMenu(
-  //           ctx,
-  //           Number(ctx.session.stadion.id),
-  //         );
-  //       }
-  //       if (
-  //         ctx.session.step === 'add_off_stadion_week' ||
-  //         ctx.session.step === 'add_special' ||
-  //         ctx.session.step === 'week_edit' ||
-  //         ctx.session.step === 'edit_specile'
-  //       ) {
-  //         const dateStr = ctx.message.text.trim();
-
-  //         const isValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(dateStr);
-  //         if (!isValidFormat) {
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.off_day.format', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         const [year, month, day] = dateStr.split('-').map(Number);
-  //         const date = new Date(dateStr);
-
-  //         const isRealDate =
-  //           date.getFullYear() === year &&
-  //           date.getMonth() + 1 === month &&
-  //           date.getDate() === day;
-
-  //         if (!isRealDate) {
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.off_day.not_fount_day', { lang }),
-  //           );
-  //           return;
-  //         }
-  //         if (ctx.session.step === 'add_special') {
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.time_specile', { lang }),
-  //           );
-  //           ctx.session.stadion.special = date;
-  //           ctx.session.step = 'special_time';
-  //           return;
-  //         }
-  //         if (ctx.session.step === 'edit_specile') {
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.update_time', { lang }),
-  //           );
-  //           ctx.session.stadion.special = date;
-  //           ctx.session.step = 'special_time_edit';
-  //           return;
-  //         }
-
-  //         try {
-  //           if (ctx.session.step === 'week_edit') {
-  //             await this.prisma.stadion_off_days.update({
-  //               where: { id: Number(ctx.session.stadion.off) },
-  //               data: { date },
-  //             });
-  //             await ctx.reply(
-  //               this.i18n.translate('schedule.off_day.update', { lang }),
-  //             );
-  //             ctx.session.step = null;
-  //             return this.botService.stadion_off_days(
-  //               ctx,
-  //               Number(ctx.session.stadion.id),
-  //             );
-  //           }
-
-  //           await this.prisma.stadion_off_days.create({
-  //             data: {
-  //               stadion_id: Number(ctx.session.stadion.id),
-  //               date: date,
-  //             },
-  //           });
-
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.off_day.succses', { lang }),
-  //           );
-  //           ctx.session.step = null;
-  //           return this.botService.stadion_off_days(
-  //             ctx,
-  //             Number(ctx.session.stadion.id),
-  //           );
-  //         } catch (e) {
-  //           await ctx.reply(
-  //             this.i18n.translate('schedule.off_day.error', { lang }),
-  //           );
-  //         }
-
-  //         return;
-  //       }
-  //       if (ctx.session.step === 'price') {
-  //         const input = ctx.message.text.trim();
-  //         const price = Number(input);
-
-  //         if (!/^\d+$/.test(input)) {
-  //           await ctx.reply(
-  //             this.i18n.translate('error.number_error', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         if (price <= 0) {
-  //           await ctx.reply(
-  //             this.i18n.translate('error.positive_number', { lang }),
-  //           );
-  //           return;
-  //         }
-
-  //         if (price > 1500000) {
-  //           await ctx.reply(this.i18n.translate('error.too_large', { lang }));
-  //           return;
-  //         }
-  //         try {
-  //           const stadion = await this.prisma.stadion.update({
-  //             where: { id: Number(ctx.session.stadion.id) },
-  //             data: { price },
-  //           });
-  //           return this.botService.stadion_price(ctx, stadion.id);
-  //         } catch (error) {
-  //           ctx.reply(this.i18n.translate('error.error', { lang }));
-  //         }
-  //       }
-  //       if (
-  //         ctx.message.text ===
-  //           this.i18n.translate('menyu_buttons.settings', { lang }) &&
-  //         (await this.utils.isChecket(String(ctx.from?.id), ctx))
-  //       ) {
-  //         try {
-  //           const owner = await this.prisma.owners.findUnique({
-  //             where: { chatID: String(ctx.from?.id) },
-  //           });
-  //           if (!owner) {
-  //             ctx.reply(this.i18n.translate('error.error', { lang }));
-  //             return;
-  //           }
-
-  //           ctx.reply(this.i18n.translate('settings.title', { lang }), {
-  //             reply_markup: {
-  //               inline_keyboard: [
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('settings.language', { lang }),
-  //                     callback_data: JSON.stringify({
-  //                       id: owner.id,
-  //                       type: 'language',
-  //                     }),
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('settings.notification', {
-  //                       lang,
-  //                     }),
-  //                     callback_data: JSON.stringify({
-  //                       id: owner.id,
-  //                       type: 'notification',
-  //                     }),
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('settings.phone', { lang }),
-  //                     callback_data: JSON.stringify({
-  //                       id: owner.id,
-  //                       type: 'phone',
-  //                     }),
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('settings.account', { lang }),
-  //                     callback_data: JSON.stringify({
-  //                       id: owner.id,
-  //                       type: 'account',
-  //                     }),
-  //                   },
-  //                 ],
-  //                 [
-  //                   {
-  //                     text: this.i18n.translate('schedule.back', { lang }),
-  //                     callback_data: 'back_owner_1',
-  //                   },
-  //                 ],
-  //               ],
-  //             },
-  //           });
-  //           return;
-  //         } catch (error) {
-  //           ctx.reply(this.i18n.translate('error.error', { lang }));
-  //         }
-  //       }
-  //       if (ctx.session.owner_registor.phone === 'update_phone') {
-  //         try {
-  //           const phone = ctx.message.text?.trim();
-
-  //           const phoneRegex = /^(?:\+998|998)?[0-9]{9}$/;
-
-  //           if (!phone || !phoneRegex.test(phone)) {
-  //             ctx.reply(this.i18n.translate('error.phone_invalid', { lang }));
-  //             return;
-  //           }
-
-  //           let normalizedPhone = phone;
-
-  //           if (phone.length === 9) {
-  //             normalizedPhone = `+998${phone}`;
-  //           } else if (phone.startsWith('998')) {
-  //             normalizedPhone = `+${phone}`;
-  //           }
-
-  //           ctx.session.owner_registor.phone = null;
-  //           const id = Number(ctx.session.owner_registor.id);
-
-  //           await this.prisma.owners.update({
-  //             where: { id },
-  //             data: { phone: normalizedPhone },
-  //           });
-  //           ctx.reply(this.i18n.translate('success.phone_updated', { lang }));
-  //           return this.ownerService.ownerContakt(ctx, id);
-  //         } catch (error) {
-  //           ctx.reply(this.i18n.translate('error.error', { lang }));
-  //         }
-  //       }
-  //       if (
-  //         ctx.message.text ===
-  //           this.i18n.translate('menyu_buttons.help', { lang }) &&
-  //         (await this.utils.isChecket(String(ctx.from?.id), ctx))
-  //       ) {
-  //         ctx.reply(
-  //           this.i18n.translate('help.help.title', { lang }),
-  //           helpMenuKeyboard(this.i18n, String(lang)),
-  //         );
-  //       }
-  //       if (ctx.message.text === this.i18n.translate('menyu_buttons.bron')) {
-  //         return this.ownerService.owner_Bron(ctx, lang);
-  //       }
-  //       if (
-  //         ctx.message.text ===
-  //         this.i18n.translate('menyu_buttons.card', { lang })
-  //       ) {
-  //         return this.ownerService.owner_card(ctx, lang);
-  //       } else {
-  //         ctx.reply(
-  //           this.i18n.translate('error.else', {
-  //             lang,
-  //             args: { text: ctx.message.text },
-  //           }),
-  //         );
-  //       }
-  //     }
-  //   } catch (error) {
-  //     ctx.reply(this.i18n.translate('error.error', { lang }));
-  //   }
-  // }
-
-
   @On('message')
   async Message(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -2345,22 +1342,22 @@ export class BotUpdate {
         if (
           text === `💼 ${this.i18n.translate('registor.button.0', { lang })}`
         ) {
-          return this.ownerService.registor(ctx);
+          return this.ownerService.registor(ctx, lang);
         } else if (
           text === `🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`
         ) {
-          return this.userService.registor(ctx);
+          return this.userService.registor(ctx, lang);
         } else {
-           ctx.reply(this.i18n.translate('error.worning', { lang }));
-           return
+          ctx.reply(this.i18n.translate('error.worning', { lang }));
+          return;
         }
       }
 
       if (ctx.session.step === 'owner_registor') {
-        return this.ownerService.registor_step(ctx);
+        return this.ownerService.registor_step(ctx, lang);
       }
       if (ctx.session.step === 'user_registor') {
-        return this.userService.registor_step(ctx);
+        return this.userService.registor_step(ctx, lang);
       }
 
       switch (text) {
@@ -2376,23 +1373,28 @@ export class BotUpdate {
         case this.i18n.translate('menyu_buttons.settings', { lang }):
           if (await this.utils.isChecket(String(ctx.from?.id), ctx)) {
             return this.ownerService.ownerSettings(ctx, lang);
-          }
-          else{
-            ctx.reply("settings")
-            return
+          } else {
+            return this.userService.settings(ctx, lang);
           }
 
         case this.i18n.translate('menyu_buttons.help', { lang }):
           if (await this.utils.isChecket(String(ctx.from?.id), ctx)) {
-             ctx.reply(
+            ctx.reply(
               this.i18n.translate('help.help.title', { lang }),
               helpMenuKeyboard(this.i18n, lang),
             );
-            return
+            return;
+          } else {
+            return this.userService.userHelp(ctx, lang)
           }
-          else{
-            ctx.reply("Help")
-            return
+        case this.i18n.translate('menyu_buttons.user_stadion_booking', {
+          lang,
+        }):
+          return this.userService.userBooking(ctx, lang);
+
+        case this.i18n.translate('stadions.back', { lang }):
+          if (ctx.session.stadion.step) {
+            return this.ownerService.handleStadionBack(ctx, lang);
           }
       }
 
@@ -2402,6 +1404,9 @@ export class BotUpdate {
 
       if (ctx.session.stadion_step === 'stadion') {
         return this.ownerService.handleStadionSteps(ctx, lang, text);
+      }
+      if (ctx.session.user_registor.phone === 'phone') {
+        return this.userService.userUpdate_phone(ctx, lang, text);
       }
 
       if (
@@ -2432,20 +1437,7 @@ export class BotUpdate {
         return this.ownerService.handlePrice(ctx, lang, text);
       }
 
-      if (
-        ctx.message.text === this.i18n.translate('stadions.back', { lang }) &&
-        ctx.session.stadion.step
-      ) {
-        return this.ownerService.handleStadionBack(ctx, lang);
-      }
-      if(ctx.message.text === this.i18n.translate("menyu_buttons.user_stadion_booking",{lang})){
-        ctx.reply("Bron")
-        return
-      }
-
-       ctx.reply(
-        this.i18n.translate('error.else', { lang, args: { text } }),
-      );
+      ctx.reply(this.i18n.translate('error.else', { lang, args: { text } }));
     } catch (error) {
       console.error(error);
       return ctx.reply(this.i18n.translate('error.error', { lang }));

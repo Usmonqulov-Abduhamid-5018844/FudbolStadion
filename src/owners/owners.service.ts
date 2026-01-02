@@ -19,8 +19,7 @@ export class OwnersService {
     private readonly botService: BotService,
   ) {}
 
-  async registor(ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
+  async registor(ctx: MyContext, lang: string) {
     ctx.session = ctx.session || {};
     ctx.session.step = 'owner_registor';
 
@@ -46,8 +45,7 @@ export class OwnersService {
     });
   }
 
-  async registor_step(ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
+  async registor_step(ctx: MyContext, lang: string) {
     if (ctx.message && 'text' in ctx.message) {
       if (ctx.session.owner_registor.step === 'full_name') {
         ctx.session.owner_registor.full_name = ctx.message.text;
@@ -301,7 +299,6 @@ export class OwnersService {
           ],
         },
       });
-      return;
     } catch (error) {
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
@@ -822,6 +819,194 @@ export class OwnersService {
       default: {
         break;
       }
+    }
+  }
+  async ownerBackSwitch(ctx: MyContext, data: string, lang: string) {
+    try {
+      switch (data) {
+        case '1':
+          {
+            ctx.reply(
+              this.i18n.translate('menyu_buttons.menu', { lang }),
+              Markup.keyboard([
+                [
+                  this.i18n.translate('menyu_buttons.stadion', { lang }),
+                  this.i18n.translate('menyu_buttons.bron', { lang }),
+                ],
+                [
+                  this.i18n.translate('menyu_buttons.settings', { lang }),
+                  this.i18n.translate('menyu_buttons.help', { lang }),
+                ],
+                [this.i18n.translate('menyu_buttons.card', { lang })],
+              ])
+                .resize()
+                .oneTime(),
+            );
+          }
+          break;
+        case '2':
+          {
+            try {
+              const owner = await this.prisma.owners.findUnique({
+                where: { chatID: String(ctx.from?.id) },
+              });
+              if (!owner) {
+                throw new Error();
+              }
+              const stadion = await this.prisma.stadion.findMany({
+                where: { owner_id: owner.id },
+              });
+              if (!stadion.length) {
+                await ctx.reply(
+                  this.i18n.translate('stadions.stadion', { lang }),
+                  {
+                    reply_markup: {
+                      inline_keyboard: [
+                        [
+                          {
+                            text: this.i18n.translate('stadions.add', {
+                              lang,
+                            }),
+                            callback_data: 'add_stadion',
+                          },
+                        ],
+                        [
+                          {
+                            text: this.i18n.translate('stadions.back', {
+                              lang,
+                            }),
+                            callback_data: 'back_owner_1',
+                          },
+                        ],
+                      ],
+                    },
+                  },
+                );
+                return;
+              }
+              const button: InlineKeyboardButton[][] = [];
+
+              stadion.forEach((s) => {
+                button.push([
+                  { text: `🏟 ${s.name}`, callback_data: `stadion_${s.id}` },
+                ]);
+              });
+
+              button.push(
+                [
+                  {
+                    text: this.i18n.translate('stadions.add', { lang }),
+                    callback_data: 'add_stadion',
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('stadions.back', { lang }),
+                    callback_data: 'back_owner_1',
+                  },
+                ],
+              );
+              await ctx.reply(
+                this.i18n.translate('stadions.select', { lang }),
+                {
+                  reply_markup: { inline_keyboard: button },
+                },
+              );
+            } catch (error) {
+              ctx.reply(this.i18n.translate('error.error', { lang }));
+            }
+          }
+          break;
+        case '3':
+          {
+            if (ctx.callbackQuery) {
+              try {
+                await ctx.answerCbQuery();
+              } catch {}
+            }
+            try {
+              const region = await this.prisma.region.findMany();
+              if (!region.length) {
+                throw new Error();
+              }
+
+              const button: InlineKeyboardButton[][] = region.map((r) => [
+                { text: r.name, callback_data: `region_${r.id}` },
+              ]);
+              button.push([
+                {
+                  text: this.i18n.translate('stadions.back', { lang }),
+                  callback_data: 'back_owner_2',
+                },
+              ]);
+
+              await ctx.reply(
+                this.i18n.translate('stadions.stadion_region', { lang }),
+                {
+                  reply_markup: { inline_keyboard: button },
+                },
+              );
+            } catch (error) {
+              ctx.reply(this.i18n.translate('error.error', { lang }));
+            }
+          }
+          break;
+        case '4':
+          {
+            ctx.session.stadion.price = 'price';
+            ctx.session.stadion.step = 7;
+            ctx.reply(this.i18n.translate('stadions.price', { lang }), {
+              reply_markup: {
+                keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('stadions.back', { lang }),
+                    },
+                  ],
+                ],
+                resize_keyboard: true,
+                one_time_keyboard: true,
+              },
+            });
+          }
+          break;
+        case 'help':
+          {
+            try {
+              await this.utils.safeEditHelpMenyuReply(
+                ctx,
+                this.i18n.translate('help.help.title', { lang }),
+              );
+            } catch (error) {
+              ctx.reply(this.i18n.translate('error.error', { lang }));
+            }
+          }
+          break;
+        case '5':
+          {
+            ctx.session.step = 'registor';
+            ctx.reply(
+              this.i18n.translate('registor.title', {
+                lang: ctx.session.lang || ctx.from?.language_code,
+              }),
+              Markup.keyboard([
+                [`💼 ${this.i18n.translate('registor.button.0', { lang })}`],
+                [`🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`],
+              ])
+                .oneTime()
+                .resize(),
+            );
+          }
+          break;
+        case '6': {
+          return this.registor(ctx, lang);
+        }
+        default: {
+          break;
+        }
+      }
+    } catch (error) {
+      ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
 
