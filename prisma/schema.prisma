@@ -55,6 +55,7 @@ model Users {
   updatedAt    DateTime      @updatedAt
   tranzaktions Tranzaktion[]
   bookings     Booking[]
+  myFavoriteStadiums MyFavoriteStadium[]
 }
 
 model Stadion {
@@ -68,7 +69,7 @@ model Stadion {
   max_count       Int
   region_item_id  Int
   owner_id        Int
-  working_status  Boolean           @default(false)
+  working_status  Boolean           @default(true)
   length          Int
   width           Int
   payments_type   Payments          @default(GIBRID)
@@ -77,6 +78,7 @@ model Stadion {
   updatedAt       DateTime          @updatedAt
   stadionChedules Stadion_chedule[]
   bookings        Booking[]
+  myFavoriteStadiums MyFavoriteStadium[]
 
   region                  Region                     @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
   region_items            Region_item                @relation(fields: [region_item_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -183,4 +185,17 @@ model sesion {
   lang    String?
   step    String?
   chat_id String @unique
+}
+
+
+model MyFavoriteStadium {
+  id         Int    @id @default(autoincrement())
+  chat_id    String
+  stadion_id Int
+  createdAt  DateTime @default(now())
+
+  user    Users    @relation(fields: [chat_id], references: [chatID], onDelete: Cascade)
+  stadion Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+
+  @@unique([chat_id, stadion_id])
 }

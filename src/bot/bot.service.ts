@@ -140,9 +140,9 @@ export class BotService {
         payments_type: ctx.session.stadion.payments_type,
       };
       let stadion: any;
-      if (data.payments_type == 'CASH') {
+      if (data.payments_type === 'CARD') {
         stadion = await this.prisma.stadion.create({
-          data: { ...data, working_status: true },
+          data: { ...data, working_status: false },
         });
       } else {
         stadion = await this.prisma.stadion.create({ data });
@@ -395,7 +395,10 @@ export class BotService {
             { inline_keyboard: inlineKeyboard },
           );
         } catch (error) {
-          ctx.reply(this.i18n.translate('error.error', { lang }));
+          await ctx.reply(
+            this.i18n.translate('schedule.schedules.week', { lang }),
+            { reply_markup: { inline_keyboard: inlineKeyboard } },
+          );
         }
       } else {
         return this.renderScheduleMenu(ctx, stadion_id);
@@ -715,22 +718,6 @@ export class BotService {
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
-        select: {
-          name: true,
-          latitude: true,
-          longitude: true,
-          image: true,
-          price: true,
-          max_count: true,
-          length: true,
-          width: true,
-          payments_type: true,
-          is_premium: true,
-          working_status: true,
-          createdAt: true,
-          updatedAt: true,
-          owner_id: true,
-        },
       });
 
       if (!stadion) {
@@ -779,31 +766,27 @@ ${this.i18n.translate('view.creted', { lang })} ${createdAt}
 ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 `;
 
+      const sendText = async () => {
+        await ctx.reply(message, { parse_mode: 'HTML' });
+      };
+
       if (stadion.image) {
-        await ctx.replyWithPhoto(stadion.image, {
-          caption: message,
-          parse_mode: 'HTML',
-        });
-        ctx.reply(this.i18n.translate('stadions.menyu.all_data', { lang }), {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'stadion',
-                    id: stadion_id,
-                  }),
-                },
-              ],
-            ],
-          },
-        });
+        try {
+          await ctx.replyWithPhoto(stadion.image, {
+            caption: message,
+            parse_mode: 'HTML',
+          });
+        } catch (err) {
+          console.error('Image send failed:', err);
+          await sendText();
+        }
       } else {
-        await ctx.reply(message, {
-          parse_mode: 'HTML',
-        });
-        ctx.reply(this.i18n.translate('stadions.menyu.all_data', { lang }), {
+        await sendText();
+      }
+
+      await ctx.reply(
+        this.i18n.translate('stadions.menyu.all_data', { lang }),
+        {
           reply_markup: {
             inline_keyboard: [
               [
@@ -817,8 +800,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               ],
             ],
           },
-        });
-      }
+        },
+      );
     } catch (error) {
       console.error(error);
       ctx.reply(this.i18n.translate('error.error', { lang }));

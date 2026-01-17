@@ -177,6 +177,27 @@ export class BotUpdate {
       }
     }
   }
+  @Action(/^booking_(region|regionItem|stadion|save)_(.+)/)
+  async userBooking(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, type, id] = ctx.callbackQuery.data.split('_');
+      if (type === 'region') {
+        return this.userService.userbookingRegion(ctx, lang, Number(id));
+      } else if (type === 'regionItem') {
+        return this.userService.userbookingRegionItems(ctx, lang, Number(id));
+      } else if (type === 'stadion') {
+        ctx.reply('stadion');
+      } else if (type === 'save') {
+        return this.userService.userSaveFnc(ctx, lang, Number(id));
+      }
+    }
+  }
   @Action(/^user_(.+)$/)
   async userSetting(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -188,7 +209,6 @@ export class BotUpdate {
 
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const data = ctx.callbackQuery.data.split('_')[1];
-
       return this.userService.userSwitch(ctx, data, lang);
     }
   }
@@ -412,6 +432,9 @@ export class BotUpdate {
           } catch {}
         }
         return;
+      }
+      case 'user_back_regionItems': {
+        return this.userService.userbookingRegion(ctx, lang, data.id);
       }
       case 'HELP_ABOUT':
         {
@@ -1385,7 +1408,7 @@ export class BotUpdate {
             );
             return;
           } else {
-            return this.userService.userHelp(ctx, lang)
+            return this.userService.userHelp(ctx, lang);
           }
         case this.i18n.translate('menyu_buttons.user_stadion_booking', {
           lang,
