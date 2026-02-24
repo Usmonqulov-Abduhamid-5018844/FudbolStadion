@@ -8,10 +8,8 @@ import { getDistance } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
-import { text } from 'stream/consumers';
 import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { inlineKeyboard } from 'telegraf/typings/markup';
 @Injectable()
 export class UsersService {
   constructor(
@@ -307,6 +305,26 @@ export class UsersService {
         case 'stadionNewBron': {
           return this.userBookingFanc(ctx, lang);
         }
+        case 'stadionFavorite': {
+          const lang = await this.utils.langs(ctx);
+          const favorites = await this.prisma.myFavoriteStadium.findMany({
+            where: { chat_id: String(ctx.from?.id) },
+            include: {
+              stadion: true,
+            },
+          });
+          if (favorites.length) {
+            favorites.forEach((i) => {
+              this.stadionFavorite(ctx, lang, i.stadion);
+            });
+            return;
+          } else {
+            ctx.reply(
+              this.i18n.translate('booking.stadion.noFavorites', { lang }),
+            );
+            return;
+          }
+        }
         default: {
           break;
         }
@@ -320,37 +338,43 @@ export class UsersService {
   }
   async userBooking(ctx: MyContext, lang: string) {
     try {
-      ctx.reply('Stadion bron qilish', {
+      ctx.reply(this.i18n.translate('booking.stadion.menuTitle', { lang }), {
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: '➕ Yangi stadion bron qilish',
+                text: this.i18n.translate('booking.stadion.newBooking', {
+                  lang,
+                }),
                 callback_data: 'user_stadionNewBron',
               },
             ],
             [
               {
-                text: '📅 Faol bronlarim',
+                text: this.i18n.translate('booking.stadion.activeBookings', {
+                  lang,
+                }),
                 callback_data: 'user_stadionBron',
               },
             ],
             [
               {
-                text: '📜 Bronlar tarixi',
+                text: this.i18n.translate('booking.stadion.history', { lang }),
                 callback_data: 'user_stadionBronHistory',
               },
             ],
             [
               {
-                text: '⭐ Sevimli stadionlar',
+                text: this.i18n.translate('booking.stadion.favorites', {
+                  lang,
+                }),
                 callback_data: 'user_stadionFavorite',
               },
             ],
             [
               {
-                text: '🔎 Stadion qidirish',
-                callback_data: 'user_stadionSeorch',
+                text: this.i18n.translate('booking.stadion.search', { lang }),
+                callback_data: 'user_stadionSearch',
               },
             ],
             [
@@ -394,12 +418,13 @@ export class UsersService {
           callback_data: 'back_user_4',
         },
       ]);
-      await ctx.reply('Region  tanlang', {
-        reply_markup: { inline_keyboard: button },
-      });
+      await ctx.reply(
+        this.i18n.translate('booking.stadion.selectRegion', { lang }),
+        {
+          reply_markup: { inline_keyboard: button },
+        },
+      );
     } catch (error) {
-      console.log(error);
-
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
@@ -429,7 +454,7 @@ export class UsersService {
         try {
           await this.utils.safeEditOrReply(
             ctx,
-            'Hozircha stadionlar mavjud emas',
+            this.i18n.translate('booking.stadion.notAvailable', { lang }),
             {
               inline_keyboard: [
                 [
@@ -445,20 +470,23 @@ export class UsersService {
           );
           return;
         } catch (error) {
-          await ctx.reply('Hozircha stadionlar mavjud emas', {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', {
-                      lang,
-                    }),
-                    callback_data: 'back_user_3',
-                  },
+          await ctx.reply(
+            this.i18n.translate('booking.stadion.notAvailable', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', {
+                        lang,
+                      }),
+                      callback_data: 'back_user_3',
+                    },
+                  ],
                 ],
-              ],
+              },
             },
-          });
+          );
           return;
         }
       }
@@ -477,9 +505,12 @@ export class UsersService {
         },
       ]);
 
-      await ctx.editMessageText("Hozirda stadion mavjud bo'lgan viloyadlar", {
-        reply_markup: { inline_keyboard: button },
-      });
+      await ctx.editMessageText(
+        this.i18n.translate('booking.stadion.availableRegions', { lang }),
+        {
+          reply_markup: { inline_keyboard: button },
+        },
+      );
     } catch (error) {
       await ctx.reply(this.i18n.translate('error.error', { lang }));
     }
@@ -537,11 +568,11 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             inline_keyboard: [
               [
                 {
-                  text: 'Bron qilish',
+                  text: this.i18n.translate("booking.stadion.book",{lang}),
                   callback_data: `booking_stadion_${stadion.id}`,
                 },
                 {
-                  text: 'Sevimliy',
+                  text: this.i18n.translate("booking.stadion.favorite",{lang}),
                   callback_data: `booking_save_${stadion.id}`,
                 },
               ],
@@ -567,14 +598,14 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             reply_markup: {
               inline_keyboard: [
                 [
-                  {
-                    text: 'Bron qilish',
-                    callback_data: `booking_stadion_${stadion.id}`,
-                  },
-                  {
-                    text: 'Sevimliy',
-                    callback_data: `booking_save_${stadion.id}`,
-                  },
+                 {
+                  text: this.i18n.translate("booking.stadion.book",{lang}),
+                  callback_data: `booking_stadion_${stadion.id}`,
+                },
+                {
+                  text: this.i18n.translate("booking.stadion.favorite",{lang}),
+                  callback_data: `booking_save_${stadion.id}`,
+                },
                 ],
                 [
                   {
@@ -610,12 +641,16 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const data = await this.prisma.myFavoriteStadium.findUnique({ where });
       if (data) {
         await this.prisma.myFavoriteStadium.delete({ where });
-        await ctx.reply("Stadion sevimliydan o'chirildi");
+        await ctx.reply(
+          this.i18n.translate('booking.stadion.removedFromFavorites', { lang }),
+        );
       } else {
         await this.prisma.myFavoriteStadium.create({
           data: { stadion_id: stadionId, chat_id: String(ctx.from?.id) },
         });
-        await ctx.reply("Stadion sevimliylarga qo'shildi");
+        await ctx.reply(
+          this.i18n.translate('booking.stadion.addedToFavorites', { lang }),
+        );
       }
     } catch (error) {
       await ctx.reply(this.i18n.translate('error.error', { lang }));
@@ -670,6 +705,134 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     } catch (error) {
       console.error(error);
       ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  async stadionFavorite(ctx: MyContext, lang: string, stadion: IStadion) {
+    try {
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: stadion.owner_id },
+      });
+      const formatPrice = (price?: number | string) => {
+        if (!price) return '❌';
+        return new Intl.NumberFormat('uz-UZ').format(Number(price));
+      };
+
+      const createdAt = formatInTimeZone(
+        stadion.createdAt,
+        'Asia/Tashkent',
+        'yyyy-MM-dd HH:mm',
+      );
+
+      const updatedAt = formatInTimeZone(
+        stadion.updatedAt,
+        'Asia/Tashkent',
+        'yyyy-MM-dd HH:mm',
+      );
+      const statusText = stadion.working_status
+        ? `🟢 ${this.i18n.translate('view.active', { lang })}`
+        : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
+
+      let locationText = this.i18n.translate('view.not_available', { lang });
+      if (stadion.latitude && stadion.longitude) {
+        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
+        locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
+      }
+
+      const message = `
+🏟 <b>${stadion.name}</b>\n
+${this.i18n.translate('view.locate', { lang })} ${locationText}
+${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
+${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
+${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
+${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
+${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
+${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
+${this.i18n.translate('view.creted', { lang })} ${createdAt}
+${this.i18n.translate('view.update', { lang })} ${updatedAt}
+`;
+
+      const sendText = async () => {
+        await ctx.reply(message, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate("booking.stadion.book",{lang}),
+                  callback_data: `booking_stadion_${stadion.id}`,
+                },
+                {
+                  text: this.i18n.translate('schedule.back'),
+                  callback_data: 'back_user_3',
+                },
+              ],
+            ],
+          },
+        });
+      };
+
+      if (stadion.image) {
+        try {
+          await ctx.replyWithPhoto(stadion.image, {
+            caption: message,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate("booking.stadion.book",{lang}),
+                    callback_data: `booking_stadion_${stadion.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('schedule.back'),
+                    callback_data: 'back_user_3',
+                  },
+                ],
+              ],
+            },
+          });
+        } catch (err) {
+          await sendText();
+        }
+      } else {
+        await sendText();
+      }
+    } catch (error) {
+      await ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  async userbookingStadion(ctx: MyContext, lang: string, stadionId: number) {
+    try {
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+      });
+      if (!stadion) {
+        await ctx.reply(this.i18n.translate('error.error', { lang }));
+        return;
+      }
+      const schedule = await this.prisma.stadion_chedule.findMany({
+        where: { stadion_id: stadionId },
+      });
+
+      if(!schedule.length){
+        await ctx.reply(this.i18n.translate('booking.stadion.noWorkingHours', { lang }));
+        return;
+      }
+      ctx.reply(this.i18n.translate('booking.stadion.selectDate', { lang }), {
+        reply_markup: {
+          inline_keyboard: schedule.map((s) => [
+            {
+              text: `${this.i18n.translate(`schedule.week_days.${s.day_of_week}`, { lang })} ||  ${s.start_time} - ${s.end_time}`,
+              callback_data: `booking_stadion_${stadionId}_${s.id}`,
+            },
+          ]),
+        },
+      });
+    } catch (error) {
+      await ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
 }

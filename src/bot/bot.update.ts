@@ -192,7 +192,7 @@ export class BotUpdate {
       } else if (type === 'regionItem') {
         return this.userService.userbookingRegionItems(ctx, lang, Number(id));
       } else if (type === 'stadion') {
-        ctx.reply('stadion');
+        return this.userService.userbookingStadion(ctx, lang, Number(id));
       } else if (type === 'save') {
         return this.userService.userSaveFnc(ctx, lang, Number(id));
       }

@@ -1,0 +1,20 @@
+{
+  "stadion": {
+    "menuTitle": "Stadion bron qilish",
+    "newBooking": "➕ Yangi stadion bron qilish",
+    "activeBookings": "📅 Faol bronlarim",
+    "history": "📜 Bronlar tarixi",
+    "favorites": "⭐ Sevimli stadionlar",
+    "search": "🔎 Stadion qidirish",
+     "notAvailable": "⚠️ Hozircha stadionlar mavjud emas",
+      "availableRegions": "📍 Stadion mavjud bo‘lgan hududlar",
+        "addedToFavorites": "⭐ Stadion sevimlilar ro‘yxatiga qo‘shildi",
+       "removedFromFavorites": "⭐ Stadion sevimlilar ro‘yxatidan o‘chirildi",
+       "selectRegion": "📍 Hududni tanlang",
+        "noFavorites": "⭐ Sizda hozircha sevimli stadionlar mavjud emas",
+          "book": "📅 Bron qilish",
+    "favorite": "⭐ Sevimlilarga qo‘shish",
+     "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan"
+  
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "stadion": {
+    "menuTitle": "Stadium Booking",
+    "newBooking": "➕ Book a New Stadium",
+    "activeBookings": "📅 My Active Bookings",
+    "history": "📜 Booking History",
+    "favorites": "⭐ Favorite Stadiums",
+    "search": "🔎 Search Stadium",
+    "notAvailable": "⚠️ No stadiums available at the moment",
+    "availableRegions": "📍 Regions with available stadiums",
+    "addedToFavorites": "⭐ Stadium added to favorites",
+    "removedFromFavorites": "⭐ Stadium removed from favorites",
+    "selectRegion": "📍 Select Region",
+    "noFavorites": "⭐ You currently have no favorite stadiums",
+    "book": "📅 Book Now",
+    "favorite": "⭐ Add to Favorites",
+     "noWorkingHours": "⏰ Working hours have not been set for this stadium yet"
+  }
+}
