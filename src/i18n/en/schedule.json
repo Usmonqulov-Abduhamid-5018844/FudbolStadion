@@ -8,6 +8,21 @@
     "6": "Saturday",
     "7": "Sunday"
   },
+   "months": {
+      "1": "January",
+      "2": "February",
+      "3": "March",
+      "4": "April",
+      "5": "May",
+      "6": "June",
+      "7": "July",
+      "8": "August",
+      "9": "September",
+      "10": "October",
+      "11": "November",
+      "12": "December"
+    },
+    
   "working_hours": "🕒 Enter start and end work time for {name} (HH:MM-HH:MM):",
   "update_hours": "🕒 Please re-enter the start and end work time for {day} (HH:MM-HH:MM):",
 

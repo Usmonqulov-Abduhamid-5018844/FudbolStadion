@@ -121,7 +121,10 @@ export class UtilisService implements OnModuleInit {
         await ctx.answerCbQuery().catch(() => {});
       }
 
-      await ctx.editMessageText(text,  helpMenuKeyboard(this.i18n, String(lang)));
+      await ctx.editMessageText(
+        text,
+        helpMenuKeyboard(this.i18n, String(lang)),
+      );
     } catch (e) {
       const description = e?.response?.description ?? '';
 
@@ -135,7 +138,7 @@ export class UtilisService implements OnModuleInit {
       const canReply = safeErrors.some((err) => description.includes(err));
 
       if (canReply) {
-        await ctx.reply(text,  helpMenuKeyboard(this.i18n, String(lang)));
+        await ctx.reply(text, helpMenuKeyboard(this.i18n, String(lang)));
         return;
       }
       throw e;

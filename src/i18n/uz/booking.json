@@ -14,7 +14,8 @@
         "noFavorites": "⭐ Sizda hozircha sevimli stadionlar mavjud emas",
           "book": "📅 Bron qilish",
     "favorite": "⭐ Sevimlilarga qo‘shish",
-     "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan"
-  
+     "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan",
+   "selectDate": "📅 Bron qilish uchun sanani tanlang",
+   "alert": "⚠ E’tibor! Ushbu sana dam olish kuni 🏟️\n\nStadion yopiq ❌\nIltimos, boshqa kunni tanlang 📅"
   }
 }

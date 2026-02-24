@@ -14,6 +14,8 @@
     "noFavorites": "⭐ You currently have no favorite stadiums",
     "book": "📅 Book Now",
     "favorite": "⭐ Add to Favorites",
-     "noWorkingHours": "⏰ Working hours have not been set for this stadium yet"
+    "noWorkingHours": "⏰ Working hours have not been set for this stadium yet",
+    "selectDate": "📅 Select a date to book the stadium",
+    "alert": "⚠ Attention! This date is a holiday 🏟️\n\nStadium is closed ❌\nPlease choose another day 📅"
   }
 }

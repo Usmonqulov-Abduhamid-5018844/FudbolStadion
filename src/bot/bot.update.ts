@@ -162,6 +162,7 @@ export class BotUpdate {
 
   @Action(/^back_(owner|user)_(.+)$/)
   async brckAll(@Ctx() ctx: MyContext) {
+
     if (ctx.callbackQuery) {
       try {
         await ctx.answerCbQuery();
@@ -177,8 +178,9 @@ export class BotUpdate {
       }
     }
   }
-  @Action(/^booking_(region|regionItem|stadion|save)_(.+)/)
+  @Action(/^booking_(region|regionItem|schedule|stadion|save)_(.+)/)
   async userBooking(@Ctx() ctx: MyContext) {
+    
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery) {
       try {
@@ -196,19 +198,30 @@ export class BotUpdate {
       } else if (type === 'save') {
         return this.userService.userSaveFnc(ctx, lang, Number(id));
       }
+      else if (type === 'schedule') {
+       return this.userService.schedule(ctx, lang, Number(id));
+      }
     }
   }
   @Action(/^user_(.+)$/)
   async userSetting(@Ctx() ctx: MyContext) {
-    if (ctx.callbackQuery) {
-      try {
-        await ctx.answerCbQuery();
-      } catch (error) {}
-    }
+    
     const lang = await this.utils.langs(ctx);
 
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const data = ctx.callbackQuery.data.split('_')[1];
+      if (data === 'offday') {
+        if (ctx.callbackQuery) {
+          try {
+            await ctx.answerCbQuery(
+              this.i18n.translate('booking.stadion.alert', { lang }),
+              {
+                show_alert: true,
+              },
+            );
+          } catch (error) {}
+        }
+      }
       return this.userService.userSwitch(ctx, data, lang);
     }
   }
@@ -433,6 +446,9 @@ export class BotUpdate {
         }
         return;
       }
+      case 'Continue_back_stadion': {
+        return this.userService.userbookingRegionItems(ctx, lang, data.id);
+      };
       case 'user_back_regionItems': {
         return this.userService.userbookingRegion(ctx, lang, data.id);
       }

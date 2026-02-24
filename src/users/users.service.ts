@@ -10,6 +10,8 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
+import { toZonedTime, format } from 'date-fns-tz';
+import { time } from 'node:console';
 @Injectable()
 export class UsersService {
   constructor(
@@ -504,11 +506,11 @@ export class UsersService {
           callback_data: 'back_user_3',
         },
       ]);
-
-      await ctx.editMessageText(
+      await this.utils.safeEditOrReply(
+        ctx,
         this.i18n.translate('booking.stadion.availableRegions', { lang }),
         {
-          reply_markup: { inline_keyboard: button },
+          inline_keyboard: button,
         },
       );
     } catch (error) {
@@ -568,11 +570,13 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate("booking.stadion.book",{lang}),
+                  text: this.i18n.translate('booking.stadion.book', { lang }),
                   callback_data: `booking_stadion_${stadion.id}`,
                 },
                 {
-                  text: this.i18n.translate("booking.stadion.favorite",{lang}),
+                  text: this.i18n.translate('booking.stadion.favorite', {
+                    lang,
+                  }),
                   callback_data: `booking_save_${stadion.id}`,
                 },
               ],
@@ -598,14 +602,16 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             reply_markup: {
               inline_keyboard: [
                 [
-                 {
-                  text: this.i18n.translate("booking.stadion.book",{lang}),
-                  callback_data: `booking_stadion_${stadion.id}`,
-                },
-                {
-                  text: this.i18n.translate("booking.stadion.favorite",{lang}),
-                  callback_data: `booking_save_${stadion.id}`,
-                },
+                  {
+                    text: this.i18n.translate('booking.stadion.book', { lang }),
+                    callback_data: `booking_stadion_${stadion.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('booking.stadion.favorite', {
+                      lang,
+                    }),
+                    callback_data: `booking_save_${stadion.id}`,
+                  },
                 ],
                 [
                   {
@@ -760,7 +766,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate("booking.stadion.book",{lang}),
+                  text: this.i18n.translate('booking.stadion.book', { lang }),
                   callback_data: `booking_stadion_${stadion.id}`,
                 },
                 {
@@ -782,7 +788,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               inline_keyboard: [
                 [
                   {
-                    text: this.i18n.translate("booking.stadion.book",{lang}),
+                    text: this.i18n.translate('booking.stadion.book', { lang }),
                     callback_data: `booking_stadion_${stadion.id}`,
                   },
                   {
@@ -817,22 +823,103 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: { stadion_id: stadionId },
       });
 
-      if(!schedule.length){
-        await ctx.reply(this.i18n.translate('booking.stadion.noWorkingHours', { lang }));
+      if (!schedule.length) {
+        await ctx.reply(
+          this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
+        );
         return;
       }
-      ctx.reply(this.i18n.translate('booking.stadion.selectDate', { lang }), {
-        reply_markup: {
-          inline_keyboard: schedule.map((s) => [
-            {
-              text: `${this.i18n.translate(`schedule.week_days.${s.day_of_week}`, { lang })} ||  ${s.start_time} - ${s.end_time}`,
-              callback_data: `booking_stadion_${stadionId}_${s.id}`,
-            },
-          ]),
-        },
+      const offDays = await this.prisma.stadion_off_days.findMany({
+        where: { stadion_id: stadionId },
       });
+      const specialDays = await this.prisma.stadion_special_schedule.findMany({
+        where: { stadion_id: stadionId },
+      });
+
+      const tz = 'Asia/Tashkent';
+      const now = toZonedTime(new Date(), tz);
+
+      const buttons = schedule.map((s) => {
+        const dayOfWeek = s.day_of_week;
+        const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+
+        let diffDays = dayOfWeek - currentDay;
+        if (diffDays < 0) diffDays += 7;
+
+        const date = new Date(now);
+        date.setDate(now.getDate() + diffDays);
+        const day = format(date, 'd', { timeZone: tz });
+        const monthNumber = date.getMonth() + 1;
+        const monthText = this.i18n.translate(
+          `schedule.months.${monthNumber}`,
+          { lang },
+        );
+
+        const weekDayText = this.i18n.translate(
+          `schedule.week_days.${dayOfWeek}`,
+          { lang },
+        );
+        const special = specialDays.find((d) => {
+          const specialDate = toZonedTime(new Date(d.date), tz);
+          return (
+            format(specialDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+          );
+        });
+        if (special) {
+          return [
+            {
+              text: `⭐ ${format(date, 'd', { timeZone: tz })} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
+              callback_data: `booking_schedule_${s.id}`,
+            },
+          ];
+        }
+
+        const isOffDay = offDays.some((d) => {
+          const offDate = toZonedTime(new Date(d.date), tz);
+          return format(offDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+        });
+        if (isOffDay) {
+          return [
+            {
+              text: `❌ ${format(date, 'd', { timeZone: tz })} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
+              callback_data: 'user_offday',
+            },
+          ];
+        }
+
+        return [
+          {
+            text: `${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
+            callback_data: `booking_schedule_${s.id}`,
+          },
+        ];
+      });
+      buttons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: JSON.stringify({
+            type: 'Continue_back_stadion',
+            id: stadion.region_item_id,
+          }),
+        },
+      ]);
+      await ctx.reply(
+        this.i18n.translate('booking.stadion.selectDate', { lang }),
+        {
+          reply_markup: { inline_keyboard: buttons },
+        },
+      );
     } catch (error) {
       await ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
+
+  async schedule(ctx:MyContext, lang: string, scheduleId: number){
+    try {
+      ctx.reply("Schedule")
+    } catch (error) {
+      ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
 }
+
