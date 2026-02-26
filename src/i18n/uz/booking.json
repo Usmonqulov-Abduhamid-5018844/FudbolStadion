@@ -16,6 +16,9 @@
     "favorite": "⭐ Sevimlilarga qo‘shish",
      "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan",
    "selectDate": "📅 Bron qilish uchun sanani tanlang",
-   "alert": "⚠ E’tibor! Ushbu sana dam olish kuni 🏟️\n\nStadion yopiq ❌\nIltimos, boshqa kunni tanlang 📅"
-  }
+   "alert": "⚠ E’tibor! Ushbu sana dam olish kuni 🏟️\n\nStadion yopiq ❌\nIltimos, boshqa kunni tanlang 📅",
+   "selectTime": "⏰ O‘yinni boshlash vaqtini tanlang",
+   "selectEndTime": "⏰ O‘yinni tugash vaqtini tanlang"
+  },
+"no_free_slots": "⚠ Afsus! Ushbu kunga bo‘sh vaqtlar mavjud emas"
 }

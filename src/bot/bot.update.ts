@@ -162,7 +162,6 @@ export class BotUpdate {
 
   @Action(/^back_(owner|user)_(.+)$/)
   async brckAll(@Ctx() ctx: MyContext) {
-
     if (ctx.callbackQuery) {
       try {
         await ctx.answerCbQuery();
@@ -178,9 +177,101 @@ export class BotUpdate {
       }
     }
   }
-  @Action(/^booking_(region|regionItem|schedule|stadion|save)_(.+)/)
+  @Action(/booking_back_(\d+)$/)
+  async bookingBack(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, id] = ctx.callbackQuery.data.split('_');
+      return this.userService.userbookingStadionBack(ctx, lang, Number(id));
+    }
+  }
+  @Action(/^booking_scheduleBack_(\d+)_(\d+)_(\d+)$/)
+  async bookingScheduleBack(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, scheduleId, day, monthNumber] =
+        ctx.callbackQuery.data.split('_');
+      return this.userService.bookingSchedule_start(
+        ctx,
+        day,
+        monthNumber,
+        Number(scheduleId),
+        lang,
+      );
+    }
+  }
+
+  @Action(/^booking_timeStart_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)$/)
+  async bookingTimeStart(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, start_time, scheduleId, day, monthNumber] =
+        ctx.callbackQuery.data.split('_');
+      return this.userService.bookingSchedule_end(
+        ctx,
+        start_time,
+        Number(scheduleId),
+        Number(day),
+        Number(monthNumber),
+        lang,
+      );
+    }
+  }
+  @Action(/^booking_timeEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d+)$/)
+  async bookingTimeEnd(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, start_time, end_time, day, monthNumber] =
+        ctx.callbackQuery.data.split('_');
+      return this.userService.bookingScheduleFinish(
+        ctx,
+        start_time,
+        end_time,
+        day,
+        monthNumber,
+        lang,
+      );
+    }
+  }
+
+  @Action(/^booking_schedule_(\d+)_(\d+)_(\d+)$/)
+  async userBookingSchedule(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, day, monthNumber, id] = ctx.callbackQuery.data.split('_');
+      return this.userService.bookingSchedule_start(
+        ctx,
+        day,
+        monthNumber,
+        Number(id),
+        lang,
+      );
+    }
+  }
+
+  @Action(/^booking_(region|regionItem|special|stadion|save)_(\d+)$/)
   async userBooking(@Ctx() ctx: MyContext) {
-    
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery) {
       try {
@@ -197,15 +288,14 @@ export class BotUpdate {
         return this.userService.userbookingStadion(ctx, lang, Number(id));
       } else if (type === 'save') {
         return this.userService.userSaveFnc(ctx, lang, Number(id));
-      }
-      else if (type === 'schedule') {
-       return this.userService.schedule(ctx, lang, Number(id));
+      } else if (type === 'special') {
+        return this.userService.special(ctx, lang, Number(id));
       }
     }
   }
+
   @Action(/^user_(.+)$/)
   async userSetting(@Ctx() ctx: MyContext) {
-    
     const lang = await this.utils.langs(ctx);
 
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
@@ -448,7 +538,7 @@ export class BotUpdate {
       }
       case 'Continue_back_stadion': {
         return this.userService.userbookingRegionItems(ctx, lang, data.id);
-      };
+      }
       case 'user_back_regionItems': {
         return this.userService.userbookingRegion(ctx, lang, data.id);
       }

@@ -46,38 +46,38 @@ model Owners {
 }
 
 model Users {
-  id           Int           @id @default(autoincrement())
-  username     String?
-  phone        String
-  full_name    String
-  chatID       String        @unique
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  tranzaktions Tranzaktion[]
-  bookings     Booking[]
+  id                 Int                 @id @default(autoincrement())
+  username           String?
+  phone              String
+  full_name          String
+  chatID             String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  tranzaktions       Tranzaktion[]
+  bookings           Booking[]
   myFavoriteStadiums MyFavoriteStadium[]
 }
 
 model Stadion {
-  id              Int               @id @default(autoincrement())
-  name            String
-  latitude        Float
-  longitude       Float
-  image           String
-  price           Int
-  region_id       Int
-  max_count       Int
-  region_item_id  Int
-  owner_id        Int
-  working_status  Boolean           @default(true)
-  length          Int
-  width           Int
-  payments_type   Payments          @default(GIBRID)
-  is_premium      Boolean           @default(false)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  stadionChedules Stadion_chedule[]
-  bookings        Booking[]
+  id                 Int                 @id @default(autoincrement())
+  name               String
+  latitude           Float
+  longitude          Float
+  image              String
+  price              Int
+  region_id          Int
+  max_count          Int
+  region_item_id     Int
+  owner_id           Int
+  working_status     Boolean             @default(true)
+  length             Int
+  width              Int
+  payments_type      Payments            @default(GIBRID)
+  is_premium         Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  stadionChedules    Stadion_chedule[]
+  bookings           Booking[]
   myFavoriteStadiums MyFavoriteStadium[]
 
   region                  Region                     @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
@@ -100,6 +100,7 @@ model stadion_off_days {
   id         Int      @id @default(autoincrement())
   stadion_id Int
   date       DateTime
+  desc      String?
   createdAt  DateTime @default(now())
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
@@ -133,13 +134,13 @@ model Region_item {
 model Owner_card {
   id           Int           @id @default(autoincrement())
   owner_id     Int
-  provider String
-  cardToken String
-  cardMask String
-  cardType    String
-  expireMonth String
-  expireYear String
-  isActive    Boolean
+  provider     String
+  cardToken    String
+  cardMask     String
+  cardType     String
+  expireMonth  String
+  expireYear   String
+  isActive     Boolean
   createdAt    DateTime      @default(now())
   owner        Owners        @relation(fields: [owner_id], references: [id], onDelete: Cascade)
   tranzaktions Tranzaktion[]
@@ -181,20 +182,19 @@ model Tranzaktion {
 }
 
 model sesion {
-  id      Int    @id @default(autoincrement())
+  id      Int     @id @default(autoincrement())
   lang    String?
   step    String?
-  chat_id String @unique
+  chat_id String  @unique
 }
 
-
 model MyFavoriteStadium {
-  id         Int    @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   chat_id    String
   stadion_id Int
   createdAt  DateTime @default(now())
 
-  user    Users    @relation(fields: [chat_id], references: [chatID], onDelete: Cascade)
+  user    Users   @relation(fields: [chat_id], references: [chatID], onDelete: Cascade)
   stadion Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
 
   @@unique([chat_id, stadion_id])

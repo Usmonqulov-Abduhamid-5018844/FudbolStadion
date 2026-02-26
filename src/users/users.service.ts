@@ -10,8 +10,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { toZonedTime, format } from 'date-fns-tz';
-import { time } from 'node:console';
+import { toZonedTime, format, fromZonedTime } from 'date-fns-tz';
 @Injectable()
 export class UsersService {
   constructor(
@@ -868,8 +867,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         if (special) {
           return [
             {
-              text: `⭐ ${format(date, 'd', { timeZone: tz })} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
-              callback_data: `booking_schedule_${s.id}`,
+              text: `⭐ ${day} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
+              callback_data: `booking_special_${special.id}`,
             },
           ];
         }
@@ -881,7 +880,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         if (isOffDay) {
           return [
             {
-              text: `❌ ${format(date, 'd', { timeZone: tz })} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
+              text: `❌ ${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
               callback_data: 'user_offday',
             },
           ];
@@ -890,7 +889,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         return [
           {
             text: `${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
-            callback_data: `booking_schedule_${s.id}`,
+            callback_data: `booking_schedule_${day}_${monthNumber}_${s.id}`,
           },
         ];
       });
@@ -913,13 +912,378 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       await ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
-
-  async schedule(ctx:MyContext, lang: string, scheduleId: number){
+  async userbookingStadionBack(
+    ctx: MyContext,
+    lang: string,
+    stadionId: number,
+  ) {
     try {
-      ctx.reply("Schedule")
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+      });
+      if (!stadion) {
+        await ctx.reply(this.i18n.translate('error.error', { lang }));
+        return;
+      }
+      const schedule = await this.prisma.stadion_chedule.findMany({
+        where: { stadion_id: stadionId },
+      });
+
+      if (!schedule.length) {
+        await ctx.reply(
+          this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
+        );
+        return;
+      }
+      const offDays = await this.prisma.stadion_off_days.findMany({
+        where: { stadion_id: stadionId },
+      });
+      const specialDays = await this.prisma.stadion_special_schedule.findMany({
+        where: { stadion_id: stadionId },
+      });
+
+      const tz = 'Asia/Tashkent';
+      const now = toZonedTime(new Date(), tz);
+
+      const buttons = schedule.map((s) => {
+        const dayOfWeek = s.day_of_week;
+        const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+
+        let diffDays = dayOfWeek - currentDay;
+        if (diffDays < 0) diffDays += 7;
+
+        const date = new Date(now);
+        date.setDate(now.getDate() + diffDays);
+        const day = format(date, 'd', { timeZone: tz });
+        const monthNumber = date.getMonth() + 1;
+        const monthText = this.i18n.translate(
+          `schedule.months.${monthNumber}`,
+          { lang },
+        );
+
+        const weekDayText = this.i18n.translate(
+          `schedule.week_days.${dayOfWeek}`,
+          { lang },
+        );
+        const special = specialDays.find((d) => {
+          const specialDate = toZonedTime(new Date(d.date), tz);
+          return (
+            format(specialDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+          );
+        });
+        if (special) {
+          return [
+            {
+              text: `⭐ ${day} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
+              callback_data: `booking_special_${special.id}`,
+            },
+          ];
+        }
+
+        const isOffDay = offDays.some((d) => {
+          const offDate = toZonedTime(new Date(d.date), tz);
+          return format(offDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
+        });
+        if (isOffDay) {
+          return [
+            {
+              text: `❌ ${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
+              callback_data: 'user_offday',
+            },
+          ];
+        }
+
+        return [
+          {
+            text: `${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
+            callback_data: `booking_schedule_${day}_${monthNumber}_${s.id}`,
+          },
+        ];
+      });
+      buttons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: JSON.stringify({
+            type: 'Continue_back_stadion',
+            id: stadion.region_item_id,
+          }),
+        },
+      ]);
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.stadion.selectDate', { lang }),
+        {
+          inline_keyboard: buttons,
+        },
+      );
+    } catch (error) {
+      await ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  async special(ctx: MyContext, lang: string, specialId: number) {
+    try {
+      ctx.reply('special');
     } catch (error) {
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
-}
+  async bookingSchedule_start(
+    ctx: MyContext,
+    day: string,
+    monthNumber: string,
+    scheduleId: number,
+    lang: string,
+  ) {
+    try {
+      const scheduleDate = await this.prisma.stadion_chedule.findUnique({
+        where: { id: scheduleId },
+      });
+      if (!scheduleDate) {
+        ctx.reply(this.i18n.translate('error.error', { lang }));
+        return;
+      }
+      const button: InlineKeyboardButton[][] = [];
+      const slotsPerKeyboard = 2;
 
+      const tz = 'Asia/Tashkent';
+      const year = new Date().getFullYear();
+      const startString = `${year}-${monthNumber
+        .toString()
+        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 00:00:00`;
+      const endString = `${year}-${monthNumber
+        .toString()
+        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 23:59:59`;
+      const startOfDay = fromZonedTime(startString, tz);
+      const endOfDay = fromZonedTime(endString, tz);
+
+      const allSlots = await this.utils.generateSlots(
+        scheduleDate.start_time,
+        scheduleDate.end_time,
+      );
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          stadion_id: scheduleDate.stadion_id,
+          date: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+      });
+
+      if (bookings.length) {
+        const freeSlots = allSlots.filter((slot) =>
+          this.utils.isSlotFree(slot, bookings),
+        );
+        if (freeSlots.length) {
+          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
+            const row: InlineKeyboardButton[] = [];
+            for (let j = 0; j < slotsPerKeyboard; j++) {
+              if (freeSlots[i + j]) {
+                row.push({
+                  text: freeSlots[i + j].start,
+                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}`,
+                });
+              }
+            }
+            button.push(row);
+          }
+          button.push([
+            {
+              text: this.i18n.translate('booking.back', { lang }),
+              callback_data: `booking_back_${scheduleDate.stadion_id}`,
+            },
+          ]);
+        } else {
+          try {
+            await ctx.answerCbQuery(
+              this.i18n.translate('booking.no_free_slots', { lang }),
+              { show_alert: true },
+            );
+          } catch (error) {
+            await ctx.reply(
+              this.i18n.translate('booking.no_free_slots', { lang }),
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: `booking_back_${scheduleDate.stadion_id}`,
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+          }
+        }
+      } else {
+        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+          const row: InlineKeyboardButton[] = [];
+          for (let j = 0; j < slotsPerKeyboard; j++) {
+            if (allSlots[i + j]) {
+              row.push({
+                text: allSlots[i + j].start,
+                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}`,
+              });
+            }
+          }
+          button.push(row);
+        }
+        button.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: `booking_back_${scheduleDate.stadion_id}`,
+          },
+        ]);
+      }
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.stadion.selectTime', { lang }),
+        {
+          inline_keyboard: button,
+        },
+      );
+    } catch (error) {
+      ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  async bookingSchedule_end(
+    ctx: MyContext,
+    start_time: string,
+    scheduleId: number,
+    day: number,
+    monthNumber: number,
+    lang: string,
+  ) {
+    try {
+      const scheduleDate = await this.prisma.stadion_chedule.findUnique({
+        where: { id: scheduleId },
+      });
+      if (!scheduleDate) {
+        ctx.reply(this.i18n.translate('error.error', { lang }));
+        return;
+      }
+      const button: InlineKeyboardButton[][] = [];
+      const slotsPerKeyboard = 2;
+
+      const tz = 'Asia/Tashkent';
+      const year = new Date().getFullYear();
+      const startString = `${year}-${monthNumber
+        .toString()
+        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 00:00:00`;
+      const endString = `${year}-${monthNumber
+        .toString()
+        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 23:59:59`;
+      const startOfDay = fromZonedTime(startString, tz);
+      const endOfDay = fromZonedTime(endString, tz);
+
+      const allSlots = await this.utils.generateSlots(
+        start_time,
+        scheduleDate.end_time,
+      );
+
+      const bookings = await this.prisma.booking.findMany({
+        where: {
+          stadion_id: scheduleDate.stadion_id,
+          date: {
+            gte: startOfDay,
+            lte: endOfDay,
+          },
+        },
+      });
+
+      if (bookings.length) {
+        const freeSlots = allSlots.filter((slot) =>
+          this.utils.isSlotFree(slot, bookings),
+        );
+        if (freeSlots.length) {
+          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
+            const row: InlineKeyboardButton[] = [];
+            for (let j = 0; j < slotsPerKeyboard; j++) {
+              if (freeSlots[i + j]) {
+                row.push({
+                  text: freeSlots[i + j].end,
+                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}`,
+                });
+              }
+            }
+            button.push(row);
+          }
+          button.push([
+            {
+              text: this.i18n.translate('booking.back', { lang }),
+              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+            },
+          ]);
+        } else {
+          try {
+            await ctx.answerCbQuery(
+              this.i18n.translate('booking.no_free_slots', { lang }),
+              { show_alert: true },
+            );
+          } catch (error) {
+            await ctx.reply(
+              this.i18n.translate('booking.no_free_slots', { lang }),
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+          }
+        }
+      } else {
+        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+          const row: InlineKeyboardButton[] = [];
+          for (let j = 0; j < slotsPerKeyboard; j++) {
+            if (allSlots[i + j]) {
+              row.push({
+                text: allSlots[i + j].end,
+                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}`,
+              });
+            }
+          }
+          button.push(row);
+        }
+        button.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+          },
+        ]);
+      }
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.stadion.selectEndTime', { lang }),
+        {
+          inline_keyboard: button,
+        },
+      );
+    } catch (error) {
+      ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  
+  async bookingScheduleFinish(
+    ctx: MyContext,
+    start_time: string,
+    end_time: string,
+    day: string,
+    monthNumber: string,
+    lang: string,
+  ) {
+    ctx.reply(`finish ${start_time}, ${end_time}, ${day}, ${monthNumber}`);
+  }
+}

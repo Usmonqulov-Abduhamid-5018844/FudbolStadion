@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { InlineKeyboardMarkup } from '@telegraf/types';
+import { format, toZonedTime } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
@@ -143,5 +144,60 @@ export class UtilisService implements OnModuleInit {
       }
       throw e;
     }
+  }
+
+  async generateSlots(start: string, end: string, intervalMinutes = 60) {
+    const slots: { start: string; end: string }[] = [];
+
+    const [startH, startM] = start.split(':').map(Number);
+    const [endH, endM] = end.split(':').map(Number);
+
+    let current = startH * 60 + startM;
+    const finish = endH * 60 + endM;
+
+    while (current + intervalMinutes <= finish) {
+      const fromH = Math.floor(current / 60);
+      const fromM = current % 60;
+
+      const to = current + intervalMinutes;
+      const toH = Math.floor(to / 60);
+      const toM = to % 60;
+
+      slots.push({
+        start: `${fromH.toString().padStart(2, '0')}:${fromM
+          .toString()
+          .padStart(2, '0')}`,
+        end: `${toH.toString().padStart(2, '0')}:${toM
+          .toString()
+          .padStart(2, '0')}`,
+      });
+
+      current += intervalMinutes;
+    }
+
+    return slots;
+  }
+
+  async isSlotFree(slot: { start: string; end: string }, bookings: any[]) {
+    const slotStart = this.toMinutes(slot.start);
+    const slotEnd = this.toMinutes(slot.end);
+
+    const tz = 'Asia/Tashkent';
+
+    return bookings.some((b: any) => {
+      const bookedStart = this.toMinutes(
+        format(toZonedTime(b.start_time, tz), 'HH:mm', { timeZone: tz }),
+      );
+      const bookedEnd = this.toMinutes(
+        format(toZonedTime(b.end_time, tz), 'HH:mm', { timeZone: tz }),
+      );
+
+      return bookedStart < slotEnd && bookedEnd > slotStart;
+    });
+  }
+
+  async toMinutes(time: string) {
+    const [h, m] = time.split(':').map(Number);
+    return h * 60 + m;
   }
 }
