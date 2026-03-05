@@ -15,10 +15,11 @@ enum Payments {
 
 enum Booking_status {
   PENDING
-  APPROVED
-  CANCELED
+  CONFIRMED
   PAID
   COMPLETED
+  CANCELED
+  NO_SHOW
 }
 
 enum Pay_method {
@@ -100,7 +101,7 @@ model stadion_off_days {
   id         Int      @id @default(autoincrement())
   stadion_id Int
   date       DateTime
-  desc      String?
+  desc       String?
   createdAt  DateTime @default(now())
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
@@ -157,6 +158,7 @@ model Booking {
   status         Booking_status @default(PENDING)
   payment_method Pay_method
   createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
   tranzaktions   Tranzaktion[]
   user           Users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
   stadion        Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)

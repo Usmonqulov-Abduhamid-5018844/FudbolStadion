@@ -6,6 +6,7 @@ import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { text } from 'stream/consumers';
 import { Telegraf } from 'telegraf';
 
 @Injectable()
@@ -199,5 +200,64 @@ export class UtilisService implements OnModuleInit {
   async toMinutes(time: string) {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
+  }
+
+  async errorFunction(ctx: MyContext) {
+    const lang = await this.langs(ctx);
+    ctx.reply(this.i18n.translate('error.error', { lang }), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'errorBack_1',
+            },
+          ],
+        ],
+      },
+    });
+  }
+
+  roundUpToNextHour(date: Date) {
+    const rounded = new Date(date);
+    if (
+      rounded.getMinutes() > 0 ||
+      rounded.getSeconds() > 0 ||
+      rounded.getMilliseconds() > 0
+    ) {
+      rounded.setHours(rounded.getHours() + 1);
+      rounded.setMinutes(0, 0, 0);
+    }
+
+    return rounded;
+  }
+
+  calculateTotalPrice(
+    start: string,
+    end: string,
+    pricePerHour: number,
+    noshowCount: number,
+  ) {
+    const [startHour, startMin] = start.split(':').map(Number);
+    const [endHour, endMin] = end.split(':').map(Number);
+
+    const startTotalMinutes = startHour * 60 + startMin;
+    const endTotalMinutes = endHour * 60 + endMin;
+
+    const durationHours = (endTotalMinutes - startTotalMinutes) / 60;
+    const penalty = noshowCount * 20000;
+    let total = 0
+    if(penalty > 0){
+      total = durationHours * pricePerHour * penalty
+    }
+    else{
+      total = durationHours * pricePerHour
+    }
+
+    return {
+      total,
+      penalty,
+      price: durationHours * pricePerHour,
+    };
   }
 }
