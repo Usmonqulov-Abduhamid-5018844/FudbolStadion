@@ -462,6 +462,7 @@ export class OwnersService {
 
       if (!/^\d+$/.test(input)) {
         await ctx.reply(this.i18n.translate('error.number_error', { lang }));
+        
         return;
       }
 
@@ -668,9 +669,9 @@ export class OwnersService {
         );
       }
     } catch (error) {
-      ctx.reply(
-        this.i18n.translate('schedule.schedules.creat_error', { lang }),
-      );
+      await this.utils.errorFunction(ctx)
+      console.log("ERROR",error);
+      
     }
     ctx.session.step = null;
     ctx.session.stadion.schedule_day = null;

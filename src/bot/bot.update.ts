@@ -18,7 +18,7 @@ import { Markup } from 'telegraf';
 import { Payments } from '@prisma/client';
 import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
 import { UtilisService } from 'src/utils/utile.service';
-import { getDate } from 'date-fns';
+import { format } from 'date-fns';
 
 @Update()
 export class BotUpdate {
@@ -173,7 +173,142 @@ export class BotUpdate {
         case '1': {
           return this.botService.checket(ctx);
         }
+      }
+    }
+  }
+  @Action(/delete_stadion_fovorite_(\d+)$/)
+  async deletStadion(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    try {
+      const lang = await this.utils.langs(ctx);
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const [_, __, type, id] = ctx.callbackQuery.data.split('_');
+        if (type === 'fovorite') {
+          await this.prisma.myFavoriteStadium.delete({
+            where: {
+              chat_id_stadion_id: {
+                chat_id: String(ctx.from?.id),
+                stadion_id: Number(id),
+              },
+            },
+          });
+          await ctx.deleteMessage();
         }
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  @Action(/^booking_confirm_(.+)_(\d+)$/)
+  async confirment(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    try {
+      const lang = await this.utils.langs(ctx);
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
+        switch (type) {
+          case 'yes':
+            {
+              const booking = await this.prisma.booking.findUnique({
+                where: { id: Number(bookingId) },
+                include: { stadion: true },
+              });
+              if (!booking) {
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+              await this.prisma.booking.update({
+                where: { id: Number(booking.id) },
+                data: { status: 'CONFIRMED' },
+              });
+              const days = format(booking.date, 'dd.MM.yyyy');
+
+              const paymentTextMap = {
+                CARD: this.i18n.translate('peyments.card', { lang }),
+                CASH: this.i18n.translate('peyments.cash', { lang }),
+                BOTH: this.i18n.translate('peyments.both', { lang }),
+              };
+
+              const paymentMethodText =
+                paymentTextMap[booking.payment_method] ||
+                booking.payment_method;
+
+              const message = `
+✅ Sizning bron tasdiqlandi!
+🏟 Stadion: *${booking.stadion.name}*
+📅 Sana: *${days}*
+⏰ Vaqt: *${booking.start_time} - ${booking.end_time}*
+
+💳 To‘lov turi: *${paymentMethodText}*
+💰 Umumiy narx: *${booking.total_price.toLocaleString()} so'm*
+
+Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
+`;
+              await ctx.editMessageText(message, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'errorBack_1',
+                      },
+                    ],
+                  ],
+                },
+              });
+            }
+            break;
+          case 'no':
+            {
+              await this.prisma.booking.deleteMany({
+                where: {
+                  status: 'PENDING',
+                  expires_at: {
+                    lt: new Date(),
+                  },
+                },
+              });
+              const booking = await this.prisma.booking.findUnique({
+                where: { id: Number(bookingId) },
+              });
+              if (!booking) {
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+              const days = format(booking.date, 'dd.MM,yyyy');
+              await ctx.editMessageText(
+                `❌ Bron bekor qilindi, lekin darhol o‘chirilmaydi.
+⏳ Hozir PENDING holatda: 15 daqiqa ichida qayta tasdiqlash mumkin.
+📅 ${days} ⏰ ${booking.start_time} - ${booking.end_time}`,
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate('schedule.back', { lang }),
+                          callback_data: 'errorBack_1',
+                        },
+                      ],
+                    ],
+                  },
+                },
+              );
+            }
+            break;
+        }
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
   @Action(/^back_(owner|user)_(.+)$/)
@@ -191,6 +326,26 @@ export class BotUpdate {
       } else if (role === 'user') {
         return this.userService.userBackSwitch(ctx, data, lang);
       }
+    }
+  }
+  @Action(
+    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)/,
+  )
+  async bookingPeyments(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, type, start_time, end_time, days, stadionId] =
+        ctx.callbackQuery.data.split('_');
+      const [year,month,day] = days.split("-")
+      console.log(type,stadionId,start_time,end_time,"\n");
+      console.log(year,month,day);
+      
+      
     }
   }
   @Action(/booking_(back|specialBack)_(\d+)$/)
@@ -268,7 +423,7 @@ export class BotUpdate {
         year,
         Number(monthNumber) - 1,
         Number(day),
-        0,
+        5,
         0,
         0,
         0,
@@ -318,9 +473,9 @@ export class BotUpdate {
           ctx.callbackQuery.data.split('_');
         const data = new Date(
           Number(year),
-          Number(month),
+          Number(month) - 1,
           Number(day),
-          0,
+          5,
           0,
           0,
           0,
@@ -414,7 +569,7 @@ export class BotUpdate {
       const region = await this.prisma.region.findMany();
 
       if (!region.length) {
-       this.utils.errorFunction(ctx)
+        this.utils.errorFunction(ctx);
         return;
       }
 
@@ -436,7 +591,7 @@ export class BotUpdate {
         },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx)
+      this.utils.errorFunction(ctx);
     }
   }
   @Action(/region_(.+)/)
@@ -471,7 +626,7 @@ export class BotUpdate {
         10,
       );
       if (isNaN(regionId)) {
-        this.utils.errorFunction(ctx)
+        this.utils.errorFunction(ctx);
         return;
       }
       const region_items = await this.prisma.region_item.findMany({
@@ -481,7 +636,7 @@ export class BotUpdate {
       });
 
       if (!region_items.length) {
-        this.utils.errorFunction(ctx)
+        this.utils.errorFunction(ctx);
         return;
       }
       ctx.session.stadion.region_id = regionId;
@@ -499,7 +654,7 @@ export class BotUpdate {
         reply_markup: { inline_keyboard: button },
       });
     } catch (error) {
-     this.utils.errorFunction(ctx)
+      this.utils.errorFunction(ctx);
     }
   }
 
@@ -538,7 +693,7 @@ export class BotUpdate {
       );
 
       if (isNaN(region_item_id)) {
-        this.utils.errorFunction(ctx)
+        this.utils.errorFunction(ctx);
         return;
       }
       ctx.session.stadion.region_item_id = region_item_id;
@@ -547,7 +702,7 @@ export class BotUpdate {
       ctx.session.stadion_step = 'stadion';
       ctx.session.stadion.name = 'N';
     } catch (error) {
-      this.utils.errorFunction(ctx)
+      this.utils.errorFunction(ctx);
     }
   }
 
@@ -606,7 +761,7 @@ export class BotUpdate {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
       data = JSON.parse(ctx.callbackQuery.data);
     } catch (error) {
-      this.utils.errorFunction(ctx)
+      this.utils.errorFunction(ctx);
       return;
     }
     switch (data.type) {
@@ -632,7 +787,7 @@ export class BotUpdate {
               this.i18n.translate('help.help.about', { lang }),
             );
           } catch (error) {
-           this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -645,7 +800,7 @@ export class BotUpdate {
               this.i18n.translate('help.help.start', { lang }),
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -658,7 +813,7 @@ export class BotUpdate {
               this.i18n.translate('help.help.payment', { lang }),
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -671,7 +826,7 @@ export class BotUpdate {
               this.i18n.translate('help.help.cancel', { lang }),
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -684,7 +839,7 @@ export class BotUpdate {
               this.i18n.translate('help.help.contact', { lang }),
             );
           } catch (error) {
-           this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -758,7 +913,7 @@ export class BotUpdate {
               },
             );
           } catch (error) {
-           this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -797,7 +952,7 @@ export class BotUpdate {
                 },
               );
             } catch (error) {
-              this.utils.errorFunction(ctx)
+              this.utils.errorFunction(ctx);
             }
             return;
           } else {
@@ -836,7 +991,7 @@ export class BotUpdate {
                 { inline_keyboard: button },
               );
             } catch (error) {
-              this.utils.errorFunction(ctx)
+              this.utils.errorFunction(ctx);
             }
           }
         }
@@ -869,7 +1024,7 @@ export class BotUpdate {
               },
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -910,7 +1065,7 @@ export class BotUpdate {
                   },
                 );
               } catch (error) {
-                this.utils.errorFunction(ctx)
+                this.utils.errorFunction(ctx);
               }
 
               return;
@@ -954,7 +1109,7 @@ export class BotUpdate {
               }
             }
           } catch (error) {
-           this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1029,7 +1184,7 @@ export class BotUpdate {
               },
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1094,7 +1249,7 @@ export class BotUpdate {
               },
             );
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1136,7 +1291,7 @@ export class BotUpdate {
             ctx.session.stadion.schedule_id = null;
             return this.botService.viewSchedule(ctx, data.id);
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1188,7 +1343,7 @@ export class BotUpdate {
             });
             return this.botService.stadion_off_days(ctx, data.id);
           } catch (error) {
-            this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1218,7 +1373,7 @@ export class BotUpdate {
           });
           return this.botService.stadion_special(ctx, data.id);
         } catch (error) {
-          this.utils.errorFunction(ctx)
+          this.utils.errorFunction(ctx);
         }
       }
       case 'lokation': {
@@ -1350,7 +1505,7 @@ export class BotUpdate {
               },
             );
           } catch (error) {
-           this.utils.errorFunction(ctx)
+            this.utils.errorFunction(ctx);
           }
         }
         break;
@@ -1436,7 +1591,7 @@ export class BotUpdate {
           ctx.session.step = null;
           return this.botService.location(ctx, Number(ctx.session.stadion.id));
         } catch (error) {
-         this.utils.errorFunction(ctx)
+          this.utils.errorFunction(ctx);
         }
       }
     } else {
@@ -1446,30 +1601,30 @@ export class BotUpdate {
   @On('photo')
   async onPhoto(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
-    if (
-      ctx.session.stadion_step === 'stadion' &&
-      ctx.session.stadion.image === 'image'
-    ) {
+    try {
       if (
-        ctx.message &&
-        'photo' in ctx.message &&
-        ctx.message.photo.length > 0
+        ctx.session.stadion_step === 'stadion' &&
+        ctx.session.stadion.image === 'image'
       ) {
-        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-        ctx.session.stadion.image = image;
-        ctx.session.stadion.step = 10;
-        ctx.session.stadion_step = null;
-        return this.botService.createStadion(ctx);
+        if (
+          ctx.message &&
+          'photo' in ctx.message &&
+          ctx.message.photo.length > 0
+        ) {
+          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          ctx.session.stadion.image = image;
+          ctx.session.stadion.step = 10;
+          ctx.session.stadion_step = null;
+          return this.botService.createStadion(ctx);
+        }
       }
-    }
-    if (ctx.session.step === 'image') {
-      if (
-        ctx.message &&
-        'photo' in ctx.message &&
-        ctx.message.photo.length > 0
-      ) {
-        const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-        try {
+      if (ctx.session.step === 'image') {
+        if (
+          ctx.message &&
+          'photo' in ctx.message &&
+          ctx.message.photo.length > 0
+        ) {
+          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
           const stadion = await this.prisma.stadion.update({
             where: { id: Number(ctx.session.stadion.id) },
             data: { image },
@@ -1479,13 +1634,13 @@ export class BotUpdate {
           );
           ctx.session.step = null;
           return this.botService.stadion_image(ctx, stadion.id);
-        } catch (error) {
-          ctx.session.step = null;
-         this.utils.errorFunction(ctx)
         }
+      } else {
+        ctx.reply(this.i18n.translate('error.warning_image', { lang }));
       }
-    } else {
-      ctx.reply(this.i18n.translate('error.warning_image', { lang }));
+    } catch (error) {
+      ctx.session.step = null;
+      this.utils.errorFunction(ctx);
     }
   }
 
@@ -1522,7 +1677,12 @@ export class BotUpdate {
       phone: null,
       step: null,
     };
-
+    ctx.session.user_registor = ctx.session.user_registor || {
+      phone: null,
+      full_name: null,
+      step: null,
+      id: 0,
+    };
     try {
       if (!ctx.message || !('text' in ctx.message)) return;
 
@@ -1606,6 +1766,8 @@ export class BotUpdate {
         case this.i18n.translate('stadions.back', { lang }):
           if (ctx.session.stadion.step) {
             return this.ownerService.handleStadionBack(ctx, lang);
+          } else {
+            return this.botService.checket(ctx);
           }
       }
 
@@ -1616,6 +1778,7 @@ export class BotUpdate {
       if (ctx.session.stadion_step === 'stadion') {
         return this.ownerService.handleStadionSteps(ctx, lang, text);
       }
+
       if (ctx.session.user_registor.phone === 'phone') {
         return this.userService.userUpdate_phone(ctx, lang, text);
       }
@@ -1650,7 +1813,8 @@ export class BotUpdate {
 
       ctx.reply(this.i18n.translate('error.else', { lang, args: { text } }));
     } catch (error) {
-      this.utils.errorFunction(ctx)
+      this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
 }

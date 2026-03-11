@@ -6,7 +6,6 @@ import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { text } from 'stream/consumers';
 import { Telegraf } from 'telegraf';
 
 @Injectable()
@@ -179,25 +178,22 @@ export class UtilisService implements OnModuleInit {
     return slots;
   }
 
-  async isSlotFree(slot: { start: string; end: string }, bookings: any[]) {
+  isSlotFree(slot: { start: string; end: string }, bookings: any[]) {
     const slotStart = this.toMinutes(slot.start);
     const slotEnd = this.toMinutes(slot.end);
 
-    const tz = 'Asia/Tashkent';
+    for (const b of bookings) {
+      const bookingStart = this.toMinutes(b.start_time);
+      const bookingEnd = this.toMinutes(b.end_time);
 
-    return bookings.some((b: any) => {
-      const bookedStart = this.toMinutes(
-        format(toZonedTime(b.start_time, tz), 'HH:mm', { timeZone: tz }),
-      );
-      const bookedEnd = this.toMinutes(
-        format(toZonedTime(b.end_time, tz), 'HH:mm', { timeZone: tz }),
-      );
-
-      return bookedStart < slotEnd && bookedEnd > slotStart;
-    });
+      if (bookingStart < slotEnd && bookingEnd > slotStart) {
+        return false;
+      }
+    }
+    return true;
   }
 
-  async toMinutes(time: string) {
+  toMinutes(time: string) {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
   }
@@ -245,19 +241,20 @@ export class UtilisService implements OnModuleInit {
     const endTotalMinutes = endHour * 60 + endMin;
 
     const durationHours = (endTotalMinutes - startTotalMinutes) / 60;
-    const penalty = noshowCount * 20000;
-    let total = 0
-    if(penalty > 0){
-      total = durationHours * pricePerHour * penalty
-    }
-    else{
-      total = durationHours * pricePerHour
+    let penalty = 0;
+    let total = 0;
+    if (noshowCount >= 2) {
+      penalty = (noshowCount - 1) * 20000;
+      total = durationHours * pricePerHour + penalty;
+    } else {
+      total = durationHours * pricePerHour;
     }
 
     return {
       total,
       penalty,
       price: durationHours * pricePerHour,
+      hors: durationHours,
     };
   }
 }

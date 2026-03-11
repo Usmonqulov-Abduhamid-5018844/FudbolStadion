@@ -11,6 +11,7 @@ import { UtileModule } from './utils/utils.module';
 import { OwnersModule } from './owners/owners.module';
 import { UsersModule } from './users/users.module';
 import { MailService } from './mail/mail.service';
+import { INITIAL_SESSION } from './helpers/interface';
 
 @Module({
   providers: [MailService],
@@ -27,7 +28,11 @@ import { MailService } from './mail/mail.service';
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TelegrafModule.forRoot({
       token: String(process.env.BOT_TOKEN),
-      middlewares: [session()],
+      middlewares: [
+        session({
+          defaultSession: () => INITIAL_SESSION,
+        }),
+      ],
     }),
     PrismaModule,
     BotModule,

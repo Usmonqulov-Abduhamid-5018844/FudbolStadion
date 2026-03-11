@@ -164,7 +164,7 @@ export class BotService {
 
       return this.all_data(ctx, stadion.id);
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+       await this.utils.errorFunction(ctx)
     }
   }
 
@@ -217,7 +217,7 @@ export class BotService {
             { inline_keyboard: inlineKeyboard },
           );
         } catch (error) {
-          ctx.reply(this.i18n.translate('error.error', { lang }));
+           await this.utils.errorFunction(ctx)
         }
         return;
       } else if (existingSchedules.length) {
@@ -291,10 +291,10 @@ export class BotService {
           { inline_keyboard: inlineKeyboard },
         );
       } catch (error) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+         await this.utils.errorFunction(ctx)
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
     }
   }
 
@@ -344,15 +344,15 @@ export class BotService {
           { inline_keyboard: inlineKeyboard },
         );
       } catch (error) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+         await this.utils.errorFunction(ctx)
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+       await this.utils.errorFunction(ctx)
     }
   }
 
   async viewSchedule(ctx: MyContext, stadion_id: number) {
-    const lang = ctx.session.lang || ctx.from?.language_code;
+    const lang = await this.utils.langs(ctx)
     try {
       const schedule = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
@@ -404,7 +404,7 @@ export class BotService {
         return this.renderScheduleMenu(ctx, stadion_id);
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+       await this.utils.errorFunction(ctx)
     }
   }
   async stadion_off_days(ctx: MyContext, stadion_id: number) {
@@ -467,10 +467,10 @@ export class BotService {
           { inline_keyboard: button },
         );
       } catch (error) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+         await this.utils.errorFunction(ctx)
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+       await this.utils.errorFunction(ctx)
     }
   }
 
@@ -533,10 +533,10 @@ export class BotService {
           { inline_keyboard: button },
         );
       } catch (error) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+        await this.utils.errorFunction(ctx)
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx)
     }
   }
   async location(ctx: MyContext, stadion_id: number) {
@@ -591,7 +591,7 @@ export class BotService {
         });
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+     await this.utils.errorFunction(ctx)
     }
   }
   async stadion_price(ctx: MyContext, stadion_id: number) {
@@ -617,7 +617,7 @@ export class BotService {
           },
         });
       } else {
-        await ctx.reply(
+        await ctx.editMessageText(
           this.i18n.translate('stadions.menyu.price', {
             lang,
             args: { price: stadion.price.toLocaleString('uz-UZ') },
@@ -651,7 +651,7 @@ export class BotService {
         );
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
     }
   }
   async stadion_image(ctx: MyContext, stadion_id: number) {
@@ -709,7 +709,7 @@ export class BotService {
         );
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx)
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {
@@ -804,7 +804,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
     } catch (error) {
       console.error(error);
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx)
     }
   }
 }

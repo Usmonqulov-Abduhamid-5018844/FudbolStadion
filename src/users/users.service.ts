@@ -10,8 +10,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { toZonedTime, format, fromZonedTime } from 'date-fns-tz';
-import { spec } from 'node:test/reporters';
+import { toZonedTime, format } from 'date-fns-tz';
 @Injectable()
 export class UsersService {
   constructor(
@@ -308,6 +307,11 @@ export class UsersService {
           return this.userBookingFanc(ctx, lang);
         }
         case 'stadionFavorite': {
+          if (ctx.callbackQuery) {
+            try {
+              await ctx.answerCbQuery();
+            } catch (error) {}
+          }
           const lang = await this.utils.langs(ctx);
           const favorites = await this.prisma.myFavoriteStadium.findMany({
             where: { chat_id: String(ctx.from?.id) },
@@ -788,6 +792,12 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               inline_keyboard: [
                 [
                   {
+                    text: "Sevimliydan o'chirish",
+                    callback_data: `delete_stadion_fovorite_${stadion.id}`,
+                  },
+                ],
+                [
+                  {
                     text: this.i18n.translate('booking.stadion.book', { lang }),
                     callback_data: `booking_stadion_${stadion.id}`,
                   },
@@ -1019,6 +1029,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
+      
     }
   }
 
@@ -1058,27 +1069,15 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
       const startOfDay = new Date(
         special.date.getFullYear(),
-        special.date.getMonth(),
+        special.date.getMonth() + 1,
         special.date.getDate(),
-        0,
-        0,
-        0,
       );
-      const endOfDay = new Date(
-        special.date.getFullYear(),
-        special.date.getMonth(),
-        special.date.getDate(),
-        23,
-        59,
-        59,
-      );
+      console.log(startOfDay);
+
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: special.stadion_id,
-          date: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
+          date: startOfDay,
         },
       });
       if (bookings.length) {
@@ -1104,6 +1103,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               this.i18n.translate('booking.no_free_slots', { lang }),
               { show_alert: true },
             );
+            return;
           } catch (error) {
             await ctx.reply(
               this.i18n.translate('booking.no_free_slots', { lang }),
@@ -1175,27 +1175,15 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
       const startOfDay = new Date(
         special.date.getFullYear(),
-        special.date.getMonth(),
+        special.date.getMonth() + 1,
         special.date.getDate(),
-        0,
-        0,
-        0,
       );
-      const endOfDay = new Date(
-        special.date.getFullYear(),
-        special.date.getMonth(),
-        special.date.getDate(),
-        23,
-        59,
-        59,
-      );
+      console.log(startOfDay);
+
       const booking = await this.prisma.booking.findMany({
         where: {
           stadion_id: special.stadion_id,
-          date: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
+          date: startOfDay,
         },
       });
       if (booking.length) {
@@ -1209,7 +1197,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].end,
-                  callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth()}_${special.date.getDate()}`,
+                  callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
                 });
               }
             }
@@ -1227,6 +1215,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               this.i18n.translate('booking.no_free_slots', { lang }),
               { show_alert: true },
             );
+            return;
           } catch (error) {
             await ctx.reply(
               this.i18n.translate('booking.no_free_slots', { lang }),
@@ -1252,7 +1241,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].end,
-                callback_data: `booking_specialEnd_${start_time}_${allSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth()}_${special.date.getDate()}`,
+                callback_data: `booking_specialEnd_${start_time}_${allSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
               });
             }
           }
@@ -1297,22 +1286,20 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
       const tz = 'Asia/Tashkent';
       const year = new Date().getFullYear();
-      const startString = `${year}-${monthNumber
-        .toString()
-        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 00:00:00`;
-      const endString = `${year}-${monthNumber
-        .toString()
-        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 23:59:59`;
-      const startOfDay = fromZonedTime(startString, tz);
-      const endOfDay = fromZonedTime(endString, tz);
-
       const tzOffset = 5 * 60;
+
+      const startOfDay = new Date(
+        Date.UTC(year, Number(monthNumber) - 1, Number(day)),
+      );
+
       const now = new Date();
       const tzNow = new Date(
         now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60000,
       );
+
       let scheduleStart = scheduleDate.start_time;
-      const time = await this.utils.roundUpToNextHour(tzNow);
+
+      const time = this.utils.roundUpToNextHour(tzNow);
       const currentTime = time.toTimeString().slice(0, 5);
 
       if (
@@ -1333,17 +1320,15 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: scheduleDate.stadion_id,
-          date: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
+          date: startOfDay,
         },
       });
 
       if (bookings.length) {
-        const freeSlots = allSlots.filter((slot) =>
-          this.utils.isSlotFree(slot, bookings),
-        );
+        const freeSlots = allSlots.filter((slot) => {
+          return this.utils.isSlotFree(slot, bookings);
+        });
+
         if (freeSlots.length) {
           for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
             const row: InlineKeyboardButton[] = [];
@@ -1359,7 +1344,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           }
           button.push([
             {
-              text: this.i18n.translate('booking.back', { lang }),
+              text: this.i18n.translate('schedule.back', { lang }),
               callback_data: `booking_back_${scheduleDate.stadion_id}`,
             },
           ]);
@@ -1369,6 +1354,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               this.i18n.translate('booking.no_free_slots', { lang }),
               { show_alert: true },
             );
+            return;
           } catch (error) {
             await ctx.reply(
               this.i18n.translate('booking.no_free_slots', { lang }),
@@ -1416,6 +1402,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
 
@@ -1440,14 +1427,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
       const tz = 'Asia/Tashkent';
       const year = new Date().getFullYear();
-      const startString = `${year}-${monthNumber
-        .toString()
-        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 00:00:00`;
-      const endString = `${year}-${monthNumber
-        .toString()
-        .padStart(2, '0')}-${day.toString().padStart(2, '0')} 23:59:59`;
-      const startOfDay = fromZonedTime(startString, tz);
-      const endOfDay = fromZonedTime(endString, tz);
+
+      const startOfDay = new Date(
+        Date.UTC(year, Number(monthNumber) - 1, Number(day)),
+      );
 
       const allSlots = await this.utils.generateSlots(
         start_time,
@@ -1457,10 +1440,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: scheduleDate.stadion_id,
-          date: {
-            gte: startOfDay,
-            lte: endOfDay,
-          },
+          date: startOfDay,
         },
       });
 
@@ -1468,6 +1448,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         const freeSlots = allSlots.filter((slot) =>
           this.utils.isSlotFree(slot, bookings),
         );
+
         if (freeSlots.length) {
           for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
             const row: InlineKeyboardButton[] = [];
@@ -1483,7 +1464,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           }
           button.push([
             {
-              text: this.i18n.translate('booking.back', { lang }),
+              text: this.i18n.translate('schedule.back', { lang }),
               callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
             },
           ]);
@@ -1493,6 +1474,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               this.i18n.translate('booking.no_free_slots', { lang }),
               { show_alert: true },
             );
+            return;
           } catch (error) {
             await ctx.reply(
               this.i18n.translate('booking.no_free_slots', { lang }),
@@ -1559,44 +1541,155 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         await this.utils.errorFunction(ctx);
         return;
       }
+
       const user = await this.prisma.users.findUnique({
         where: { chatID: String(ctx.from?.id) },
       });
       if (!user) {
         await this.utils.errorFunction(ctx);
+        return;
       }
       const noshowCount = await this.prisma.booking.count({
         where: { user_id: user?.id, stadion_id: stadion.id, status: 'NO_SHOW' },
       });
 
-
-
       if (stadion.payments_type === 'CARD') {
         ctx.reply('Karta');
-      }
-      
-      else if (stadion.payments_type === 'CASH') {
-        const { price, penalty, total } = this.utils.calculateTotalPrice(
+      } else if (stadion.payments_type === 'CASH') {
+        const { price, penalty, total, hors } = this.utils.calculateTotalPrice(
           start_time,
           end_time,
           stadion.price,
           noshowCount,
         );
-        console.log(price, penalty, total);
 
-        ctx.editMessageText(
-          `Umumiy narx: ${total.toLocaleString()}\n Jarima:${penalty}\n$Narh:${price}`,
+        const days = format(date, 'dd.MM.yyyy');
+        const paymentTextMap = {
+          CARD: this.i18n.translate('peyments.card', { lang }),
+          CASH: this.i18n.translate('peyments.cash', { lang }),
+        };
+
+        const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+        let warning = '';
+
+        if (noshowCount === 1) {
+          warning = `
+⚠️ Ogohlantirish!
+Siz avvalgi bron vaqtida stadionga kelmagansiz.
+
+Shu kabi holat yana takrorlansa,
+keyingi bronlarda jarima qo‘llanilishi mumkin.
+`;
+        } else if (noshowCount >= 2) {
+          warning = `
+⚠️ Ogohlantirish!
+Siz oldingi bronlardan birida kelmagansiz.
+Shu sababli jarima qo‘shildi.
+`;
+        }
+
+        let message = `
+🏟 *Stadion bron qilish*
+
+${warning}
+📅 Sana: *${days}*
+⏰ Vaqt: *${start_time} - ${end_time}*
+
+🕒 Davomiyligi: *${hors} soat*
+`;
+
+        if (penalty > 0) {
+          message += `
+⚠️ Jarima: *${penalty.toLocaleString()} so'm*
+`;
+        }
+
+        message += `
+━━━━━━━━━━━━━━
+💰 *Umumiy to‘lov:* ${total.toLocaleString()} so'm
+
+💵 To‘lov turi: *${paymentMethodText}*
+
+Bronni tasdiqlaysizmi?
+`;
+
+        const booking = await this.prisma.booking.create({
+          data: {
+            stadion_id: stadion.id,
+            user_id: user.id,
+            date: date,
+            start_time,
+            end_time,
+            total_price: total,
+            payment_method: 'CASH',
+            expires_at: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        });
+
+        await ctx.editMessageText(message, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: '✅ Tasdiqlash',
+                  callback_data: `booking_confirm_yes_${booking.id}`,
+                },
+                {
+                  text: '❌ Bekor qilish',
+                  callback_data: `booking_confirm_no_${booking.id}`,
+                },
+              ],
+            ],
+          },
+        });
+      } else if (stadion.payments_type === 'GIBRID') {
+        const { price, penalty, hors, total } = this.utils.calculateTotalPrice(
+          start_time,
+          end_time,
+          stadion.price,
+          noshowCount,
         );
+        const days = format(date, 'dd.MM.yyyy');
+        const paymentTextMap = {
+          CARD: this.i18n.translate('peyments.card', { lang }),
+          CASH: this.i18n.translate('peyments.cash', { lang }),
+        };
+        if (noshowCount >= 2) {
+        } else {
+          const shortDate = date.toISOString().split("T")[0];
+          console.log(shortDate);
+          
+         await ctx.editMessageText("To'lov turini tanlayng", {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('peyments.cash', { lang }),
+                    callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('peyments.card', { lang }),
+                    callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}`,
+                  },
+                ],
+                [
+                  {
+                    text:this.i18n.translate("schedule.back",{lang}),
+                    callback_data: `booking_back_${stadionId}`
+                  }
+                ]
+              ],
+            },
+          });
+        }
       }
-      
-      
-      else if (stadion.payments_type === 'GIBRID') {
-        ctx.reply('Ikkalasi');
-      }
-    } 
-    
-    catch (error) {
+    } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
 }

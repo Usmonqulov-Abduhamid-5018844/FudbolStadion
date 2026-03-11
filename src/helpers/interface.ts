@@ -8,6 +8,7 @@ import {
   stadion_off_days,
   stadion_special_schedule,
 } from '@prisma/client';
+import { ISession } from './bot.sesion';
 
 export interface IStadion {
   id: number;
@@ -36,3 +37,47 @@ export interface IStadion {
   stadionOffDays?: stadion_off_days[];
   stadionSpecialSchedules?: stadion_special_schedule[];
 }
+
+
+
+export const INITIAL_SESSION: ISession = {
+  name: null,
+  lang: null,
+  step: null,
+  stadion_step: null,
+  owner_registor: {
+    full_name: null,
+    email: null,
+    phone: null,
+    step: null,
+    id: null,
+  },
+  user_registor: {
+    full_name: null,
+    phone: null,
+    step: null,
+    id: null,
+  },
+  stadion: {
+    step: 0,
+    name: null,
+    lockation: null,
+    latitude: null,
+    longitude: null,
+    price: null,
+    max_count: null,
+    image: null,
+    region_id: null,
+    region_item_id: null,
+    owner_id: null,
+    length: null,
+    width: null,
+    payments_type: Payments.CASH,
+    payments: null,
+    schedule_day: null,
+    id: null,
+    schedule_id: null,
+    special: new Date(),
+    off: null,
+  },
+};
