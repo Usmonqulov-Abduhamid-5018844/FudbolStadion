@@ -11,6 +11,7 @@ import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
+import { url } from 'inspector';
 @Injectable()
 export class UsersService {
   constructor(
@@ -556,15 +557,15 @@ export class UsersService {
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
-${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
-${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
-${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
+${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
+${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
+${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
-${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${createdAt}
-${this.i18n.translate('view.update', { lang })} ${updatedAt}
+${this.i18n.translate('view.premium', { lang })} <b>${stadion.is_premium ? this.i18n.translate('view.yes', { lang }) : this.i18n.translate('view.no', { lang })}</b>
+${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
+${this.i18n.translate('view.creted', { lang })} <b>${createdAt}</b>
+${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
 `;
 
       const sendText = async () => {
@@ -574,10 +575,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate('booking.stadion.book', { lang }),
-                  callback_data: `booking_stadion_${stadion.id}`,
-                },
-                {
                   text: this.i18n.translate('booking.stadion.favorite', {
                     lang,
                   }),
@@ -585,6 +582,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 },
               ],
               [
+                {
+                  text: this.i18n.translate('booking.stadion.book', { lang }),
+                  callback_data: `booking_stadion_${stadion.id}`,
+                },
                 {
                   text: this.i18n.translate('schedule.back'),
                   callback_data: JSON.stringify({
@@ -607,10 +608,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               inline_keyboard: [
                 [
                   {
-                    text: this.i18n.translate('booking.stadion.book', { lang }),
-                    callback_data: `booking_stadion_${stadion.id}`,
-                  },
-                  {
                     text: this.i18n.translate('booking.stadion.favorite', {
                       lang,
                     }),
@@ -618,6 +615,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                   },
                 ],
                 [
+                  {
+                    text: this.i18n.translate('booking.stadion.book', { lang }),
+                    callback_data: `booking_stadion_${stadion.id}`,
+                  },
                   {
                     text: this.i18n.translate('schedule.back'),
                     callback_data: JSON.stringify({
@@ -792,7 +793,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               inline_keyboard: [
                 [
                   {
-                    text: "Sevimliydan o'chirish",
+                    text: this.i18n.translate('booking.delete_favorite', {
+                      lang,
+                    }),
                     callback_data: `delete_stadion_fovorite_${stadion.id}`,
                   },
                 ],
@@ -843,9 +846,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       ]);
 
       if (!schedule.length) {
-        return ctx.reply(
+        ctx.reply(
           this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
         );
+        return;
       }
 
       const tz = 'Asia/Tashkent';
@@ -1598,11 +1602,20 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
+        include: {
+          owner: {
+            include: {
+              ownerCard: { select: { id: true } },
+            },
+          },
+        },
       });
       if (!stadion) {
         await this.utils.errorFunction(ctx);
         return;
       }
+      const cardId = stadion?.owner?.ownerCard?.id;
+      const hasCard = !!cardId;
 
       const user = await this.prisma.users.findUnique({
         where: { chatID: String(ctx.from?.id) },
@@ -1636,46 +1649,30 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         let warning = '';
 
         if (noshowCount === 1) {
-          warning = `
-⚠️ Ogohlantirish!
-Siz avvalgi bron vaqtida stadionga kelmagansiz.
-
-Shu kabi holat yana takrorlansa,
-keyingi bronlarda jarima qo‘llanilishi mumkin.
-`;
+          warning = this.i18n.translate('booking.no_show_warning', { lang });
         } else if (noshowCount >= 2) {
-          warning = `
-⚠️ Ogohlantirish!
-Siz oldingi bronlardan birida kelmagansiz.
-Shu sababli jarima qo‘shildi.
-`;
+          warning = this.i18n.translate('booking.penalty', { lang });
         }
 
-        let message = `
-🏟 *Stadion bron qilish*
-
-${warning}
-📅 Sana: *${days}*
-⏰ Vaqt: *${start_time} - ${end_time}*
-
-🕒 Davomiyligi: *${hors} soat*
-`;
-
-        if (penalty > 0) {
-          message += `
-⚠️ Jarima: *${penalty.toLocaleString()} so'm*
-`;
-        }
-
-        message += `
-━━━━━━━━━━━━━━
-💰 *Umumiy to‘lov:* ${total.toLocaleString()} so'm
-
-💵 To‘lov turi: *${paymentMethodText}*
-
-Bronni tasdiqlaysizmi?
-`;
-
+        const message = this.i18n.translate('booking.booking_confirm', {
+          lang,
+          args: {
+            warning,
+            date: days,
+            start_time,
+            end_time,
+            hours: hors,
+            total: total.toLocaleString(),
+            payment_method: paymentMethodText,
+            penalty_block:
+              penalty > 0
+                ? this.i18n.translate('booking.penalty_block', {
+                    lang,
+                    args: { penalty: penalty.toLocaleString() },
+                  })
+                : '',
+          },
+        });
         const booking = await this.prisma.booking.create({
           data: {
             stadion_id: stadion.id,
@@ -1695,11 +1692,11 @@ Bronni tasdiqlaysizmi?
             inline_keyboard: [
               [
                 {
-                  text: '✅ Tasdiqlash',
+                  text: this.i18n.translate('booking.confirm', { lang }),
                   callback_data: `booking_confirm_yes_${booking.id}`,
                 },
                 {
-                  text: '❌ Bekor qilish',
+                  text: this.i18n.translate('booking.cancel', { lang }),
                   callback_data: `booking_confirm_no_${booking.id}`,
                 },
               ],
@@ -1717,40 +1714,432 @@ Bronni tasdiqlaysizmi?
           CARD: this.i18n.translate('peyments.card', { lang }),
           CASH: this.i18n.translate('peyments.cash', { lang }),
         };
-        if (noshowCount >= 2) {
-          ctx.editMessageText('');
-        } else {
-          const shortDate = date.toISOString().split('T')[0];
+        const days = format(date, 'dd.MM.yyyy');
+        if (noshowCount >= 2 && hasCard) {
+          const booking = await this.prisma.booking.create({
+            data: {
+              stadion_id: stadion.id,
+              user_id: user.id,
+              date: date,
+              start_time,
+              end_time,
+              total_price: total,
+              payment_method: 'CARD',
+              expires_at: new Date(Date.now() + 15 * 60 * 1000),
+            },
+          });
+          const transaction = await this.prisma.tranzaktion.create({
+            data: {
+              user_id: booking.user_id,
+              booking_id: booking.id,
+              systeam_fee: 0,
+              owner_amount: total,
+              provider: 'Click',
+              provider_transactionId: '',
+              status: 'PENDING',
+              owner_card_id: cardId,
+              amount_received: 0,
+            },
+          });
+          const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
 
-          await ctx.editMessageText("To'lov turini tanlayng", {
+          const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction.id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+          const warning = this.i18n.translate('booking.warning', { lang });
+
+          const message = this.i18n.translate('booking.message_template', {
+            lang,
+            args: {
+              warning,
+              date: days,
+              start_time,
+              end_time,
+              hours: hors,
+              total: total.toLocaleString(),
+              payment_method: paymentMethodText,
+              penalty_block:
+                penalty > 0
+                  ? this.i18n.translate('penalty_block', {
+                      lang,
+                      args: { penalty: penalty.toLocaleString() },
+                    })
+                  : '',
+            },
+          });
+          await ctx.editMessageText(message, {
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: this.i18n.translate('peyments.cash', { lang }),
-                    callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}`,
+                    text: this.i18n.translate('booking.pay_by_card', { lang }),
+                    url: clickUrl,
                   },
                 ],
                 [
                   {
-                    text: this.i18n.translate('peyments.card', { lang }),
-                    callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: `booking_back_${stadionId}`,
+                    text: this.i18n.translate('booking.cancel', { lang }),
+                    callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
               ],
             },
           });
+        } else if (noshowCount >= 2) {
+          const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+          const warning = this.i18n.translate(
+            'booking.booking_penalty_notice.warning',
+            { lang },
+          );
+
+          const message = this.i18n.translate(
+            'booking.booking_penalty_notice.message_template',
+            {
+              lang,
+              args: {
+                warning,
+                date: days,
+                start_time,
+                end_time,
+                hours: hors,
+                total: total.toLocaleString(),
+                payment_method: paymentMethodText,
+                penalty_block:
+                  penalty > 0
+                    ? this.i18n.translate('penalty_block', {
+                        lang,
+                        args: { penalty: penalty.toLocaleString() },
+                      })
+                    : '',
+              },
+            },
+          );
+
+          const booking = await this.prisma.booking.create({
+            data: {
+              stadion_id: stadion.id,
+              user_id: user.id,
+              date: date,
+              start_time,
+              end_time,
+              total_price: total,
+              payment_method: 'CASH',
+              expires_at: new Date(Date.now() + 15 * 60 * 1000),
+            },
+          });
+
+          await ctx.editMessageText(message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.confirm', { lang }),
+                    callback_data: `booking_confirm_yes_${booking.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('booking.cancel', { lang }),
+                    callback_data: `booking_confirm_no_${booking.id}`,
+                  },
+                ],
+              ],
+            },
+          });
+        } else if (!hasCard) {
+          const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+          let warning = '';
+          if (noshowCount == 1) {
+            warning = this.i18n.translate('booking.booking_warning.warning', {
+              lang,
+            });
+          }
+
+          const message = this.i18n.translate(
+            'booking.booking_warning.message_template',
+            {
+              lang,
+              args: {
+                warning,
+                date: days,
+                start_time,
+                end_time,
+                hours: hors,
+                total: total.toLocaleString(),
+                payment_method: paymentMethodText,
+              },
+            },
+          );
+          const booking = await this.prisma.booking.create({
+            data: {
+              stadion_id: stadionId,
+              user_id: user.id,
+              date: date,
+              start_time,
+              end_time,
+              total_price: total,
+              payment_method: 'CASH',
+              expires_at: new Date(Date.now() + 15 * 60 * 1000),
+            },
+          });
+
+          await ctx.editMessageText(message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.confirm', { lang }),
+                    callback_data: `booking_confirm_yes_${booking.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('booking.cancel', { lang }),
+                    callback_data: `booking_confirm_no_${booking.id}`,
+                  },
+                ],
+              ],
+            },
+          });
+        } else {
+          const shortDate = date.toISOString().split('T')[0];
+
+          await ctx.editMessageText(
+            this.i18n.translate('booking.select_payment_method', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('peyments.cash', { lang }),
+                      callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('peyments.card', { lang }),
+                      callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: `booking_back_${stadionId}`,
+                    },
+                  ],
+                ],
+              },
+            },
+          );
         }
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
       console.log(error);
+    }
+  }
+
+  async bookingPayments(
+    ctx: MyContext,
+    type: string,
+    days: string,
+    start_time: string,
+    end_time: string,
+    stadionId: number,
+    pricePerHur: number,
+    noshowCount: number,
+    lang: string,
+  ) {
+    try {
+      const { total, penalty, price, hors } = this.utils.calculateTotalPrice(
+        start_time,
+        end_time,
+        pricePerHur,
+        noshowCount,
+      );
+      const [year, month, day] = days.split('-');
+      const date = new Date(
+        Number(year),
+        Number(month) - 1,
+        Number(day),
+        5,
+        0,
+        0,
+        0,
+      );
+      const dayss = format(date, 'dd.MM.yyyy');
+      const user = await this.prisma.users.findUnique({
+        where: { chatID: String(ctx.from?.id) },
+      });
+      if (!user) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+        include: {
+          owner: {
+            include: {
+              ownerCard: { select: { id: true } },
+            },
+          },
+        },
+      });
+      if (!stadion) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      const cardId = stadion?.owner?.ownerCard?.id;
+      const hasCard = !!cardId;
+      if (!hasCard) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      const paymentTextMap = {
+        CARD: this.i18n.translate('peyments.card', { lang }),
+        CASH: this.i18n.translate('peyments.cash', { lang }),
+      };
+      switch (type) {
+        case 'cash':
+          {
+            const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+            let warning = '';
+            if (noshowCount == 1) {
+              warning = this.i18n.translate('booking.booking_warning.warning', {
+                lang,
+              });
+            }
+
+            const message = this.i18n.translate(
+              'booking.booking_warning.message_template',
+              {
+                lang,
+                args: {
+                  warning,
+                  date: days,
+                  start_time,
+                  end_time,
+                  hours: hors,
+                  total: total.toLocaleString(),
+                  payment_method: paymentMethodText,
+                },
+              },
+            );
+
+            const booking = await this.prisma.booking.create({
+              data: {
+                stadion_id: stadionId,
+                user_id: user.id,
+                date: date,
+                start_time,
+                end_time,
+                total_price: total,
+                payment_method: 'CASH',
+                expires_at: new Date(Date.now() + 15 * 60 * 1000),
+              },
+            });
+
+            await ctx.editMessageText(message, {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('booking.confirm', { lang }),
+                      callback_data: `booking_confirm_yes_${booking.id}`,
+                    },
+                    {
+                      text: this.i18n.translate('booking.cancel', { lang }),
+                      callback_data: `booking_confirm_no_${booking.id}`,
+                    },
+                  ],
+                ],
+              },
+            });
+          }
+          break;
+        case 'card':
+          {
+            const booking = await this.prisma.booking.create({
+              data: {
+                stadion_id: stadionId,
+                user_id: user.id,
+                date: date,
+                start_time,
+                end_time,
+                total_price: total,
+                payment_method: 'CARD',
+                expires_at: new Date(Date.now() + 15 * 60 * 1000),
+              },
+            });
+            const transaction = await this.prisma.tranzaktion.create({
+              data: {
+                user_id: booking.user_id,
+                booking_id: booking.id,
+                systeam_fee: 0,
+                owner_amount: total,
+                provider: 'Click',
+                provider_transactionId: '',
+                status: 'PENDING',
+                owner_card_id: cardId,
+                amount_received: 0,
+              },
+            });
+            const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
+
+            const message = this.i18n.translate('booking.booking_details', {
+              lang,
+              args: {
+                date: dayss,
+                start_time,
+                end_time,
+                hours: hors,
+                total: total.toLocaleString(),
+                payment_method: paymentMethodText,
+              },
+            });
+
+            const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction.id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+
+            await ctx.editMessageText(message, {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate(
+                        'booking.payment_options.prepay',
+                        { lang },
+                      ),
+                      url: clickUrl,
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate(
+                        'booking.payment_options.pay_later',
+                        { lang },
+                      ),
+                      callback_data: `booking_confirm_pending_${booking.id}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('booking.cancel', { lang }),
+                      callback_data: `booking_confirm_no_${booking.id}`,
+                    },
+                  ],
+                ],
+              },
+            });
+          }
+          break;
+        default: {
+          await this.utils.errorFunction(ctx);
+        }
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
 }

@@ -206,11 +206,6 @@ export class BotUpdate {
 
   @Action(/^booking_confirm_(.+)_(\d+)$/)
   async confirment(@Ctx() ctx: MyContext) {
-    if (ctx.callbackQuery) {
-      try {
-        await ctx.answerCbQuery();
-      } catch (error) {}
-    }
     try {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
@@ -218,6 +213,11 @@ export class BotUpdate {
         switch (type) {
           case 'yes':
             {
+              if (ctx.callbackQuery) {
+                try {
+                  await ctx.answerCbQuery();
+                } catch (error) {}
+              }
               const booking = await this.prisma.booking.findUnique({
                 where: { id: Number(bookingId) },
                 include: { stadion: true },
@@ -235,24 +235,23 @@ export class BotUpdate {
               const paymentTextMap = {
                 CARD: this.i18n.translate('peyments.card', { lang }),
                 CASH: this.i18n.translate('peyments.cash', { lang }),
-                BOTH: this.i18n.translate('peyments.both', { lang }),
               };
 
               const paymentMethodText =
                 paymentTextMap[booking.payment_method] ||
                 booking.payment_method;
 
-              const message = `
-✅ Sizning bron tasdiqlandi!
-🏟 Stadion: *${booking.stadion.name}*
-📅 Sana: *${days}*
-⏰ Vaqt: *${booking.start_time} - ${booking.end_time}*
-
-💳 To‘lov turi: *${paymentMethodText}*
-💰 Umumiy narx: *${booking.total_price.toLocaleString()} so'm*
-
-Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
-`;
+              const message = this.i18n.translate('booking.booking_confirmed', {
+                lang,
+                args: {
+                  stadion_name: booking.stadion.name,
+                  date: days,
+                  start_time: booking.start_time,
+                  end_time: booking.end_time,
+                  payment_method: paymentMethodText,
+                  total: booking.total_price.toLocaleString(),
+                },
+              });
               await ctx.editMessageText(message, {
                 parse_mode: 'Markdown',
                 reply_markup: {
@@ -270,14 +269,11 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
             break;
           case 'no':
             {
-              await this.prisma.booking.deleteMany({
-                where: {
-                  status: 'PENDING',
-                  expires_at: {
-                    lt: new Date(),
-                  },
-                },
-              });
+              if (ctx.callbackQuery) {
+                try {
+                  await ctx.answerCbQuery();
+                } catch (error) {}
+              }
               const booking = await this.prisma.booking.findUnique({
                 where: { id: Number(bookingId) },
               });
@@ -285,12 +281,18 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
                 await this.utils.errorFunction(ctx);
                 return;
               }
-              const days = format(booking.date, 'dd.MM,yyyy');
+              const days = format(booking.date, 'dd.MM.yyyy');
               await ctx.editMessageText(
-                `❌ Bron bekor qilindi, lekin darhol o‘chirilmaydi.
-⏳ Hozir PENDING holatda: 15 daqiqa ichida qayta tasdiqlash mumkin.
-📅 ${days} ⏰ ${booking.start_time} - ${booking.end_time}`,
+                this.i18n.translate('booking.booking_cancelled_notice', {
+                  lang,
+                  args: {
+                    date: days,
+                    start_time: booking.start_time,
+                    end_time: booking.end_time,
+                  },
+                }),
                 {
+                  parse_mode: 'Markdown',
                   reply_markup: {
                     inline_keyboard: [
                       [
@@ -303,6 +305,74 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
                   },
                 },
               );
+            }
+            break;
+          case 'pending':
+            {
+              const booking = await this.prisma.booking.findUnique({
+                where: { id: Number(bookingId) },
+                include: { stadion: true },
+              });
+              if (!booking) {
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+              const { timeLeftText, totalMinutes } =
+                this.utils.bookingTimeCalculate(
+                  booking.date,
+                  booking.start_time,
+                  lang,
+                );
+
+              if (totalMinutes < 60) {
+                await ctx.answerCbQuery(
+                  this.i18n.translate('booking.payment_time_alert', {
+                    lang,
+                    args: { time_left: timeLeftText },
+                  }),
+                  { show_alert: true },
+                );
+                return;
+              }
+              const days = format(booking.date, 'dd.MM.yyyy');
+
+              const paymentTextMap = {
+                CARD: this.i18n.translate('peyments.card', { lang }),
+                CASH: this.i18n.translate('peyments.cash', { lang }),
+              };
+
+              const paymentMethodText =
+                paymentTextMap[booking.payment_method] ||
+                booking.payment_method;
+
+              const message = this.i18n.translate(
+                'booking.confirm_with_payment',
+                {
+                  lang,
+                  args: {
+                    stadion_name: booking.stadion.name,
+                    date: days,
+                    start_time: booking.start_time,
+                    end_time: booking.end_time,
+                    payment_method: paymentMethodText,
+                    total: booking.total_price.toLocaleString(),
+                    time_left: timeLeftText,
+                  },
+                },
+              );
+              await ctx.editMessageText(message, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'errorBack_1',
+                      },
+                    ],
+                  ],
+                },
+              });
             }
             break;
         }
@@ -329,7 +399,7 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
   }
   @Action(
-    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)/,
+    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)_(\d+)_(\d+)/,
   )
   async bookingPeyments(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -337,27 +407,32 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
         await ctx.answerCbQuery();
       } catch (error) {}
     }
-
     try {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, __, type, start_time, end_time, days, stadionId] =
-          ctx.callbackQuery.data.split('_');
-        const [year, month, day] = days.split('-');
+        const [
+          _,
+          __,
+          type,
+          start_time,
+          end_time,
+          days,
+          stadionId,
+          price,
+          noshowCount,
+        ] = ctx.callbackQuery.data.split('_');
 
-        switch (type) {
-          case 'cash':
-            {
-            }
-            break;
-          case 'card':
-            {
-            }
-            break;
-          default: {
-            await this.utils.errorFunction(ctx);
-          }
-        }
+        return this.userService.bookingPayments(
+          ctx,
+          type,
+          days,
+          start_time,
+          end_time,
+          Number(stadionId),
+          Number(price),
+          Number(noshowCount),
+          lang,
+        );
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
@@ -389,7 +464,7 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, scheduleId, day, monthNumber,years] =
+      const [_, __, scheduleId, day, monthNumber, years] =
         ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_start(
         ctx,

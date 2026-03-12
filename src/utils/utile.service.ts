@@ -257,4 +257,50 @@ export class UtilisService implements OnModuleInit {
       hors: durationHours,
     };
   }
+  bookingTimeCalculate(date: Date, start_time: string, lang: string) {
+    const bookingDate = new Date(date);
+    const [hours, minutes] = start_time.split(':').map(Number);
+
+    bookingDate.setHours(hours, minutes, 0, 0);
+    const now = new Date();
+    const diffMs = bookingDate.getTime() - now.getTime();
+
+    const totalMinutes = Math.floor(diffMs / 60000);
+
+    const daysLeft = Math.floor(totalMinutes / 1440);
+    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
+    const minutesLeft = totalMinutes % 60;
+
+    let timeLeftText = '';
+
+    if (daysLeft > 0) {
+      timeLeftText = this.i18n.translate(
+        'booking.time_left.days_hours_minutes',
+        {
+          lang,
+          args: {
+            daysLeft,
+            hoursLeft,
+            minutesLeft,
+          },
+        },
+      );
+    } else if (hoursLeft > 0) {
+      timeLeftText = this.i18n.translate('booking.time_left.hours_minutes', {
+        lang,
+        args: {
+          hoursLeft,
+          minutesLeft,
+        },
+      });
+    } else {
+      timeLeftText = this.i18n.translate('booking.time_left.minutes_only', {
+        lang,
+        args: {
+          minutesLeft,
+        },
+      });
+    }
+    return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
+  }
 }
