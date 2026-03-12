@@ -8,21 +8,21 @@
     "6": "Saturday",
     "7": "Sunday"
   },
-   "months": {
-      "1": "January",
-      "2": "February",
-      "3": "March",
-      "4": "April",
-      "5": "May",
-      "6": "June",
-      "7": "July",
-      "8": "August",
-      "9": "September",
-      "10": "October",
-      "11": "November",
-      "12": "December"
-    },
-    
+  "months": {
+    "1": "January",
+    "2": "February",
+    "3": "March",
+    "4": "April",
+    "5": "May",
+    "6": "June",
+    "7": "July",
+    "8": "August",
+    "9": "September",
+    "10": "October",
+    "11": "November",
+    "12": "December"
+  },
+
   "working_hours": "🕒 Enter start and end work time for {name} (HH:MM-HH:MM):",
   "update_hours": "🕒 Please re-enter the start and end work time for {day} (HH:MM-HH:MM):",
 
@@ -69,5 +69,7 @@
   "update": "🗓️ Enter the new date for update. Format: 2025-12-12",
   "time_specile": "⏰ Enter your stadium's opening and closing time in the following format: (HH:MM-HH:MM)",
   "update_time": "🔄 Enter the new opening and closing time of your stadium. Format: (HH:MM-HH:MM)",
-  "specile_days": "📅 Special Days"
+  "specile_days": "📅 Special Days",
+  "today": "Today",
+  "tomorrow": "Tomorrow"
 }

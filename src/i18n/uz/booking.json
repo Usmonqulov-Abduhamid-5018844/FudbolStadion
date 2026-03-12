@@ -6,19 +6,19 @@
     "history": "📜 Bronlar tarixi",
     "favorites": "⭐ Sevimli stadionlar",
     "search": "🔎 Stadion qidirish",
-     "notAvailable": "⚠️ Hozircha stadionlar mavjud emas",
-      "availableRegions": "📍 Stadion mavjud bo‘lgan hududlar",
-        "addedToFavorites": "⭐ Stadion sevimlilar ro‘yxatiga qo‘shildi",
-       "removedFromFavorites": "⭐ Stadion sevimlilar ro‘yxatidan o‘chirildi",
-       "selectRegion": "📍 Hududni tanlang",
-        "noFavorites": "⭐ Sizda hozircha sevimli stadionlar mavjud emas",
-          "book": "📅 Bron qilish",
+    "notAvailable": "⚠️ Hozircha stadionlar mavjud emas",
+    "availableRegions": "📍 Stadion mavjud bo‘lgan hududlar",
+    "addedToFavorites": "⭐ Stadion sevimlilar ro‘yxatiga qo‘shildi",
+    "removedFromFavorites": "⭐ Stadion sevimlilar ro‘yxatidan o‘chirildi",
+    "selectRegion": "📍 Hududni tanlang",
+    "noFavorites": "⭐ Sizda hozircha sevimli stadionlar mavjud emas",
+    "book": "📅 Bron qilish",
     "favorite": "⭐ Sevimlilarga qo‘shish",
-     "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan",
-   "selectDate": "📅 Bron qilish uchun sanani tanlang",
-   "alert": "⚠ E’tibor! Ushbu sana dam olish kuni 🏟️\n\nStadion yopiq ❌\nIltimos, boshqa kunni tanlang 📅",
-   "selectTime": "⏰ O‘yinni boshlash vaqtini tanlang",
-   "selectEndTime": "⏰ O‘yinni tugash vaqtini tanlang"
+    "noWorkingHours": "⏰ Hozircha ushbu stadion uchun ish vaqtlari belgilanmagan",
+    "selectDate": "📅 Bron qilish uchun sanani tanlang",
+    "alert": "🔒 Stadion yopiq\n\nTanlangan sana dam olish kuniga to‘g‘ri keladi 🏟️\nShu sababli bu kunda bron qilish mumkin emas.\n\nIltimos, boshqa kunni tanlang 📅",
+    "selectTime": "⏰ O‘yinni boshlash vaqtini tanlang",
+    "selectEndTime": "⏰ O‘yinni tugash vaqtini tanlang"
   },
-"no_free_slots": "⚠ Afsus! Ushbu kunga bo‘sh vaqtlar mavjud emas"
+  "no_free_slots": "⚠ Afsus! Ushbu kunga bo‘sh vaqtlar mavjud emas"
 }

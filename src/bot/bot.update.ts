@@ -337,15 +337,30 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
         await ctx.answerCbQuery();
       } catch (error) {}
     }
-    const lang = await this.utils.langs(ctx);
-    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, type, start_time, end_time, days, stadionId] =
-        ctx.callbackQuery.data.split('_');
-      const [year,month,day] = days.split("-")
-      console.log(type,stadionId,start_time,end_time,"\n");
-      console.log(year,month,day);
-      
-      
+
+    try {
+      const lang = await this.utils.langs(ctx);
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const [_, __, type, start_time, end_time, days, stadionId] =
+          ctx.callbackQuery.data.split('_');
+        const [year, month, day] = days.split('-');
+
+        switch (type) {
+          case 'cash':
+            {
+            }
+            break;
+          case 'card':
+            {
+            }
+            break;
+          default: {
+            await this.utils.errorFunction(ctx);
+          }
+        }
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
   @Action(/booking_(back|specialBack)_(\d+)$/)
@@ -365,7 +380,7 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
       }
     }
   }
-  @Action(/^booking_scheduleBack_(\d+)_(\d+)_(\d+)$/)
+  @Action(/^booking_scheduleBack_(\d+)_(\d+)_(\d+)_(\d{4})$/)
   async bookingScheduleBack(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -374,10 +389,11 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, scheduleId, day, monthNumber] =
+      const [_, __, scheduleId, day, monthNumber,years] =
         ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_start(
         ctx,
+        years,
         day,
         monthNumber,
         Number(scheduleId),
@@ -386,7 +402,7 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
   }
 
-  @Action(/^booking_timeStart_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)$/)
+  @Action(/^booking_timeStart_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})$/)
   async bookingTimeStart(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -395,10 +411,11 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, scheduleId, day, monthNumber] =
+      const [_, __, start_time, scheduleId, day, monthNumber, years] =
         ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_end(
         ctx,
+        years,
         start_time,
         Number(scheduleId),
         Number(day),
@@ -407,7 +424,9 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
       );
     }
   }
-  @Action(/^booking_timeEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)$/)
+  @Action(
+    /^booking_timeEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})$/,
+  )
   async bookingTimeEnd(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -416,11 +435,10 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, end_time, day, monthNumber, stadionId] =
+      const [_, __, start_time, end_time, day, monthNumber, stadionId, years] =
         ctx.callbackQuery.data.split('_');
-      const year = new Date().getFullYear();
       const data = new Date(
-        year,
+        Number(years),
         Number(monthNumber) - 1,
         Number(day),
         5,
@@ -495,14 +513,16 @@ Iltimos, belgilangan vaqtda kelishni unutmang! ⏳
     }
   }
 
-  @Action(/^booking_schedule_(\d+)_(\d+)_(\d+)$/)
+  @Action(/^booking_schedule_(\d{4})_(\d+)_(\d+)_(\d+)$/)
   async userBookingSchedule(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
 
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, day, monthNumber, id] = ctx.callbackQuery.data.split('_');
+      const [_, __, year, day, monthNumber, id] =
+        ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_start(
         ctx,
+        year,
         day,
         monthNumber,
         Number(id),

@@ -16,7 +16,7 @@
     "favorite": "⭐ Add to Favorites",
     "noWorkingHours": "⏰ Working hours have not been set for this stadium yet",
     "selectDate": "📅 Select a date to book the stadium",
-    "alert": "⚠ Attention! This date is a holiday 🏟️\n\nStadium is closed ❌\nPlease choose another day 📅",
+    "alert": "🔒 Stadium closed\n\nThe selected date falls on a day off 🏟️\nTherefore, booking is not available on this day.\n\nPlease choose another date 📅",
     "selectTime": "⏰ Select the game start time",
     "selectEndTime": "⏰ Select the game end time"
   },

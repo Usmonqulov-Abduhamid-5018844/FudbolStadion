@@ -825,41 +825,66 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
       });
+
       if (!stadion) {
-        this.utils.errorFunction(ctx);
-        return;
+        return this.utils.errorFunction(ctx);
       }
-      const schedule = await this.prisma.stadion_chedule.findMany({
-        where: { stadion_id: stadionId },
-      });
+
+      const [schedule, offDays, specialDays] = await Promise.all([
+        this.prisma.stadion_chedule.findMany({
+          where: { stadion_id: stadionId },
+        }),
+        this.prisma.stadion_off_days.findMany({
+          where: { stadion_id: stadionId },
+        }),
+        this.prisma.stadion_special_schedule.findMany({
+          where: { stadion_id: stadionId },
+        }),
+      ]);
 
       if (!schedule.length) {
-        await ctx.reply(
+        return ctx.reply(
           this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
         );
-        return;
       }
-      const offDays = await this.prisma.stadion_off_days.findMany({
-        where: { stadion_id: stadionId },
-      });
-      const specialDays = await this.prisma.stadion_special_schedule.findMany({
-        where: { stadion_id: stadionId },
-      });
 
       const tz = 'Asia/Tashkent';
       const now = toZonedTime(new Date(), tz);
+
+      const todayStr = format(now, 'yyyy-MM-dd');
+      const tomorrowStr = format(
+        new Date(now.getTime() + 86400000),
+        'yyyy-MM-dd',
+      );
+
+      const offSet = new Set(
+        offDays.map((d) =>
+          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+        ),
+      );
+
+      const specialMap = new Map(
+        specialDays.map((d) => [
+          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+          d,
+        ]),
+      );
 
       const buttons = schedule.map((s) => {
         const dayOfWeek = s.day_of_week;
         const currentDay = now.getDay() === 0 ? 7 : now.getDay();
 
-        let diffDays = dayOfWeek - currentDay;
-        if (diffDays < 0) diffDays += 7;
+        let diff = dayOfWeek - currentDay;
+        if (diff < 0) diff += 7;
 
         const date = new Date(now);
-        date.setDate(now.getDate() + diffDays);
-        const day = format(date, 'd', { timeZone: tz });
+        date.setDate(now.getDate() + diff);
+
+        const dateStr = format(date, 'yyyy-MM-dd');
+
+        const day = format(date, 'd');
         const monthNumber = date.getMonth() + 1;
+
         const monthText = this.i18n.translate(
           `schedule.months.${monthNumber}`,
           { lang },
@@ -869,41 +894,45 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           `schedule.week_days.${dayOfWeek}`,
           { lang },
         );
-        const special = specialDays.find((d) => {
-          const specialDate = toZonedTime(new Date(d.date), tz);
-          return (
-            format(specialDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-          );
-        });
+
+        let dateLabel = `${day} - ${monthText}. ${weekDayText}`;
+
+        if (dateStr === todayStr) {
+          dateLabel = `${this.i18n.translate('schedule.today', { lang })}. ${weekDayText}`;
+        }
+
+        if (dateStr === tomorrowStr) {
+          dateLabel = `${this.i18n.translate('schedule.tomorrow', { lang })}. ${weekDayText}`;
+        }
+
+        const special = specialMap.get(dateStr);
+
         if (special) {
           return [
             {
-              text: `⭐ ${day} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
+              text: `⭐ ${dateLabel} || ${special.start_time} - ${special.end_time}`,
               callback_data: `booking_special_${special.id}`,
             },
           ];
         }
 
-        const isOffDay = offDays.some((d) => {
-          const offDate = toZonedTime(new Date(d.date), tz);
-          return format(offDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-        });
-        if (isOffDay) {
+        if (offSet.has(dateStr)) {
           return [
             {
-              text: `❌ ${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
-              callback_data: 'user_offday',
+              text: `🔒 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
+              callback_data: `user_offday`,
             },
           ];
         }
 
         return [
           {
-            text: `${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
-            callback_data: `booking_schedule_${day}_${monthNumber}_${s.id}`,
+            text: `📅 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
+            callback_data: `booking_schedule_${date.getFullYear()}_${day}_${monthNumber}_${s.id}`,
           },
         ];
       });
+
       buttons.push([
         {
           text: this.i18n.translate('schedule.back', { lang }),
@@ -913,6 +942,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           }),
         },
       ]);
+
       await ctx.reply(
         this.i18n.translate('booking.stadion.selectDate', { lang }),
         {
@@ -932,41 +962,67 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
       });
+
       if (!stadion) {
-        this.utils.errorFunction(ctx);
-        return;
+        return this.utils.errorFunction(ctx);
       }
-      const schedule = await this.prisma.stadion_chedule.findMany({
-        where: { stadion_id: stadionId },
-      });
+
+      const [schedule, offDays, specialDays] = await Promise.all([
+        this.prisma.stadion_chedule.findMany({
+          where: { stadion_id: stadionId },
+        }),
+        this.prisma.stadion_off_days.findMany({
+          where: { stadion_id: stadionId },
+        }),
+        this.prisma.stadion_special_schedule.findMany({
+          where: { stadion_id: stadionId },
+        }),
+      ]);
 
       if (!schedule.length) {
-        await ctx.reply(
+        return ctx.reply(
           this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
         );
-        return;
       }
-      const offDays = await this.prisma.stadion_off_days.findMany({
-        where: { stadion_id: stadionId },
-      });
-      const specialDays = await this.prisma.stadion_special_schedule.findMany({
-        where: { stadion_id: stadionId },
-      });
 
       const tz = 'Asia/Tashkent';
       const now = toZonedTime(new Date(), tz);
+
+      const todayStr = format(now, 'yyyy-MM-dd');
+      const tomorrowStr = format(
+        new Date(now.getTime() + 86400000),
+        'yyyy-MM-dd',
+      );
+
+      const offSet = new Set(
+        offDays.map((d) =>
+          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+        ),
+      );
+
+      const specialMap = new Map(
+        specialDays.map((d) => [
+          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+          d,
+        ]),
+      );
+      console.log(specialDays, specialMap);
 
       const buttons = schedule.map((s) => {
         const dayOfWeek = s.day_of_week;
         const currentDay = now.getDay() === 0 ? 7 : now.getDay();
 
-        let diffDays = dayOfWeek - currentDay;
-        if (diffDays < 0) diffDays += 7;
+        let diff = dayOfWeek - currentDay;
+        if (diff < 0) diff += 7;
 
         const date = new Date(now);
-        date.setDate(now.getDate() + diffDays);
-        const day = format(date, 'd', { timeZone: tz });
+        date.setDate(now.getDate() + diff);
+
+        const dateStr = format(date, 'yyyy-MM-dd');
+
+        const day = format(date, 'd');
         const monthNumber = date.getMonth() + 1;
+
         const monthText = this.i18n.translate(
           `schedule.months.${monthNumber}`,
           { lang },
@@ -976,41 +1032,45 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           `schedule.week_days.${dayOfWeek}`,
           { lang },
         );
-        const special = specialDays.find((d) => {
-          const specialDate = toZonedTime(new Date(d.date), tz);
-          return (
-            format(specialDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-          );
-        });
+
+        let dateLabel = `${day} - ${monthText}. ${weekDayText}`;
+
+        if (dateStr === todayStr) {
+          dateLabel = `${this.i18n.translate('schedule.today', { lang })}. ${weekDayText}`;
+        }
+
+        if (dateStr === tomorrowStr) {
+          dateLabel = `${this.i18n.translate('schedule.tomorrow', { lang })}. ${weekDayText}`;
+        }
+
+        const special = specialMap.get(dateStr);
+
         if (special) {
           return [
             {
-              text: `⭐ ${day} - ${monthText}. ${weekDayText} || ${special.start_time} - ${special.end_time}`,
+              text: `⭐ ${dateLabel} || ${special.start_time} - ${special.end_time}`,
               callback_data: `booking_special_${special.id}`,
             },
           ];
         }
 
-        const isOffDay = offDays.some((d) => {
-          const offDate = toZonedTime(new Date(d.date), tz);
-          return format(offDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd');
-        });
-        if (isOffDay) {
+        if (offSet.has(dateStr)) {
           return [
             {
-              text: `❌ ${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
-              callback_data: 'user_offday',
+              text: `🔒 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
+              callback_data: `user_offday`,
             },
           ];
         }
 
         return [
           {
-            text: `${day} - ${monthText}. ${weekDayText} || ${s.start_time} - ${s.end_time}`,
-            callback_data: `booking_schedule_${day}_${monthNumber}_${s.id}`,
+            text: `📅 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
+            callback_data: `booking_schedule_${date.getFullYear()}_${day}_${monthNumber}_${s.id}`,
           },
         ];
       });
+
       buttons.push([
         {
           text: this.i18n.translate('schedule.back', { lang }),
@@ -1020,6 +1080,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           }),
         },
       ]);
+
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('booking.stadion.selectDate', { lang }),
@@ -1029,7 +1090,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
-      
     }
   }
 
@@ -1268,6 +1328,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
   async bookingSchedule_start(
     ctx: MyContext,
+    years: string,
     day: string,
     monthNumber: string,
     scheduleId: number,
@@ -1336,7 +1397,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].start,
-                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}`,
+                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}`,
                 });
               }
             }
@@ -1380,7 +1441,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].start,
-                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}`,
+                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}`,
               });
             }
           }
@@ -1408,6 +1469,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
   async bookingSchedule_end(
     ctx: MyContext,
+    years: string,
     start_time: string,
     scheduleId: number,
     day: number,
@@ -1456,7 +1518,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].end,
-                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}`,
+                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}_${years}`,
                 });
               }
             }
@@ -1465,7 +1527,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           button.push([
             {
               text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
             },
           ]);
         } else {
@@ -1484,7 +1546,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                     [
                       {
                         text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
                       },
                     ],
                   ],
@@ -1500,7 +1562,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].end,
-                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}`,
+                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}_${years}`,
               });
             }
           }
@@ -1509,7 +1571,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         button.push([
           {
             text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}`,
+            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
           },
         ]);
       }
@@ -1651,17 +1713,16 @@ Bronni tasdiqlaysizmi?
           stadion.price,
           noshowCount,
         );
-        const days = format(date, 'dd.MM.yyyy');
         const paymentTextMap = {
           CARD: this.i18n.translate('peyments.card', { lang }),
           CASH: this.i18n.translate('peyments.cash', { lang }),
         };
         if (noshowCount >= 2) {
+          ctx.editMessageText('');
         } else {
-          const shortDate = date.toISOString().split("T")[0];
-          console.log(shortDate);
-          
-         await ctx.editMessageText("To'lov turini tanlayng", {
+          const shortDate = date.toISOString().split('T')[0];
+
+          await ctx.editMessageText("To'lov turini tanlayng", {
             reply_markup: {
               inline_keyboard: [
                 [
@@ -1678,10 +1739,10 @@ Bronni tasdiqlaysizmi?
                 ],
                 [
                   {
-                    text:this.i18n.translate("schedule.back",{lang}),
-                    callback_data: `booking_back_${stadionId}`
-                  }
-                ]
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `booking_back_${stadionId}`,
+                  },
+                ],
               ],
             },
           });
