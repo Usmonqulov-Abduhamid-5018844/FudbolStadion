@@ -9,6 +9,8 @@ export interface ISession {
   owner_registor: registerOwner;
   user_registor: registorUser;
   stadion: Stadion;
+  stadionMessages?: number[];
+  stadionFavoritMessages?: number[]
 }
 export interface Stadion {
   step: number;
@@ -29,8 +31,8 @@ export interface Stadion {
   schedule_day: null | number;
   id: number | null;
   schedule_id: number | null;
-  special: Date
-  off: number | null
+  special: Date;
+  off: number | null;
 }
 
 export interface registerOwner {
@@ -38,14 +40,14 @@ export interface registerOwner {
   email: string | null;
   phone: string | null;
   step: string | null;
-  id: number | null
+  id: number | null;
 }
 
 export interface registorUser {
   full_name: string | null;
   phone: string | null;
   step: string | null;
-  id: number | null
+  id: number | null;
 }
 
 export interface MyContext extends Context {

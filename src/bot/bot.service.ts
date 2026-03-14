@@ -777,7 +777,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             parse_mode: 'HTML',
           });
         } catch (err) {
-          console.error('Image send failed:', err);
           await sendText();
         }
       } else {
@@ -803,7 +802,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         },
       );
     } catch (error) {
-      console.error(error);
       await this.utils.errorFunction(ctx)
     }
   }

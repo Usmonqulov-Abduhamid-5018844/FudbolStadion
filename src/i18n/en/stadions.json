@@ -21,7 +21,7 @@
   "image": "🖼 Please send a photo of your stadium!",
   "menu": "🔙 Back to menu",
 
-  "stadion_added_success":"🎉 Stadium added successfully.",
+  "stadion_added_success": "🎉 Stadium added successfully.",
   "not_fount": "❌ No data found!",
 
   "menyu": {
@@ -34,5 +34,11 @@
     "update_image": "🔄 Update",
     "image_update": "✅ Your stadium image has been updated successfully",
     "all_data": "📄 View general information"
-  }
+  },
+
+  "Previous": "⬅️ Previous",
+  "Next": "Next ➡️",
+  "Select": "Select a page",
+
+  "booking_history_empty": "📭 You don't have any booking history yet."
 }

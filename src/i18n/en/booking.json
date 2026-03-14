@@ -33,7 +33,7 @@
   "confirm": "✅ Confirm",
   "cancel": "❌ Cancel",
 
-  "warning": "⚠️ Booking can only be prepaid by card. Click the button to make the payment:\n\n",
+  "warning": "⚠️ Warning!\nYou have missed previous bookings. Therefore, this booking requires a prepaid card payment.\n\n",
   "message_template": "🏟 *Stadium Booking*\n\n{warning}\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n🕒 Duration: *{hours} hours*\n\n{penalty_block}\n━━━━━━━━━━━━━━\n💰 *Total payment:* {total} UZS\n\n💵 Payment method: *{payment_method}*\n",
   "pay_by_card": "💳 Pay by card",
 
@@ -56,9 +56,9 @@
     "pay_later": "💳 Pay later"
   },
 
-  "booking_confirmed": "✅ Your booking is confirmed!\n🏟 Stadium: *{stadion_name}*\n📅 Date: *{date}*\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n💰 Total price: *{total} UZS*\n\nPlease arrive on time! ⏳",
+  "booking_confirmed": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\nPlease arrive on time! ⏳",
 
-  "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 15-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n⏰ *{start_time} - {end_time}*",
+  "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 15-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
   "time_left": {
     "days_hours_minutes": "{days}d {hours}h {minutes}m",
@@ -70,5 +70,5 @@
 
   "payment_time_alert": "❌ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
 
-  "confirm_with_payment": "✅ Your booking is confirmed!\n🏟 Stadium: *{stadion_name}*\n📅 Date: *{date}*\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\nTime left until the game: *{time_left}*"
+  "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*"
 }

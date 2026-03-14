@@ -24,7 +24,7 @@
   "no_free_slots": "⚠ Afsus! Ushbu kunga bo‘sh vaqtlar mavjud emas",
 
   "no_show_warning": "⚠️ Ogohlantirish!\n\nSiz oldingi bronlardan birida stadionga kelmagansiz.\n\nAgar bu holat yana takrorlansa, keyingi bronlarda jarima qo‘llanilishi mumkin.",
-  "penalty": "⚠️ Ogohlantirish!\n\nSiz bir necha bor bron qilingan vaqtda stadionga kelmagansiz.\n\nShu sababli ushbu bron uchun qo‘shimcha jarima qo‘shildi.",
+  "penalty": "⚠️ Ogohlantirish!\n\nSiz bir necha bor bron qilingan vaqtda stadionga kelmagansiz.\nShu sababli ushbu bron uchun qo‘shimcha jarima qo‘shildi.",
 
   "booking_confirm": "🏟 *Stadion bron qilish*\n\n{warning}\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n🕒 Davomiyligi: *{hours} soat*\n\n{penalty_block}\n━━━━━━━━━━━━━━\n💰 *Umumiy to‘lov:* {total} so'm\n\n💵 To‘lov turi: *{payment_method}*\n\nBronni tasdiqlaysizmi?",
 
@@ -33,7 +33,7 @@
   "confirm": "✅ Tasdiqlash",
   "cancel": "❌ Bekor qilish",
 
-  "warning": "⚠️ Bronni faqat karta orqali oldindan to‘lashingiz mumkin. To‘lovni amalga oshirish tugmasini bosing:\n\n",
+  "warning": "⚠️ Ogohlantirish!\nSizning oldingi bronlaringizda stadionga kelmaslik holati mavjud. Shu sababli ushbu bron uchun oldindan karta orqali to‘lov talab qilinadi.\n\n",
   "message_template": "🏟 *Stadion bron qilish*\n\n{warning}\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n🕒 Davomiyligi: *{hours} soat*\n\n{penalty_block}\n━━━━━━━━━━━━━━\n💰 *Umumiy to‘lov:* {total} so'm\n\n💵 To‘lov turi: *{payment_method}*\n",
 
   "pay_by_card": "💳 Karta orqali to'lash",
@@ -57,7 +57,7 @@
     "pay_later": "💳 Keyinroq to'lash"
   },
 
-  "booking_confirmed": "✅ Sizning bron tasdiqlandi!\n🏟 Stadion: *{stadion_name}*\n📅 Sana: *{date}*\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n💰 Umumiy narx: *{total} so'm*\n\nIltimos, belgilangan vaqtda kelishni unutmang! ⏳",
+  "booking_confirmed": "✅ Sizning bron tasdiqlandi!\n\n🏟 Stadion: *{stadion_name}*\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n\n💰 Umumiy narx: *{total} so'm*\n\nIltimos, belgilangan vaqtda kelishni unutmang! ⏳",
 
   "booking_cancelled_notice": "❌ *Bron bekor qilindi*.\n\n⏳ Bron darhol o‘chirilmaydi va 15 daqiqa davomida kutish holatida saqlanadi. Agar xohlasangiz, shu vaqt ichida bronni qayta tiklashingiz mumkin.\n\n📂 Bronni qayta tiklash uchun *Faol bronlarim* bo‘limiga kiring.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
@@ -71,5 +71,5 @@
 
   "payment_time_alert": "❌ O'yin boshlanishiga {time_left} qoldi.\nTo'lov kamida 1 soat oldin amalga oshirilishi kerak.",
 
-  "confirm_with_payment": "✅ Sizning bron tasdiqlandi!\n🏟 Stadion: *{stadion_name}*\n📅 Sana: *{date}*\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n💰 Umumiy narx: *{total} so'm*\n\n⚠️ Diqqat: O‘yin boshlanishidan kamida 1 soat oldin to‘lov amalga oshirilishi kerak.\nO'yin boshlanishigacha: *{time_left}* vaqt qoldi"
+  "confirm_with_payment": "✅ Sizning bron tasdiqlandi!\n\n🏟 Stadion: *{stadion_name}*\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n\n💰 Umumiy narx: *{total} so'm*\n\n⚠️ Diqqat: O‘yin boshlanishidan kamida 1 soat oldin to‘lov amalga oshirilishi kerak.\n\nO'yin boshlanishigacha: *{time_left}* vaqt qoldi"
 }

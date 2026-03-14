@@ -20,6 +20,7 @@ enum Booking_status {
   COMPLETED
   CANCELED
   NO_SHOW
+  REFUNDED
 }
 
 enum Pay_method {
@@ -34,16 +35,16 @@ enum Tranzaktion_status {
 }
 
 model Owners {
-  id         Int          @id @default(autoincrement())
-  full_name  String
-  username   String?
-  chatID     String       @unique
-  phone      String
-  email      String       @unique
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id        Int         @id @default(autoincrement())
+  full_name String
+  username  String?
+  chatID    String      @unique
+  phone     String
+  email     String      @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
   ownerCard Owner_card?
-  stadions   Stadion[]
+  stadions  Stadion[]
 }
 
 model Users {
@@ -134,7 +135,7 @@ model Region_item {
 
 model Owner_card {
   id           Int           @id @default(autoincrement())
-  owner_id     Int @unique
+  owner_id     Int           @unique
   provider     String
   cardToken    String
   cardMask     String
@@ -151,7 +152,7 @@ model Booking {
   id             Int            @id @default(autoincrement())
   user_id        Int
   stadion_id     Int
-  date           DateTime @db.Date
+  date           DateTime       @db.Date
   start_time     String
   end_time       String
   total_price    Decimal

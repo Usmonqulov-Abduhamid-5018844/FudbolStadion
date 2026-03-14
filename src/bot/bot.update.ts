@@ -449,7 +449,7 @@ export class BotUpdate {
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const [_, type, id] = ctx.callbackQuery.data.split('_');
       if (type === 'back') {
-        return this.userService.userbookingStadionBack(ctx, lang, Number(id));
+        return this.userService.userbookingStadion(ctx, lang, Number(id));
       } else if (type === 'specialBack') {
         return this.userService.special(ctx, lang, Number(id));
       }
@@ -605,7 +605,59 @@ export class BotUpdate {
       );
     }
   }
-
+  @Action(/^ignore/)
+  async ignore(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+  }
+  @Action(/^booking_region_page_(.+)_(\d+)$/)
+  async stadionPage(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, ___, anonimus, page] = ctx.callbackQuery.data.split('_');
+      if (anonimus === 'favorit') {
+        if (ctx.session.stadionFavoritMessages?.length) {
+          const messagesId = ctx.session.stadionFavoritMessages;
+          try {
+            await ctx.deleteMessages(messagesId);
+          } catch (e) {}
+          ctx.session.stadionFavoritMessages = [];
+        }
+        await ctx.deleteMessage();
+        await this.userService.userSwitch(
+          ctx,
+          'stadionFavorite',
+          lang,
+          Number(page),
+        );
+      } else if (anonimus === 'stadionBronHistory') {
+        await this.userService.userSwitch(ctx, anonimus,lang, Number(page));
+      } else {
+        if (ctx.session.stadionMessages?.length) {
+          const messagesId = ctx.session.stadionMessages;
+          try {
+            await ctx.deleteMessages(messagesId);
+          } catch (e) {}
+          ctx.session.stadionMessages = [];
+        }
+        await ctx.deleteMessage();
+        await this.userService.userbookingRegionItems(
+          ctx,
+          lang,
+          Number(anonimus),
+          Number(page),
+        );
+      }
+    }
+  }
   @Action(/^booking_(region|regionItem|special|stadion|save)_(\d+)$/)
   async userBooking(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);

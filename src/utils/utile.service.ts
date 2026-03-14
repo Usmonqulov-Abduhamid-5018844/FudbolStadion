@@ -56,93 +56,40 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditOrReply(ctx: MyContext, text: string, keyboard: any) {
+  async safeEditOrReply(
+    ctx: MyContext,
+    text: string,
+    keyboard: any,
+  ) {
     try {
-      if (ctx.callbackQuery) {
-        await ctx.answerCbQuery().catch(() => {});
-      }
-
       await ctx.editMessageText(text, {
         reply_markup: keyboard,
       });
     } catch (e) {
-      const description = e?.response?.description ?? '';
-
-      const safeErrors = [
-        'message is not modified',
-        'message to edit not found',
-        "message can't be edited",
-        'query is too old',
-      ];
-
-      const canReply = safeErrors.some((err) => description.includes(err));
-
-      if (canReply) {
-        await ctx.reply(text, {
-          reply_markup: keyboard,
-        });
-        return;
-      }
-      throw e;
+      await ctx.reply(text, {
+        reply_markup: keyboard,
+      });
     }
   }
 
   async safeEditHelpReply(ctx: MyContext, text: string) {
     const lang = await this.langs(ctx);
     try {
-      if (ctx.callbackQuery) {
-        await ctx.answerCbQuery().catch(() => {});
-      }
-
       await ctx.editMessageText(text, backKeyboard(this.i18n, String(lang)));
     } catch (e) {
-      const description = e?.response?.description ?? '';
-
-      const safeErrors = [
-        'message is not modified',
-        'message to edit not found',
-        "message can't be edited",
-        'query is too old',
-      ];
-
-      const canReply = safeErrors.some((err) => description.includes(err));
-
-      if (canReply) {
-        await ctx.reply(text, backKeyboard(this.i18n, String(lang)));
-        return;
-      }
-      throw e;
+      await ctx.reply(text, backKeyboard(this.i18n, String(lang)));
     }
   }
 
   async safeEditHelpMenyuReply(ctx: MyContext, text: string) {
     const lang = await this.langs(ctx);
     try {
-      if (ctx.callbackQuery) {
-        await ctx.answerCbQuery().catch(() => {});
-      }
-
       await ctx.editMessageText(
         text,
         helpMenuKeyboard(this.i18n, String(lang)),
       );
     } catch (e) {
-      const description = e?.response?.description ?? '';
-
-      const safeErrors = [
-        'message is not modified',
-        'message to edit not found',
-        "message can't be edited",
-        'query is too old',
-      ];
-
-      const canReply = safeErrors.some((err) => description.includes(err));
-
-      if (canReply) {
-        await ctx.reply(text, helpMenuKeyboard(this.i18n, String(lang)));
-        return;
-      }
-      throw e;
+      await ctx.reply(text, helpMenuKeyboard(this.i18n, String(lang)));
     }
   }
 
@@ -279,9 +226,9 @@ export class UtilisService implements OnModuleInit {
         {
           lang,
           args: {
-            daysLeft,
-            hoursLeft,
-            minutesLeft,
+            days: daysLeft,
+            hours: hoursLeft,
+            minutes: minutesLeft,
           },
         },
       );
@@ -289,18 +236,19 @@ export class UtilisService implements OnModuleInit {
       timeLeftText = this.i18n.translate('booking.time_left.hours_minutes', {
         lang,
         args: {
-          hoursLeft,
-          minutesLeft,
+          hours: hoursLeft,
+          minutes: minutesLeft,
         },
       });
     } else {
       timeLeftText = this.i18n.translate('booking.time_left.minutes_only', {
         lang,
         args: {
-          minutesLeft,
+          minutes: minutesLeft,
         },
       });
     }
+
     return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 }

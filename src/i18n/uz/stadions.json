@@ -21,11 +21,11 @@
   "image": "🖼 Iltimos, stadioningizning rasmni yuboring!",
   "menu": "🔙 Menyuga qaytish",
 
-  "stadion_added_success":"🎉 Stadionni muvofiyaqatli qo'shdingiz.",
+  "stadion_added_success": "🎉 Stadionni muvofiyaqatli qo'shdingiz.",
 
   "not_fount": "❌ Ma'lumot topilmadi!",
 
-  "menyu":{
+  "menyu": {
     "location": "📌 Joylashuvni yangilash",
     "update": "📍 Joylashuv muvaffaqiyatli yangilandi!",
     "update_text": "📍 Joylashuvni o'zgartirish",
@@ -35,5 +35,11 @@
     "update_image": "🔄 Yangilash",
     "image_update": "✅ Stadioningiz rasmi muvaffaqiyatli yangilandi",
     "all_data": "📄 Umumiy ma’lumotni ko‘rish"
-  }
+  },
+
+  "Previous": "⬅️ Oldingi",
+  "Next": "Keyingi ➡️",
+  "Select": "Sahifani tanlang",
+
+  "booking_history_empty": "Sizda hozircha bronlar tarixi mavjud emas."
 }
