@@ -12,6 +12,7 @@ import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
+import { time } from 'console';
 @Injectable()
 export class UsersService {
   constructor(
@@ -220,6 +221,18 @@ export class UsersService {
         case '4': {
           return this.userBookingFanc(ctx, lang);
         }
+        case '5':
+          {
+            if (ctx.session.bookingBrones?.length) {
+              try {
+                await ctx.deleteMessages(ctx.session.bookingBrones);
+              } catch (error) {}
+              ctx.session.bookingBrones = [];
+            } else {
+              return this.userBooking(ctx, lang);
+            }
+          }
+          break;
         default: {
           break;
         }
@@ -328,8 +341,204 @@ export class UsersService {
                 await ctx.answerCbQuery();
               } catch (error) {}
             }
-            ctx.reply('Tez Kunda Foal bronlar');
+            try {
+              const limit = 2;
+              const user = await this.prisma.users.findUnique({
+                where: { chatID: String(ctx.from?.id) },
+              });
+              if (!user) {
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+              const [bookings, total] = await Promise.all([
+                this.prisma.booking.findMany({
+                  where: {
+                    user_id: user.id,
+                    status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+                  },
+                  include: {
+                    stadion: {
+                      select: {
+                        id: true,
+                        name: true,
+                        latitude: true,
+                        longitude: true,
+                        payments_type: true,
+                      },
+                    },
+                    tranzaktions: {
+                      select: {
+                        id: true,
+                      },
+                    },
+                  },
+
+                  skip: (page - 1) * limit,
+                  take: limit,
+                }),
+                this.prisma.booking.count({
+                  where: {
+                    user_id: user.id,
+                    status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+                  },
+                }),
+              ]);
+
+              if (!total) {
+                await this.utils.safeEditOrReply(
+                  ctx,
+                  this.i18n.translate('stadions.no_active_bookings', {
+                    lang,
+                  }),
+                  {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate('schedule.back', { lang }),
+                          callback_data: 'back_user_3',
+                        },
+                      ],
+                    ],
+                  },
+                );
+                return;
+              }
+              const statusMap = {
+                CONFIRMED: this.i18n.translate(
+                  'bookingHestory.booking_status.confirmed',
+                  { lang },
+                ),
+                PAID: this.i18n.translate(
+                  'bookingHestory.booking_status.paid',
+                  { lang },
+                ),
+                PENDING: this.i18n.translate(
+                  'bookingHestory.booking_status.pending',
+                  { lang },
+                ),
+              };
+
+              const Time = (data: Date, start_time: string, lang: string) => {
+                const { timeLeftText, totalMinutes } =
+                  this.utils.bookingTimeCalculate(data, start_time, lang);
+
+                if (totalMinutes < 60) {
+                  return this.i18n.translate('bookingHestory.time_expired', {
+                    lang,
+                  });
+                }
+
+                return timeLeftText;
+              };
+
+              const formatPrice = (price?: number | string | Decimal) => {
+                if (!price) return '❌';
+                return new Intl.NumberFormat('uz-UZ').format(Number(price));
+              };
+
+              const msg = await ctx.reply(
+                this.i18n.translate('bookingHestory.booking.active_title', {
+                  lang,
+                }),
+              );
+              if (!ctx.session.bookingBrones) {
+                ctx.session.bookingBrones = [];
+              }
+              ctx.session.bookingBrones.push(msg.message_id);
+
+              for (const item of bookings) {
+                const locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${this.i18n.translate('bookingHestory.booking.view_map', { lang })}</a>`;
+
+                const message = `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
+
+${this.i18n.translate('bookingHestory.booking.stadion', { lang })}: ${item.stadion.name}
+
+${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
+
+${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
+
+${this.i18n.translate('bookingHestory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, lang)}
+
+${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
+
+${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, lang, this.i18n.translate('peyments', { lang }))}
+
+${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
+
+${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
+`;
+
+                const buttons = this.utils.booking_status_hedler(
+                  item.status,
+                  item.id,
+                  item.payment_method,
+                  item.stadion.payments_type,
+                  item.date,
+                  item.start_time,
+                  item.status_pay_later,
+                  Number(item.total_price),
+                  item.tranzaktions?.id,
+                  lang,
+                  ctx,
+                );
+
+                const send = await ctx.reply(message, {
+                  parse_mode: 'HTML',
+                  reply_markup: {
+                    inline_keyboard: buttons,
+                  },
+                });
+                ctx.session.bookingBrones.push(send.message_id);
+              }
+
+              const buttons: InlineKeyboardButton[] = [];
+              const totalPages = Math.ceil(total / limit);
+
+              if (!(page === 1 && totalPages === 1)) {
+                if (page > 1) {
+                  buttons.push({
+                    text: this.i18n.translate('stadions.Previous', { lang }),
+                    callback_data: `booking_region_page_stadionBron_${page - 1}`,
+                  });
+                }
+
+                buttons.push({
+                  text: `${page} / ${totalPages}`,
+                  callback_data: 'ignore',
+                });
+
+                if (page < totalPages) {
+                  buttons.push({
+                    text: this.i18n.translate('stadions.Next', { lang }),
+                    callback_data: `booking_region_page_stadionBron_${page + 1}`,
+                  });
+                }
+
+                const send = await ctx.reply(
+                  this.i18n.translate('stadions.Select', { lang }),
+                  {
+                    reply_markup: {
+                      inline_keyboard: [
+                        buttons,
+                        [
+                          {
+                            text: this.i18n.translate('schedule.back', {
+                              lang,
+                            }),
+                            callback_data: 'back_user_5',
+                          },
+                        ],
+                      ],
+                    },
+                  },
+                );
+                ctx.session.bookingBrones.push(send.message_id);
+              }
+            } catch (error) {
+              await this.utils.errorFunction(ctx);
+            }
           }
+
           break;
         case 'stadionBronHistory':
           {
@@ -380,7 +589,9 @@ export class UsersService {
               if (!total) {
                 await this.utils.safeEditOrReply(
                   ctx,
-                  this.i18n.translate("stadions.booking_history_empty",{lang}),
+                  this.i18n.translate('stadions.booking_history_empty', {
+                    lang,
+                  }),
                   {
                     inline_keyboard: [
                       [
@@ -394,27 +605,54 @@ export class UsersService {
                 );
                 return;
               }
-              let message = `📜 Bronlar tarixi:\n\n`;
-
+              let message = `${this.i18n.translate('bookingHestory.booking.history_title', { lang })}\n\n`;
               const statusMap = {
-                COMPLETED: '✅ COMPLETED',
-                NO_SHOW: '🚫 NO_SHOW',
-                CANCELED: '❌ CANCELED',
-                REFUNDED: '💸 REFUNDED',
+                COMPLETED: this.i18n.translate(
+                  'bookingHestory.booking_status.completed',
+                  {
+                    lang,
+                  },
+                ),
+                NO_SHOW: this.i18n.translate(
+                  'bookingHestory.booking_status.no_show',
+                  {
+                    lang,
+                  },
+                ),
+                CANCELED: this.i18n.translate(
+                  'bookingHestory.booking_status.canceled',
+                  {
+                    lang,
+                  },
+                ),
+                REFUNDED: this.i18n.translate(
+                  'bookingHestory.booking_status.refunded',
+                  {
+                    lang,
+                  },
+                ),
               };
+
               const formatPrice = (price?: number | string | Decimal) => {
                 if (!price) return '❌';
                 return new Intl.NumberFormat('uz-UZ').format(Number(price));
               };
               for (const item of booking) {
-                let locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">Ko'rish</a>`;
-                message += `🆔 Bron ID: ${item.id}\n
-⚽ Stadion: ${item.stadion.name}\n
-📅 Sana: ${format(item.date, 'dd.MM.yyyy')}\n
-⏰ Vaqt: ${item.start_time} - ${item.end_time.toLocaleString()}\n
-💰 Narx: ${formatPrice(item.total_price)} so‘m\n
-📊 Status: ${statusMap[item.status]}\n
-📍 Manzil: ${locationText}
+                let locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${this.i18n.translate('bookingHestory.booking.view_map', { lang })}</a>`;
+
+                message += `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
+
+${this.i18n.translate('bookingHestory.booking.stadion', { lang })}: ${item.stadion.name}
+
+${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
+
+${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
+
+${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
+
+${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
+
+${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -442,7 +680,7 @@ export class UsersService {
                 }
               }
 
-              const send = await ctx.editMessageText(message, {
+              await ctx.editMessageText(message, {
                 parse_mode: 'HTML',
                 reply_markup: {
                   inline_keyboard: [
@@ -972,8 +1210,7 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
         });
       }
     } catch (error) {
-      console.error(error);
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
     }
   }
 
@@ -2305,7 +2542,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 owner_amount: total,
                 provider: 'Click',
                 provider_transactionId: '',
-                status: 'PENDING',
                 owner_card_id: cardId,
                 amount_received: 0,
               },
@@ -2357,6 +2593,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 ],
               },
             });
+            if (!ctx.session.booking_step) {
+              ctx.session.booking_step = '';
+            }
+            ctx.session.booking_step = 'pay_later';
           }
           break;
         default: {

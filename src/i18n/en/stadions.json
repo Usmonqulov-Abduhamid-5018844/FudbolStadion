@@ -40,5 +40,7 @@
   "Next": "Next ➡️",
   "Select": "Select a page",
 
-  "booking_history_empty": "📭 You don't have any booking history yet."
+  "booking_history_empty": "📭 You don't have any booking history yet.\n\nYou haven't made any bookings so far.\n\nTo get started, choose a stadium and select a convenient time from the menu ⚽",
+
+  "no_active_bookings": "📭 You currently have no active bookings.\n\nYou haven't booked any stadium yet, or all your bookings have already been completed.\n\nTo make a new booking, choose a stadium and select a convenient time from the menu ⚽"
 }

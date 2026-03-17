@@ -1,0 +1,28 @@
+{
+  "booking": {
+    "history_title": "📜 Bronlar tarixi",
+    "active_title": "📋 Faol bronlar",
+    "id": "🆔 Bron ID",
+    "stadion": "⚽ Stadion",
+    "date": "📅 Sana",
+    "time": "⏰ Vaqt",
+    "remaining_time": "⏳ Qolgan vaqt",
+    "price": "💰 Narx",
+    "price_title": "so'm",
+    "payment_type": "💳 To‘lov turi",
+    "status": "📊 Holat",
+    "location": "📍 Manzil",
+    "view_map": "Ko'rish"
+  },
+
+  "booking_status": {
+    "completed": "✅ Yakunlangan",
+    "no_show": "🚫 Kelmagan",
+    "canceled": "❌ Bekor qilingan",
+    "refunded": "💸 Pul qaytarilgan",
+    "confirmed": "📌 Tasdiqlangan",
+    "paid": "💳 To‘langan",
+    "pending": "⏳ Kutilmoqda"
+  },
+  "time_expired": "⏰ Ushbu bron vaqti tugagan"
+}

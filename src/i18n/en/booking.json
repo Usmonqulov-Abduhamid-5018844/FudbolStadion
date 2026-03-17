@@ -31,7 +31,7 @@
   "penalty_block": "⚠️ Penalty: *{penalty} UZS*\n",
 
   "confirm": "✅ Confirm",
-  "cancel": "❌ Cancel",
+  "cancel": "🛑 Cancel",
 
   "warning": "⚠️ Warning!\nYou have missed previous bookings. Therefore, this booking requires a prepaid card payment.\n\n",
   "message_template": "🏟 *Stadium Booking*\n\n{warning}\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n🕒 Duration: *{hours} hours*\n\n{penalty_block}\n━━━━━━━━━━━━━━\n💰 *Total payment:* {total} UZS\n\n💵 Payment method: *{payment_method}*\n",

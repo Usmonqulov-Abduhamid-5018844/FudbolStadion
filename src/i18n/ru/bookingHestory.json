@@ -1,0 +1,27 @@
+{
+  "booking": {
+    "history_title": "📜 История бронирований",
+     "active_title": "📋 Активные бронирования",
+    "id": "🆔 ID бронирования",
+    "stadion": "⚽ Стадион",
+    "date": "📅 Дата",
+    "time": "⏰ Время",
+    "remaining_time": "⏳ Осталось времени",
+    "price": "💰 Цена",
+    "price_title": "сум",
+     "payment_type": "💳 Тип оплаты",
+    "status": "📊 Статус",
+    "location": "📍 Адрес",
+    "view_map": "Открыть"
+  },
+  "booking_status": {
+    "completed": "✅ Завершено",
+    "no_show": "🚫 Не пришёл",
+    "canceled": "❌ Отменено",
+    "refunded": "💸 Возврат средств",
+     "confirmed": "📌 Подтверждено",
+    "paid": "💳 Оплачено",
+    "pending": "⏳ В ожидании"
+  },
+  "time_expired": "⏰ Время этого бронирования истекло"
+}

@@ -1,0 +1,27 @@
+{
+  "booking": {
+    "history_title": "📜 Booking history",
+    "active_title": "📋 Active bookings",
+    "id": "🆔 Booking ID",
+    "stadion": "⚽ Stadium",
+    "date": "📅 Date",
+    "time": "⏰ Time",
+    "remaining_time": "⏳ Time left",
+    "price": "💰 Price",
+    "price_title": "UZS",
+     "payment_type": "💳 Payment type",
+    "status": "📊 Status",
+    "location": "📍 Location",
+    "view_map": "Open"
+  },
+  "booking_status": {
+    "completed": "✅ Completed",
+    "no_show": "🚫 No show",
+    "canceled": "❌ Canceled",
+    "refunded": "💸 Refunded",
+    "confirmed": "📌 Confirmed",
+    "paid": "💳 Paid",
+    "pending": "⏳ Pending"
+  },
+  "time_expired": "⏰ This booking time has expired"
+}

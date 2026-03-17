@@ -317,6 +317,15 @@ export class BotUpdate {
                 await this.utils.errorFunction(ctx);
                 return;
               }
+              if (
+                ctx.session.booking_step &&
+                ctx.session.booking_step === 'pay_later'
+              ) {
+                await this.prisma.booking.update({
+                  where: { id: Number(bookingId) },
+                  data: { status_pay_later: true },
+                });
+              }
               const { timeLeftText, totalMinutes } =
                 this.utils.bookingTimeCalculate(
                   booking.date,
@@ -375,6 +384,8 @@ export class BotUpdate {
               });
             }
             break;
+          case 'cancel': {
+          }
         }
       }
     } catch (error) {
@@ -639,7 +650,15 @@ export class BotUpdate {
           Number(page),
         );
       } else if (anonimus === 'stadionBronHistory') {
-        await this.userService.userSwitch(ctx, anonimus,lang, Number(page));
+        await this.userService.userSwitch(ctx, anonimus, lang, Number(page));
+      } else if (anonimus === 'stadionBron') {
+        if (ctx.session.bookingBrones?.length) {
+          try {
+            await ctx.deleteMessages(ctx.session.bookingBrones);
+          } catch (error) {}
+          ctx.session.bookingBrones = [];
+        }
+        await this.userService.userSwitch(ctx, anonimus, lang, Number(page));
       } else {
         if (ctx.session.stadionMessages?.length) {
           const messagesId = ctx.session.stadionMessages;

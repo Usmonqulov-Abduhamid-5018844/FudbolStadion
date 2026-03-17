@@ -1,4 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Booking_status, Pay_method, Payments } from '@prisma/client';
 import { InlineKeyboardMarkup } from '@telegraf/types';
 import { format, toZonedTime } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
@@ -7,6 +8,7 @@ import { MyContext } from 'src/helpers/bot.sesion';
 import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
+import { InlineKeyboardButton } from 'telegraf/types';
 
 @Injectable()
 export class UtilisService implements OnModuleInit {
@@ -56,11 +58,7 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditOrReply(
-    ctx: MyContext,
-    text: string,
-    keyboard: any,
-  ) {
+  async safeEditOrReply(ctx: MyContext, text: string, keyboard: any) {
     try {
       await ctx.editMessageText(text, {
         reply_markup: keyboard,
@@ -250,5 +248,120 @@ export class UtilisService implements OnModuleInit {
     }
 
     return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
+  }
+
+  booking_status_hedler(
+    status: Booking_status,
+    id: number,
+    booking_peyments: Pay_method,
+    stadion_peyments: Payments,
+    data: Date,
+    start_time: string,
+    pay_later: boolean,
+    total: number,
+    transaction_id: number | undefined,
+    lang: string,
+    ctx: MyContext,
+  ) {
+    const buttons: InlineKeyboardButton[][] = [];
+
+    if (status === 'PENDING') {
+      if (booking_peyments === 'CASH' && stadion_peyments === 'CASH') {
+        buttons.push([
+          {
+            text: this.i18n.translate('booking.confirm', { lang }),
+            callback_data: `booking_confirm_confirm_${id}`,
+          },
+          {
+            text: this.i18n.translate('booking.cancel', {
+              lang,
+            }),
+            callback_data: `booking_confirm_cancel_${id}`,
+          },
+        ]);
+      } else if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
+        buttons.push(
+          [
+            {
+              text: this.i18n.translate("To'lov usulini o'zgartirish", {
+                lang,
+              }),
+              callback_data: `booking_confirm_selectPeyments_${id}`,
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('booking.cancel', {
+                lang,
+              }),
+              callback_data: `booking_confirm_cancel_${id}`,
+            },
+          ],
+        );
+      } else if (
+        (booking_peyments === 'CARD' && stadion_peyments === 'CARD') ||
+        (booking_peyments === 'CARD' && stadion_peyments === 'GIBRID')
+      ) {
+        if (!transaction_id) return buttons;
+        const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction_id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+
+        if (pay_later) {
+          buttons.push([
+            {
+              text: this.i18n.translate('booking.confirm', { lang }),
+              callback_data: `booking_confirm_confirm_${id}`,
+            },
+            {
+              text: this.i18n.translate('booking.cancel', {
+                lang,
+              }),
+              callback_data: `booking_confirm_cancel_${id}`,
+            },
+          ]);
+        } else {
+          buttons.push([
+            {
+              text: this.i18n.translate('booking.pay_by_card', { lang }),
+              url: clickUrl,
+            },
+            {
+              text: this.i18n.translate('booking.cancel', {
+                lang,
+              }),
+              callback_data: `booking_confirm_cancel_${id}`,
+            },
+          ]);
+        }
+      }
+    }
+
+    if (status === 'PAID' || status === 'CONFIRMED') {
+      const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
+        data,
+        start_time,
+        lang,
+      );
+      if (totalMinutes > 60) {
+        buttons.push([
+          {
+            text: this.i18n.translate('booking.cancel', {
+              lang,
+            }),
+            callback_data: `booking_confirm_cancel_${id}`,
+          },
+        ]);
+      } else if (totalMinutes > 0 && totalMinutes < 60) {
+        buttons.push([
+          {
+            text: this.i18n.translate(timeLeftText, {
+              lang,
+            }),
+            callback_data: `booking_confirm_alerd_${id}`,
+          },
+        ]);
+      }
+    }
+
+    return buttons;
   }
 }

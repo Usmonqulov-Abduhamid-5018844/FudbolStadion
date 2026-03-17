@@ -31,7 +31,7 @@
   "penalty_block": "⚠️ Jarima: *{penalty} so'm*\n",
 
   "confirm": "✅ Tasdiqlash",
-  "cancel": "❌ Bekor qilish",
+  "cancel": "🛑 Bekor qilish",
 
   "warning": "⚠️ Ogohlantirish!\nSizning oldingi bronlaringizda stadionga kelmaslik holati mavjud. Shu sababli ushbu bron uchun oldindan karta orqali to‘lov talab qilinadi.\n\n",
   "message_template": "🏟 *Stadion bron qilish*\n\n{warning}\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n🕒 Davomiyligi: *{hours} soat*\n\n{penalty_block}\n━━━━━━━━━━━━━━\n💰 *Umumiy to‘lov:* {total} so'm\n\n💵 To‘lov turi: *{payment_method}*\n",

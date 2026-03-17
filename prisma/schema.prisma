@@ -149,27 +149,28 @@ model Owner_card {
 }
 
 model Booking {
-  id             Int            @id @default(autoincrement())
-  user_id        Int
-  stadion_id     Int
-  date           DateTime       @db.Date
-  start_time     String
-  end_time       String
-  total_price    Decimal
-  status         Booking_status @default(PENDING)
-  payment_method Pay_method
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  expires_at     DateTime?
-  tranzaktions   Tranzaktion[]
-  user           Users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  stadion        Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  id               Int            @id @default(autoincrement())
+  user_id          Int
+  stadion_id       Int
+  date             DateTime       @db.Date
+  start_time       String
+  end_time         String
+  total_price      Decimal
+  status           Booking_status @default(PENDING)
+  status_pay_later Boolean        @default(false)
+  payment_method   Pay_method
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  expires_at       DateTime?
+  tranzaktions     Tranzaktion?
+  user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
 }
 
 model Tranzaktion {
   id                     Int                @id @default(autoincrement())
   user_id                Int
-  booking_id             Int
+  booking_id             Int                @unique
   systeam_fee            Int
   owner_amount           Int
   provider               String

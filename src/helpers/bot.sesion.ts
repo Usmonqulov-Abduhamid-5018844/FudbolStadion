@@ -10,7 +10,9 @@ export interface ISession {
   user_registor: registorUser;
   stadion: Stadion;
   stadionMessages?: number[];
-  stadionFavoritMessages?: number[]
+  stadionFavoritMessages?: number[];
+  bookingBrones?: number[];
+  booking_step?:string
 }
 export interface Stadion {
   step: number;

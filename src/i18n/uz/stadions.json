@@ -41,5 +41,6 @@
   "Next": "Keyingi ➡️",
   "Select": "Sahifani tanlang",
 
-  "booking_history_empty": "Sizda hozircha bronlar tarixi mavjud emas."
+  "booking_history_empty": "📭 Sizda hozircha bronlar tarixi mavjud emas.\n\nSiz hali birorta stadionni bron qilmagansiz.\n\nYangi bron qilish uchun menyudan stadion tanlab, qulay vaqtni band qiling ⚽",
+  "no_active_bookings": "📭 Sizda hozircha faol bronlar mavjud emas.\n\nHozircha siz hech qanday stadionni bron qilmagansiz yoki barcha bronlaringiz yakunlangan.\n\nYangi bron qilish uchun menyudan stadion tanlang va qulay vaqtni band qiling ⚽"
 }
