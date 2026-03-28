@@ -14,6 +14,8 @@ import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { time } from 'console';
 import { QrService } from 'src/qr/qr.service';
+import { keyboard } from 'telegraf/typings/markup';
+import { text } from 'stream/consumers';
 @Injectable()
 export class UsersService {
   constructor(
@@ -228,6 +230,7 @@ export class UsersService {
             if (ctx.session.bookingBrones?.length) {
               try {
                 await ctx.deleteMessages(ctx.session.bookingBrones);
+                ctx.session.bookingBrones = [];
               } catch (error) {}
               ctx.session.bookingBrones = [];
             } else {
@@ -235,6 +238,17 @@ export class UsersService {
             }
           }
           break;
+        case '6': {
+          if (ctx.session.stadionMessages?.length) {
+            try {
+              await ctx.deleteMessages(ctx.session.stadionMessages);
+              ctx.session.stadionMessages = [];
+            } catch (error) {
+              ctx.session.stadionMessages = [];
+            }
+          }
+          return await this.userSwitch(ctx, 'stadionSearch', lang);
+        }
         default: {
           break;
         }
@@ -564,7 +578,6 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
               }
             } catch (error) {
               await this.utils.errorFunction(ctx);
-              console.log(error);
             }
           }
 
@@ -764,6 +777,18 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
             if (!favorites.length) {
               await ctx.reply(
                 this.i18n.translate('booking.stadion.noFavorites', { lang }),
+                {
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate('schedule.back', { lang }),
+                          callback_data: 'back_user_3',
+                        },
+                      ],
+                    ],
+                  },
+                },
               );
               return;
             }
@@ -807,7 +832,188 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 await ctx.answerCbQuery();
               } catch (error) {}
             }
-            ctx.reply('Tez kunda Seorch');
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('booking.stadion.search', { lang }),
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('booking.stadions.nearby', {
+                        lang,
+                      }),
+                      callback_data: 'user_location',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('booking.stadions.by_time', {
+                        lang,
+                      }),
+                      callback_data: 'user_working',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('booking.stadions.by_name', {
+                        lang,
+                      }),
+                      callback_data: 'user_nameSearch',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('booking.stadions.cheap', {
+                        lang,
+                      }),
+                      callback_data: 'user_cheapPrice',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: 'back_user_3',
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'location':
+          {
+            if (ctx.callbackQuery) {
+              try {
+                await ctx.answerCbQuery();
+              } catch (error) {}
+            }
+            await ctx.reply(
+              this.i18n.translate('stadions.location_else', { lang }),
+              {
+                reply_markup: {
+                  keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('stadions.send_location', {
+                          lang,
+                        }),
+                        request_location: true,
+                      },
+                    ],
+                  ],
+                  resize_keyboard: true,
+                  one_time_keyboard: true,
+                },
+              },
+            );
+            ctx.session.booking_step = 'user_location_send';
+          }
+          break;
+        case 'working':
+          {
+            try {
+              try {
+                if (ctx.callbackQuery) {
+                  await ctx.answerCbQuery();
+                }
+                await ctx.deleteMessage();
+              } catch (error) {}
+              
+
+            } catch (error) {}
+          }
+          break;
+        case 'nameSearch':
+          {
+            try {
+              try {
+                if (ctx.callbackQuery) {
+                  await ctx.answerCbQuery();
+                }
+                await ctx.deleteMessage();
+              } catch (error) {}
+
+              await ctx.reply(
+                this.i18n.translate('booking.stadions.enter_name', { lang }),
+              );
+              ctx.session.stadion.name = 'SeorchName';
+            } catch (error) {}
+          }
+          break;
+        case 'cheapPrice':
+          {
+            try {
+              try {
+                if (ctx.callbackQuery) {
+                  await ctx.answerCbQuery();
+                }
+                await ctx.deleteMessage();
+              } catch (error) {}
+              const max_price = 200000;
+              const limit = 4;
+              const [stadions, total] = await Promise.all([
+                this.prisma.stadion.findMany({
+                  where: {
+                    working_status: true,
+                    price: {
+                      lte: max_price,
+                    },
+                  },
+                  orderBy: {
+                    price: 'asc',
+                  },
+                  skip: (page - 1) * limit,
+                  take: limit,
+                }),
+                this.prisma.stadion.count({
+                  where: { working_status: true, price: { lte: max_price } },
+                }),
+              ]);
+              if (!stadions.length) {
+                await ctx.reply(this.i18n.translate('error.error', { lang }));
+                return;
+              }
+              for (const stadion of stadions) {
+                await this.stadionAll_data(ctx, lang, stadion, '', true);
+              }
+
+              const totalPages = Math.ceil(total / limit);
+
+              if (page === 1 && totalPages === 1) {
+                return;
+              }
+
+              const row: InlineKeyboardButton[] = [];
+
+              if (page > 1) {
+                row.push({
+                  text: this.i18n.translate('stadions.Previous', { lang }),
+                  callback_data: `booking_region_page_cheapPrice_${page - 1}`,
+                });
+              }
+
+              row.push({
+                text: `${page} / ${totalPages}`,
+                callback_data: 'ignore',
+              });
+
+              if (page < totalPages) {
+                row.push({
+                  text: this.i18n.translate('stadions.Next', { lang }),
+                  callback_data: `booking_region_page_cheapPrice_${page + 1}`,
+                });
+              }
+              const send = await ctx.reply(
+                this.i18n.translate('stadions.Select', { lang }),
+                {
+                  reply_markup: { inline_keyboard: [row] },
+                },
+              );
+              if (!ctx.session.stadionMessages) {
+                ctx.session.stadionMessages = [];
+              }
+              ctx.session.stadionMessages.push(send.message_id);
+            } catch (error) {}
           }
           break;
         default: {
@@ -969,13 +1175,9 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
           callback_data: `booking_region_page_${itemId}_${page + 1}`,
         });
       }
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('stadions.Select', { lang }),
-        {
-          inline_keyboard: [row],
-        },
-      );
+      await ctx.reply(this.i18n.translate('stadions.Select', { lang }), {
+        reply_markup: { inline_keyboard: [row] },
+      });
     } catch (error) {
       this.utils.errorFunction(ctx);
     }
@@ -1052,7 +1254,13 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
     }
   }
 
-  async stadionAll_data(ctx: MyContext, lang: string, stadion: IStadion) {
+  async stadionAll_data(
+    ctx: MyContext,
+    lang: string,
+    stadion: IStadion,
+    distanceKm?: string,
+    isSeorch = false,
+  ) {
     try {
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
@@ -1086,7 +1294,7 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
-${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
+${distanceKm ? this.i18n.translate('view.distance', { lang }) : ''} ${distanceKm ? distanceKm + ' km\n' : ''}${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
 ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
 ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
@@ -1115,13 +1323,18 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
                   text: this.i18n.translate('booking.stadion.book', { lang }),
                   callback_data: `booking_stadion_${stadion.id}`,
                 },
-                {
-                  text: this.i18n.translate('schedule.back'),
-                  callback_data: JSON.stringify({
-                    type: 'user_back_regionItems',
-                    id: stadion.region_id,
-                  }),
-                },
+                isSeorch
+                  ? {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: 'back_user_6',
+                    }
+                  : {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: JSON.stringify({
+                        type: 'user_back_regionItems',
+                        id: stadion.region_id,
+                      }),
+                    },
               ],
             ],
           },
@@ -1154,13 +1367,18 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
                     }),
                     callback_data: `booking_stadion_${stadion.id}`,
                   },
-                  {
-                    text: this.i18n.translate('schedule.back'),
-                    callback_data: JSON.stringify({
-                      type: 'user_back_regionItems',
-                      id: stadion.region_id,
-                    }),
-                  },
+                  isSeorch
+                    ? {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'back_user_6',
+                      }
+                    : {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: JSON.stringify({
+                          type: 'user_back_regionItems',
+                          id: stadion.region_id,
+                        }),
+                      },
                 ],
               ],
             },
@@ -1207,52 +1425,65 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
     }
   }
 
-  async handleLocation(ctx: MyContext, lang: string, location: any) {
+  async handleLocation(
+    ctx: MyContext,
+    lang: string,
+    latitude: number,
+    longitude: number,
+  ) {
+    ctx.session.booking_step = null;
     try {
-      if (!location) {
-        return ctx.reply(
-          this.i18n.translate('error.location_required', { lang }),
-        );
-      }
-
-      const { latitude, longitude } = location;
-
-      await ctx.sendChatAction('typing');
-
-      await new Promise((r) => setTimeout(r, 2000));
-
-      const stadiums = await this.prisma.stadion.findMany();
-
-      const nearby = stadiums.filter((s) => {
-        const distance = getDistance(
-          latitude,
-          longitude,
-          s.latitude,
-          s.longitude,
-        );
-        return distance < 5000;
+      const send = await ctx.reply('location', {
+        reply_markup: { remove_keyboard: true },
+      });
+      try {
+        await ctx.deleteMessage(send.message_id);
+      } catch (error) {}
+      const stadiums = await this.prisma.stadion.findMany({
+        where: { working_status: true },
       });
 
+      const nearby = stadiums
+        .map((s) => {
+          if (!s.latitude || !s.longitude) return null;
+          const distance = getDistance(
+            latitude,
+            longitude,
+            s.latitude,
+            s.longitude,
+          );
+          return { ...s, distance };
+        })
+        .filter(Boolean)
+        .filter((s) => s!.distance <= 5000)
+        .sort((a, b) => a!.distance - b!.distance)
+        .slice(0, 5);
+
       if (!nearby.length) {
-        return ctx.reply(this.i18n.translate('stadions.not_found', { lang }));
+        await ctx.reply(
+          this.i18n.translate('stadions.stadions_not_found', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_user_6',
+                  },
+                ],
+              ],
+            },
+          },
+        );
+        return;
       }
 
       for (const s of nearby) {
-        let locationText = this.i18n.translate('view.not_available', { lang });
-        if (s.latitude && s.longitude) {
-          const mapsLink = `https://www.google.com/maps/search/?api=1&query=${s.latitude},${s.longitude}`;
-          locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
-        }
-        const formatPrice = (price?: number | string) => {
-          if (!price) return '❌';
-          return new Intl.NumberFormat('uz-UZ').format(Number(price));
-        };
-
-        await ctx.replyWithPhoto(s.image, {
-          caption: `🏟 ${s.name}\n📍${this.i18n.translate('view.locate', { lang })} ${locationText} \n💵 ${this.i18n.translate('view.price', { lang })} ${formatPrice(s.price) || '❌'}`,
-        });
+        const distanceKm = (s!.distance / 1000).toFixed(2);
+        await this.stadionAll_data(ctx, lang, s!, distanceKm, true);
       }
     } catch (error) {
+      console.error(error);
       await this.utils.errorFunction(ctx);
     }
   }
@@ -2056,7 +2287,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           user_id: user.id,
           stadion_id: stadion.id,
-          status: { in: ['NO_SHOW',"REFUNDED"] },
+          status: { in: ['NO_SHOW', 'REFUNDED'] },
         },
       });
 
@@ -2524,7 +2755,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
 
             let warning = '';
-            
+
             if (noshowCount == 1) {
               warning = this.i18n.translate('booking.booking_warning.warning', {
                 lang,

@@ -36,6 +36,8 @@ export class BotUpdate {
   @Start()
   async onStart(@Ctx() ctx: any) {
     ctx.session.step = null;
+    ctx.session.stadion.name = null;
+    ctx.session.booking_step = null;
     ctx.session.stadion_step = null;
     ctx.session.stadion || {
       image: null,
@@ -558,6 +560,11 @@ export class BotUpdate {
                   );
                   return;
                 }
+                if (ctx.callbackQuery) {
+                  try {
+                    ctx.answerCbQuery();
+                  } catch (error) {}
+                }
                 await Promise.all([
                   this.prisma.booking.update({
                     where: { id: booking.id },
@@ -692,7 +699,6 @@ export class BotUpdate {
           price,
           noshowCount,
         ] = ctx.callbackQuery.data.split('_');
-        
 
         return this.userService.bookingPayments(
           ctx,
@@ -918,6 +924,16 @@ export class BotUpdate {
             await ctx.deleteMessages(ctx.session.bookingBrones);
           } catch (error) {}
           ctx.session.bookingBrones = [];
+        }
+        await this.userService.userSwitch(ctx, anonimus, lang, Number(page));
+      } else if (anonimus === 'cheapPrice') {
+        try {
+          if (ctx.session.stadionMessages?.length) {
+            await ctx.deleteMessages(ctx.session.stadionMessages);
+            ctx.session.stadionMessages = [];
+          }
+        } catch (error) {
+          ctx.session.stadionMessages = [];
         }
         await this.userService.userSwitch(ctx, anonimus, lang, Number(page));
       } else {
@@ -2021,6 +2037,12 @@ export class BotUpdate {
           this.utils.errorFunction(ctx);
         }
       }
+    }
+    if (ctx.session.booking_step === 'user_location_send') {
+      if (ctx.message && 'location' in ctx.message) {
+        const { latitude, longitude } = ctx.message.location;
+        return this.userService.handleLocation(ctx, lang, latitude, longitude);
+      }
     } else {
       ctx.reply(this.i18n.translate('error.warning_locate', { lang }));
     }
@@ -2109,6 +2131,7 @@ export class BotUpdate {
       step: null,
       id: 0,
     };
+    ctx.session.booking_step = null;
     try {
       if (!ctx.message || !('text' in ctx.message)) return;
 
@@ -2230,6 +2253,49 @@ export class BotUpdate {
             },
           });
           return;
+        } catch (error) {
+          await this.utils.errorFunction(ctx);
+        }
+      }
+      if (ctx.session.stadion.name === 'SeorchName') {
+        try {
+          const isValidName = /^[a-zA-Zа-яА-ЯёЁ0-9\s]+$/.test(text);
+
+          if (!isValidName) {
+            ctx.reply(this.i18n.translate('booking.stadions.format', { lang }));
+            return;
+          }
+          const searchName = text.trim();
+          const stadion = await this.prisma.stadion.findMany({
+            where: {
+              working_status: true,
+              name: { contains: searchName, mode: 'insensitive' },
+            },
+            take: 5,
+          });
+          if (!stadion.length) {
+            ctx.session.stadion.name = null;
+            await ctx.reply(
+              this.i18n.translate('booking.stadions.notFount_name', { lang }),
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'back_user_6',
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+            return;
+          }
+          ctx.session.stadion.name = null;
+          for (const item of stadion) {
+            return this.userService.stadionAll_data(ctx, lang, item, '', true);
+          }
         } catch (error) {
           await this.utils.errorFunction(ctx);
         }

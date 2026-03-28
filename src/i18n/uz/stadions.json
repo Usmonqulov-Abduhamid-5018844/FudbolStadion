@@ -8,9 +8,9 @@
   "name": "🏟 Stadioningizga nom bering!\n Iltimos, stadion nomini qisqa, tushunarli va esda qoladigan qilib kiriting.",
   "location": "📍 Stadioningiz joylashgan manzilni kiriting!\nIltimos, stadionning aniq manzilini yaniy joylashuvini yuboring. Agar qurilmangiz desktop bo'lsa, joylashuvingizni qo'lda kiriting.",
   "send_location": "📍 Joylashuvni yuborish",
-  "location_text": "📌 Lokatsiya qabul qilindi!\n\nStadionda bir vaqtning o'zida nechta odam o'ynashi mumkin?\n🔢 Iltimos, faqat raqam kiriting. Masalan: 6, 10, 15.",
+  "location_text": "📌 Joylashuv qabul qilindi!\n\nStadionda bir vaqtning o'zida nechta odam o'ynashi mumkin?\n🔢 Iltimos, faqat raqam kiriting. Masalan: 6, 10, 15.",
   "location_back": "Stadionda bir vaqtning o'zida nechta odam o'ynashi mumkin?\n🔢 Iltimos, faqat raqam kiriting. Masalan: 6, 10, 15.",
-  "location_else": "📍 Iltimos, lokatsiya yuborish tugmasini bosing!",
+  "location_else": "📍 Iltimos, joylashuv yuborish tugmasini bosing!",
   "length": "📏 Iltimos, stadioningizning uzunligini kiriting (faqat raqam). Masalan: 25, 30, 40 va hokazo.",
   "width": "📐 Iltimos, stadioningizning enini kiriting (faqat raqam). Masalan: 15, 20, 34 va hokazo.",
   "price": "💰 Iltimos, stadioningizning soatlik narxini kiriting (faqat raqam). Masalan: 80000, 100000 va hokazo.",
@@ -24,6 +24,8 @@
   "stadion_added_success": "🎉 Stadionni muvofiyaqatli qo'shdingiz.",
 
   "not_fount": "❌ Ma'lumot topilmadi!",
+
+  "stadions_not_found": "❌ Afsuski, sizning joylashuvingiz atrofida 5 km radiusda stadion topilmadi. Iltimos, boshqa hududni tanlang yoki biroz kuting.",
 
   "menyu": {
     "location": "📌 Joylashuvni yangilash",

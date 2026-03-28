@@ -83,5 +83,16 @@
   "change_payment_method": "💳 To‘lov usulini o'zgartirish",
   "play_game": "O'yin boshlandi, siz endi to'lov usulini o'zgartira olmaysiz",
 
-  "payments": "✅ to'lov usuli muvaffaqiyatli o'zgartirildi"
+  "payments": "✅ to'lov usuli muvaffaqiyatli o'zgartirildi",
+
+  "stadions": {
+    "nearby": "📍 Yaqin stadionlar",
+    "by_time": "⏰ Bo‘sh vaqt bo‘yicha",
+    "by_name": "🔎 Nom bo‘yicha qidirish",
+    "cheap": "💸 Arzon stadionlar",
+
+    "enter_name": "🏟 Stadion nomini kiriting...",
+    "format":"❌ Noto‘g‘ri format. Faqat harf va raqam kiriting",
+    "notFount_name": "Kechirasiz, bunday nomdagi stadion topilmadi"
+  }
 }

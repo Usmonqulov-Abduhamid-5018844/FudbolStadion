@@ -24,6 +24,8 @@
   "stadion_added_success": "🎉 Stadium added successfully.",
   "not_fount": "❌ No data found!",
 
+  "stadions_not_found": "❌ Unfortunately, no stadium was found within a 5 km radius of your location. Please try another area or wait.",
+
   "menyu": {
     "location": "📌 Update Location",
     "update": "📍 Location has been successfully updated!",

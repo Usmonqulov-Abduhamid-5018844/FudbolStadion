@@ -12,6 +12,7 @@ import { ISession } from './bot.sesion';
 
 export interface IStadion {
   id: number;
+  distance?: number;
   name: string;
   latitude: number;
   longitude: number;
@@ -28,7 +29,6 @@ export interface IStadion {
   is_premium: boolean;
   createdAt: Date;
   updatedAt: Date;
-
   region?: Region;
   region_items?: Region_item;
   owner?: Owners;
@@ -38,12 +38,11 @@ export interface IStadion {
   stadionSpecialSchedules?: stadion_special_schedule[];
 }
 
-
-
 export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
+  booking_step: null,
   stadion_step: null,
   owner_registor: {
     full_name: null,

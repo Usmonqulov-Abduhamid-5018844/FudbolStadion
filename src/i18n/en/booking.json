@@ -79,5 +79,16 @@
 
   "change_payment_method": "💳 Change Payment Method",
   "play_game": "The game has started, you can no longer change the payment method",
-  "payments": "✅ Payment method successfully changed."
+  "payments": "✅ Payment method successfully changed.",
+
+  "stadions": {
+    "nearby": "📍 Nearby stadiums",
+    "by_time": "⏰ By available time",
+    "by_name": "🔎 Search by name",
+    "cheap": "💸 Affordable stadiums",
+
+    "enter_name": "🏟 Enter the stadium name...",
+    "format": "❌ Invalid format. Only letters and numbers are allowed",
+    "notFount_name":"Sorry, no stadium found with that name"
+  }
 }

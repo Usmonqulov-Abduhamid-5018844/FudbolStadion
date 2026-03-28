@@ -12,7 +12,7 @@ export interface ISession {
   stadionMessages?: number[];
   stadionFavoritMessages?: number[];
   bookingBrones?: number[];
-  booking_step?:string
+  booking_step: string | null;
 }
 export interface Stadion {
   step: number;
