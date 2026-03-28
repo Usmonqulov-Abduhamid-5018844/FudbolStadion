@@ -12,6 +12,9 @@ import { OwnersModule } from './owners/owners.module';
 import { UsersModule } from './users/users.module';
 import { MailService } from './mail/mail.service';
 import { INITIAL_SESSION } from './helpers/interface';
+import { CronModule } from './cron/cron.module';
+import { ScheduleModule } from '@nestjs/schedule';
+import { QrModule } from './qr/qr.module';
 
 @Module({
   providers: [MailService],
@@ -24,6 +27,7 @@ import { INITIAL_SESSION } from './helpers/interface';
       },
       resolvers: [AcceptLanguageResolver, new QueryResolver(['lang'])],
     }),
+    ScheduleModule.forRoot(),
 
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TelegrafModule.forRoot({
@@ -39,6 +43,8 @@ import { INITIAL_SESSION } from './helpers/interface';
     UtileModule,
     OwnersModule,
     UsersModule,
+    CronModule,
+    QrModule,
   ],
 })
 export class AppModule {}

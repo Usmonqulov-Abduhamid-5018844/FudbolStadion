@@ -1,5 +1,7 @@
 {
-      "phone_updated": "✅ Phone number updated successfully",
-      "your_phone": "📞 Your phone number",
-      "edit": "✏️ Edit"
+  "phone_updated": "✅ Phone number updated successfully",
+  "your_phone": "📞 Your phone number",
+  "edit": "✏️ Edit",
+
+  "user_checked_in": "✅ User has checked in at the stadium"
 }

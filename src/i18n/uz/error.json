@@ -1,12 +1,17 @@
 {
-    "error": "Kutilmagan xatolik yuz berdi 😔\nIltimos, birozdan so'ng qayta urinib ko'ring. Agar muammo davom etsa, bizga xabar bering 🙏",
-    "worning": "Iltimos, faqat tugmalardan birini tanlang 👇\n O'zingiz yozib yubormang.",
-    "else": "❗Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\nSiz yozdingiz: {text}\n\n",
-    "sesion": "⏳ Sessiya vaqti tugadi. Iltimos, davom etish uchun /start buyrug'ini qayta kiriting.",
-    "warning_locate": "⚠️ Siz botga istalgan vaqtda joylashuvingizni yubora olmaysiz!",
-    "number_error": "❌ Iltimos, faqat raqam kiriting!",
-    "warning_image": "⚠️ Siz hozir istalgan vaqtda rasm yubora olmaysiz.",
-    "positive_number": "❌ Iltimos, musbat raqam kiriting!",
-    "too_large": "❌ Kiritilgan qiymat juda katta!",
-    "phone_invalid": "❌ Telefon raqam noto‘g‘ri. To‘g‘ri format: +998901234567"
+  "error": "Kutilmagan xatolik yuz berdi 😔\nIltimos, birozdan so'ng qayta urinib ko'ring. Agar muammo davom etsa, bizga xabar bering 🙏",
+  "worning": "Iltimos, faqat tugmalardan birini tanlang 👇\n O'zingiz yozib yubormang.",
+  "else": "❗Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\nSiz yozdingiz: {text}\n\n",
+  "sesion": "⏳ Sessiya vaqti tugadi. Iltimos, davom etish uchun /start buyrug'ini qayta kiriting.",
+  "warning_locate": "⚠️ Siz botga istalgan vaqtda joylashuvingizni yubora olmaysiz!",
+  "number_error": "❌ Iltimos, faqat raqam kiriting!",
+  "warning_image": "⚠️ Siz hozir istalgan vaqtda rasm yubora olmaysiz.",
+  "positive_number": "❌ Iltimos, musbat raqam kiriting!",
+  "too_large": "❌ Kiritilgan qiymat juda katta!",
+  "phone_invalid": "❌ Telefon raqam noto‘g‘ri. To‘g‘ri format: +998901234567",
+
+  "qr_error": "❌ QR noto‘g‘ri yoki eskirgan",
+  "booking_not_found": "❌ Bron topilmadi",
+  "not_admin_for_stadion": "❌ Siz bu stadion uchun admin emassiz",
+  "payment_unpaid_or_unconfirmed": "⚠️ To‘lov qilinmagan yoki tasdiqlanmagan"
 }

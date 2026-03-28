@@ -159,6 +159,7 @@ model Booking {
   status           Booking_status @default(PENDING)
   status_pay_later Boolean        @default(false)
   payment_method   Pay_method
+  check_in         Boolean        @default(false)
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   expires_at       DateTime?

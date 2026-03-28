@@ -202,7 +202,7 @@ export class UtilisService implements OnModuleInit {
       hors: durationHours,
     };
   }
-  bookingTimeCalculate(date: Date, start_time: string, lang: string) {
+  bookingTimeCalculate(date: Date, start_time: string, lang: string = 'ru') {
     const bookingDate = new Date(date);
     const [hours, minutes] = start_time.split(':').map(Number);
 
@@ -258,110 +258,150 @@ export class UtilisService implements OnModuleInit {
     data: Date,
     start_time: string,
     pay_later: boolean,
-    total: number,
+    price: number,
     transaction_id: number | undefined,
+    page: number,
+    limit: number,
+    total: number,
+    check_in: boolean,
     lang: string,
-    ctx: MyContext,
   ) {
     const buttons: InlineKeyboardButton[][] = [];
+    const isSinglePage = page === 1 && Math.ceil(total / limit) === 1;
+
+    const backBtn = {
+      text: this.i18n.translate('schedule.back', { lang }),
+      callback_data: 'back_user_5',
+    };
+
+    const cancelBtn = {
+      text: this.i18n.translate('booking.cancel', { lang }),
+      callback_data: `booking_confirm_cancel_${id}`,
+    };
+
+    const confirmBtn = {
+      text: this.i18n.translate('booking.confirm', { lang }),
+      callback_data: `booking_confirm_confirm_${id}`,
+    };
+
+    const changePaymentBtn = {
+      text: this.i18n.translate('booking.change_payment_method', { lang }),
+      callback_data: `booking_confirm_selectPeyments_${id}`,
+    };
+
+    const qrBtn = {
+      text: this.i18n.translate('booking.qr_button', { lang }),
+      callback_data: `booking_confirm_QR_${id}`,
+    };
+
+    const getClickUrl = () =>
+      `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${price}&transaction_id=${transaction_id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+
+    const getPayBtn = () => ({
+      text: this.i18n.translate('booking.pay_by_card', { lang }),
+      url: getClickUrl(),
+    });
 
     if (status === 'PENDING') {
       if (booking_peyments === 'CASH' && stadion_peyments === 'CASH') {
-        buttons.push([
-          {
-            text: this.i18n.translate('booking.confirm', { lang }),
-            callback_data: `booking_confirm_confirm_${id}`,
-          },
-          {
-            text: this.i18n.translate('booking.cancel', {
-              lang,
-            }),
-            callback_data: `booking_confirm_cancel_${id}`,
-          },
-        ]);
-      } else if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
-        buttons.push(
-          [
-            {
-              text: this.i18n.translate("To'lov usulini o'zgartirish", {
-                lang,
-              }),
-              callback_data: `booking_confirm_selectPeyments_${id}`,
-            },
-          ],
-          [
-            {
-              text: this.i18n.translate('booking.cancel', {
-                lang,
-              }),
-              callback_data: `booking_confirm_cancel_${id}`,
-            },
-          ],
-        );
-      } else if (
-        (booking_peyments === 'CARD' && stadion_peyments === 'CARD') ||
-        (booking_peyments === 'CARD' && stadion_peyments === 'GIBRID')
-      ) {
-        if (!transaction_id) return buttons;
-        const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction_id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
-
-        if (pay_later) {
-          buttons.push([
-            {
-              text: this.i18n.translate('booking.confirm', { lang }),
-              callback_data: `booking_confirm_confirm_${id}`,
-            },
-            {
-              text: this.i18n.translate('booking.cancel', {
-                lang,
-              }),
-              callback_data: `booking_confirm_cancel_${id}`,
-            },
-          ]);
-        } else {
-          buttons.push([
-            {
-              text: this.i18n.translate('booking.pay_by_card', { lang }),
-              url: clickUrl,
-            },
-            {
-              text: this.i18n.translate('booking.cancel', {
-                lang,
-              }),
-              callback_data: `booking_confirm_cancel_${id}`,
-            },
-          ]);
-        }
+        buttons.push([confirmBtn, cancelBtn]);
       }
+
+      if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
+        buttons.push([changePaymentBtn]);
+        buttons.push([confirmBtn, cancelBtn]);
+      }
+
+      if (booking_peyments === 'CARD') {
+        if (!transaction_id) return buttons;
+        buttons.push([getPayBtn(), cancelBtn]);
+      }
+
+      if (isSinglePage) buttons.push([backBtn]);
+      return buttons;
     }
 
-    if (status === 'PAID' || status === 'CONFIRMED') {
+    if (status === 'CONFIRMED') {
       const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
         data,
         start_time,
         lang,
       );
+
+      if (check_in) {
+        if (isSinglePage) {
+          buttons.push([backBtn]);
+        }
+        return buttons;
+      }
+
       if (totalMinutes > 60) {
+        if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
+          buttons.push([changePaymentBtn]);
+        }
+
+        if (booking_peyments === 'CARD') {
+          if (!transaction_id) return buttons;
+          buttons.push([getPayBtn()]);
+        }
+
+        buttons.push(isSinglePage ? [cancelBtn, backBtn] : [cancelBtn]);
+      } else if (totalMinutes > 0) {
+        if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
+          buttons.push([changePaymentBtn]);
+        }
+        if (booking_peyments === 'CARD') {
+          if (!transaction_id) return buttons;
+          buttons.push([getPayBtn()]);
+        }
+
         buttons.push([
           {
-            text: this.i18n.translate('booking.cancel', {
-              lang,
-            }),
-            callback_data: `booking_confirm_cancel_${id}`,
-          },
-        ]);
-      } else if (totalMinutes > 0 && totalMinutes < 60) {
-        buttons.push([
-          {
-            text: this.i18n.translate(timeLeftText, {
-              lang,
-            }),
+            text: this.i18n.translate(timeLeftText, { lang }),
             callback_data: `booking_confirm_alerd_${id}`,
           },
+          qrBtn,
         ]);
-      }
-    }
 
+        if (isSinglePage) buttons.push([backBtn]);
+      } else if (totalMinutes > -120) {
+        buttons.push([qrBtn]);
+        if (isSinglePage) buttons.push([backBtn]);
+      }
+
+      return buttons;
+    }
+    if (status === 'PAID') {
+      const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
+        data,
+        start_time,
+        lang,
+      );
+      if (check_in) {
+        if (isSinglePage) {
+          buttons.push([backBtn]);
+        }
+        return buttons;
+      }
+      if (totalMinutes > 60) {
+        buttons.push(isSinglePage ? [cancelBtn, backBtn] : [cancelBtn]);
+      } else if (totalMinutes > 0) {
+        buttons.push([
+          {
+            text: this.i18n.translate(timeLeftText, { lang }),
+            callback_data: `booking_confirm_alerd_${id}`,
+          },
+          qrBtn,
+        ]);
+
+        if (isSinglePage) buttons.push([backBtn]);
+      } else if (totalMinutes > -120) {
+        buttons.push([qrBtn]);
+        if (isSinglePage) buttons.push([backBtn]);
+      }
+
+      return buttons;
+    }
     return buttons;
   }
 }

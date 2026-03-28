@@ -9,10 +9,11 @@
     "remaining_time": "⏳ Time left",
     "price": "💰 Price",
     "price_title": "UZS",
-     "payment_type": "💳 Payment type",
+    "payment_type": "💳 Payment type",
     "status": "📊 Status",
     "location": "📍 Location",
-    "view_map": "Open"
+    "view_map": "Open",
+    "check_in": "🟢 Checked In"
   },
   "booking_status": {
     "completed": "✅ Completed",

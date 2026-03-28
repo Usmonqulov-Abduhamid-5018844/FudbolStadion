@@ -70,5 +70,14 @@
 
   "payment_time_alert": "❌ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
 
-  "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*"
+  "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*",
+
+  "cancel_not_allowed": "⛔ Less than 1 hour is left before the game starts.\nTherefore, this booking can no longer be canceled.\nPlease plan your bookings in advance ⚽",
+
+  "qr_caption": "🎫 Your booking QR code\n\nAdmin will scan it when you arrive at the stadium",
+  "qr_button": "📲 Generate QR",
+
+  "change_payment_method": "💳 Change Payment Method",
+  "play_game": "The game has started, you can no longer change the payment method",
+  "payments": "✅ Payment method successfully changed."
 }

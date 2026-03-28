@@ -8,6 +8,10 @@
   "warning_image": "⚠️ You cannot send a photo at any time.",
   "positive_number": "❌ Please enter a positive number!",
   "too_large": "❌ The entered value is too large!",
-  "phone_invalid": "❌ Invalid phone number. Correct format: +998901234567"
+  "phone_invalid": "❌ Invalid phone number. Correct format: +998901234567",
 
+  "qr_error": "❌ QR is invalid or expired",
+  "booking_not_found": "❌ Booking not found",
+  "not_admin_for_stadion": "❌ You are not an admin for this stadium",
+  "payment_unpaid_or_unconfirmed": "⚠️ Payment not made or not confirmed"
 }

@@ -13,6 +13,7 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { time } from 'console';
+import { QrService } from 'src/qr/qr.service';
 @Injectable()
 export class UsersService {
   constructor(
@@ -20,6 +21,7 @@ export class UsersService {
     private readonly i18n: I18nService,
     private readonly botService: BotService,
     private readonly utils: UtilisService,
+    private readonly qrservice: QrService,
   ) {}
 
   async registor(ctx: MyContext, lang: string) {
@@ -354,7 +356,9 @@ export class UsersService {
                 this.prisma.booking.findMany({
                   where: {
                     user_id: user.id,
-                    status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+                    status: {
+                      in: ['CONFIRMED', 'PAID', 'PENDING'],
+                    },
                   },
                   include: {
                     stadion: {
@@ -364,6 +368,16 @@ export class UsersService {
                         latitude: true,
                         longitude: true,
                         payments_type: true,
+                        region: {
+                          select: {
+                            name: true,
+                          },
+                        },
+                        region_items: {
+                          select: {
+                            name: true,
+                          },
+                        },
                       },
                     },
                     tranzaktions: {
@@ -379,7 +393,9 @@ export class UsersService {
                 this.prisma.booking.count({
                   where: {
                     user_id: user.id,
-                    status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+                    status: {
+                      in: ['CONFIRMED', 'PAID', 'PENDING'],
+                    },
                   },
                 }),
               ]);
@@ -418,11 +434,20 @@ export class UsersService {
                 ),
               };
 
-              const Time = (data: Date, start_time: string, lang: string) => {
+              const Time = (
+                data: Date,
+                start_time: string,
+                end_time: string,
+                lang: string,
+              ) => {
                 const { timeLeftText, totalMinutes } =
                   this.utils.bookingTimeCalculate(data, start_time, lang);
+                const { totalMinutes: endMinutes } =
+                  this.utils.bookingTimeCalculate(data, end_time, lang);
 
-                if (totalMinutes < 60) {
+                if (totalMinutes <= 0 && endMinutes >= 0) {
+                  return "O'yin boshlangan";
+                } else if (totalMinutes <= 0) {
                   return this.i18n.translate('bookingHestory.time_expired', {
                     lang,
                   });
@@ -447,7 +472,7 @@ export class UsersService {
               ctx.session.bookingBrones.push(msg.message_id);
 
               for (const item of bookings) {
-                const locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${this.i18n.translate('bookingHestory.booking.view_map', { lang })}</a>`;
+                const locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${item.stadion.region.name}, ${item.stadion.region_items.name}</a>`;
 
                 const message = `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
 
@@ -457,7 +482,7 @@ ${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.d
 
 ${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
 
-${this.i18n.translate('bookingHestory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, lang)}
+${this.i18n.translate('bookingHestory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, item.end_time, lang)}
 
 ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
 
@@ -465,7 +490,7 @@ ${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPa
 
 ${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
 
-${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
+${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
 `;
 
                 const buttons = this.utils.booking_status_hedler(
@@ -478,8 +503,11 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                   item.status_pay_later,
                   Number(item.total_price),
                   item.tranzaktions?.id,
+                  page,
+                  limit,
+                  total,
+                  item.check_in,
                   lang,
-                  ctx,
                 );
 
                 const send = await ctx.reply(message, {
@@ -536,6 +564,7 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
               }
             } catch (error) {
               await this.utils.errorFunction(ctx);
+              console.log(error);
             }
           }
 
@@ -571,6 +600,16 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                         name: true,
                         longitude: true,
                         latitude: true,
+                        region: {
+                          select: {
+                            name: true,
+                          },
+                        },
+                        region_items: {
+                          select: {
+                            name: true,
+                          },
+                        },
                       },
                     },
                   },
@@ -638,7 +677,7 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 return new Intl.NumberFormat('uz-UZ').format(Number(price));
               };
               for (const item of booking) {
-                let locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${this.i18n.translate('bookingHestory.booking.view_map', { lang })}</a>`;
+                let locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${item.stadion.region.name}, ${item.stadion.region_items.name}</a>`;
 
                 message += `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
 
@@ -649,6 +688,8 @@ ${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.d
 ${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
 
 ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
+
+${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, lang, this.i18n.translate('peyments', { lang }))}
 
 ${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
 
@@ -1108,7 +1149,9 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
                 ],
                 [
                   {
-                    text: this.i18n.translate('booking.stadion.book', { lang }),
+                    text: this.i18n.translate('booking.stadion.book', {
+                      lang,
+                    }),
                     callback_data: `booking_stadion_${stadion.id}`,
                   },
                   {
@@ -1515,6 +1558,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           stadion_id: special.stadion_id,
           date: startOfDay,
+          status: {
+            in: ['CONFIRMED', 'PAID', 'PENDING'],
+          },
         },
       });
       if (bookings.length) {
@@ -1621,6 +1667,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           stadion_id: special.stadion_id,
           date: startOfDay,
+          status: {
+            in: ['CONFIRMED', 'PAID', 'PENDING'],
+          },
         },
       });
       if (booking.length) {
@@ -1759,6 +1808,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           stadion_id: scheduleDate.stadion_id,
           date: startOfDay,
+          status: {
+            in: ['CONFIRMED', 'PAID', 'PENDING'],
+          },
         },
       });
 
@@ -1880,6 +1932,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           stadion_id: scheduleDate.stadion_id,
           date: startOfDay,
+          status: {
+            in: ['CONFIRMED', 'PAID', 'PENDING'],
+          },
         },
       });
 
@@ -1998,7 +2053,11 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         return;
       }
       const noshowCount = await this.prisma.booking.count({
-        where: { user_id: user?.id, stadion_id: stadion.id, status: 'NO_SHOW' },
+        where: {
+          user_id: user.id,
+          stadion_id: stadion.id,
+          status: { in: ['NO_SHOW',"REFUNDED"] },
+        },
       });
 
       if (stadion.payments_type === 'CARD') {
@@ -2108,7 +2167,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
 
         let warning = '';
-
         if (noshowCount === 1) {
           warning = this.i18n.translate('booking.no_show_warning', { lang });
         } else if (noshowCount >= 2) {
@@ -2466,6 +2524,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
 
             let warning = '';
+            
             if (noshowCount == 1) {
               warning = this.i18n.translate('booking.booking_warning.warning', {
                 lang,

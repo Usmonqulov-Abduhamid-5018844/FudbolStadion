@@ -1,5 +1,7 @@
 {
-      "phone_updated": "✅ Telefon raqam muvaffaqiyatli yangilandi",
-      "your_phone": "📞 Sizning telefon raqamingiz",
-      "edit": "✏️ O‘zgartirish"
+  "phone_updated": "✅ Telefon raqam muvaffaqiyatli yangilandi",
+  "your_phone": "📞 Sizning telefon raqamingiz",
+  "edit": "✏️ O‘zgartirish",
+
+  "user_checked_in": "✅ Foydalanuvchi stadionga keldi"
 }

@@ -12,7 +12,8 @@
     "payment_type": "💳 To‘lov turi",
     "status": "📊 Holat",
     "location": "📍 Manzil",
-    "view_map": "Ko'rish"
+    "view_map": "Ko'rish",
+    "check_in": "🟢 Kelgan"
   },
 
   "booking_status": {
