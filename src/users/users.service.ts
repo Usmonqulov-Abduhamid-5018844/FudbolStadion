@@ -12,10 +12,7 @@ import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
-import { time } from 'console';
 import { QrService } from 'src/qr/qr.service';
-import { keyboard } from 'telegraf/typings/markup';
-import { text } from 'stream/consumers';
 @Injectable()
 export class UsersService {
   constructor(
@@ -916,10 +913,9 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 if (ctx.callbackQuery) {
                   await ctx.answerCbQuery();
                 }
-                await ctx.deleteMessage();
               } catch (error) {}
-              
 
+              ctx.reply('Tez kunda');
             } catch (error) {}
           }
           break;
@@ -949,7 +945,7 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 }
                 await ctx.deleteMessage();
               } catch (error) {}
-              const max_price = 200000;
+              const max_price = 400000;
               const limit = 4;
               const [stadions, total] = await Promise.all([
                 this.prisma.stadion.findMany({
