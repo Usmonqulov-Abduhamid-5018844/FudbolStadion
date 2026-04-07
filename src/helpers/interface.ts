@@ -30,18 +30,25 @@ export interface IStadion {
   createdAt: Date;
   updatedAt: Date;
   region?: Region;
+  mini?: boolean;
   region_items?: Region_item;
   owner?: Owners;
   stadionChedules?: Stadion_chedule[];
   bookings?: Booking[];
+  ownerStadions?: number[];
   stadionOffDays?: stadion_off_days[];
   stadionSpecialSchedules?: stadion_special_schedule[];
+}
+export enum EStadion_type {
+  BIG = "big",
+  SMOL = "smol",
 }
 
 export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
+  maxCount:null,
   booking_step: null,
   stadion_step: null,
   owner_registor: {

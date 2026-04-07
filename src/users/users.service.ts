@@ -497,7 +497,7 @@ ${this.i18n.translate('bookingHestory.booking.remaining_time', { lang })}: ${Tim
 
 ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
 
-${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, lang, this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
 ${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
 
@@ -699,7 +699,7 @@ ${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_ti
 
 ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
 
-${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, lang, this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
 ${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
 
@@ -1293,7 +1293,7 @@ ${this.i18n.translate('view.locate', { lang })} ${locationText}
 ${distanceKm ? this.i18n.translate('view.distance', { lang }) : ''} ${distanceKm ? distanceKm + ' km\n' : ''}${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
 ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
 ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
-${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${this.i18n.translate('view.premium', { lang })} <b>${stadion.is_premium ? this.i18n.translate('view.yes', { lang }) : this.i18n.translate('view.no', { lang })}</b>
 ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
@@ -1521,7 +1521,7 @@ ${this.i18n.translate('view.locate', { lang })} ${locationText}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
-${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, String(lang), this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}

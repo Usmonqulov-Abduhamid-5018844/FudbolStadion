@@ -13,5 +13,10 @@
   "qr_error": "❌ QR код неверный или устарел",
   "booking_not_found": "❌ Бронирование не найдено",
   "not_admin_for_stadion": "❌ Вы не являетесь админом этого стадиона",
-  "payment_unpaid_or_unconfirmed": "⚠️ To‘lov qilinmagan yoki tasdiqlanmagan"
+  "payment_unpaid_or_unconfirmed": "⚠️ To‘lov qilinmagan yoki tasdiqlanmagan",
+
+  "enter_number_error": "❌ Пожалуйста, введите число",
+
+  "only_number_error": "❌ Введите только число (например: 10)",
+  "invalid_range_error": "❌ Введите число больше 6 и меньше 20"
 }

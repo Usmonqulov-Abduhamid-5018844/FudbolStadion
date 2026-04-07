@@ -2,7 +2,6 @@ import { Payments } from '@prisma/client';
 
 export const getPaymentText = (
   payments_type: Payments,
-  lang: string,
   i18nObj: any,
 ) => {
   switch (payments_type) {

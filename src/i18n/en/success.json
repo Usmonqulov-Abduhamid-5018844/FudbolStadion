@@ -3,5 +3,10 @@
   "your_phone": "📞 Your phone number",
   "edit": "✏️ Edit",
 
-  "user_checked_in": "✅ User has checked in at the stadium"
+  "user_checked_in": "✅ User has checked in at the stadium",
+
+  "stadium_name_updated": "✅ Stadium name has been successfully updated",
+
+  "max_players_updated": "✅ Maximum number of players has been updated",
+  "mini_stadium_created": "🎉 {count} mini stadium(s) created"
 }

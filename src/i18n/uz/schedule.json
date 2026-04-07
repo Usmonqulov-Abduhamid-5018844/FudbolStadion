@@ -58,15 +58,15 @@
   },
   "off_day": {
     "off": "🌴 Dam olish kunlari",
-    "format": "❌ Sana formati xato! To'g'ri format: 2026-02-15 📅",
+    "format": "❌ Sana formati xato! To'g'ri format: (YYYY-MM-DD) 📅",
     "not_fount_day": "❌ Bunday sana mavjud emas! 📅",
     "succses": "✅ Ma'lumot muvaffaqiyatli saqlandi! 🎉",
     "update": "✅ Ma'lumot muvaffaqiyatli yangilandi!",
     "error": "❌ Bazaga yozishda xatolik yuz berdi! ⚠️",
-    "add_day": "📅 Dam olish kuni uchun sanani kiriting, quyidagi formatda: 2025-12-09"
+    "add_day": "📅 Dam olish kuni uchun sanani kiriting, quyidagi formatda: (YYYY-MM-DD)"
   },
-  "specile": "📅 Mahsus kun uchun sanani kiriting, quyidagi formatda: 2025-12-12",
-  "update": "🗓️ Yangilash uchun yangi sanani kiriting. Format: 2025-12-12",
+  "specile": "📅 Mahsus kun uchun sanani kiriting, quyidagi formatda: (YYYY-MM-DD)",
+  "update": "🗓️ Yangilash uchun yangi sanani kiriting. Format: (YYYY-MM-DD)",
   "time_specile": "⏰ Stadioningiz ish boshlanish va tugash vaqtini kiriting, quyidagi formatda: (HH:MM-HH:MM)",
   "update_time": "🔄 Stadioningizning yangi ish boshlanish va tugash vaqtini kiriting. Format: (HH:MM-HH:MM)",
   "specile_days": "📅 Mahsus kunlar",

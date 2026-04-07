@@ -6,6 +6,7 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
+import { getPaymentText } from 'src/helpers/peyments_type';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
@@ -178,7 +179,7 @@ export class OwnersService {
         throw new Error();
       }
       const stadion = await this.prisma.stadion.findMany({
-        where: { owner_id: owner.id },
+        where: { owner_id: owner.id, stadion_mini: false },
         orderBy: { updatedAt: 'desc' },
       });
       if (!stadion.length) {
@@ -462,7 +463,7 @@ export class OwnersService {
 
       if (!/^\d+$/.test(input)) {
         await ctx.reply(this.i18n.translate('error.number_error', { lang }));
-        
+
         return;
       }
 
@@ -669,9 +670,8 @@ export class OwnersService {
         );
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx)
-      console.log("ERROR",error);
-      
+      await this.utils.errorFunction(ctx);
+      console.log('ERROR', error);
     }
     ctx.session.step = null;
     ctx.session.stadion.schedule_day = null;
@@ -705,6 +705,7 @@ export class OwnersService {
       });
       return this.botService.stadion_price(ctx, stadion.id);
     } catch (error) {
+      await this.utils.errorFunction(ctx);
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
@@ -855,7 +856,7 @@ export class OwnersService {
                 throw new Error();
               }
               const stadion = await this.prisma.stadion.findMany({
-                where: { owner_id: owner.id },
+                where: { owner_id: owner.id, stadion_mini: false },
               });
               if (!stadion.length) {
                 await ctx.reply(
@@ -1008,6 +1009,379 @@ export class OwnersService {
       }
     } catch (error) {
       ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+  async stadionSplit(
+    ctx: MyContext,
+    count: number,
+    stadionId: number,
+    lang: string,
+  ) {
+    try {
+      const parent = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+      });
+      if (!parent) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      const childLength = Math.floor(parent.length / count);
+      const childWidth = Math.floor(parent.width / count);
+      const childPrice = Math.floor(parent.price / count);
+      const childMax = Math.floor(parent.max_count / count);
+
+      for (let i = 0; i < count; i++) {
+        const send = await this.prisma.stadion.create({
+          data: {
+            stadion_mini: true,
+            image: parent.image,
+            name: parent.name + ` - ${i + 1}`,
+            parent_id: parent.id,
+            length: childLength,
+            width: childWidth,
+            price: childPrice,
+            max_count: childMax,
+            owner_id: parent.owner_id,
+            region_id: parent.region_id,
+            region_item_id: parent.region_item_id,
+            working_status: true,
+            latitude: parent.latitude,
+            longitude: parent.longitude,
+          },
+        });
+      }
+      const sent = await ctx.reply(
+        this.i18n.translate('success.mini_stadium_created', {
+          lang,
+          args: { count },
+        }),
+      );
+      if (!ctx.session.stadionMessages) {
+        ctx.session.stadionMessages = [];
+      }
+      ctx.session.stadionMessages.push(sent.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async miniStadion(ctx: MyContext, childId: number, lang: string) {
+    try {
+      const child = await this.prisma.stadion.findFirstOrThrow({
+        where: { id: childId, parent_id: { not: null }, stadion_mini: true },
+      });
+      const keyboard: InlineKeyboardButton[][] = [
+        [
+          {
+            text: this.i18n.translate('stadions.stadium.name', { lang }),
+            callback_data: JSON.stringify({
+              type: 'Stadion_nomi',
+              id: child.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.price', { lang }),
+            callback_data: JSON.stringify({ type: 'price', id: child.id }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('stadions.players_count', { lang }),
+            callback_data: JSON.stringify({
+              type: 'players_count',
+              id: child.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.image', { lang }),
+            callback_data: JSON.stringify({ type: 'image', id: child.id }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('stadions.menyu.all_data', {
+              lang,
+            }),
+            callback_data: JSON.stringify({
+              type: 'all_data',
+              id: child.id,
+            }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('schedule.delete', { lang }),
+            callback_data: JSON.stringify({
+              type: 'delete',
+              id: child.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: JSON.stringify({
+              type: 'miniStadionlar',
+              id: child.parent_id,
+            }),
+          },
+        ],
+      ];
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('stadions.mini_stadium_settings', { lang }),
+        {
+          inline_keyboard: keyboard,
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  async miniStadionlar(ctx: MyContext, stadionId: number, lang: string) {
+    try {
+      if (ctx.session.stadionMessages?.length) {
+        await ctx.deleteMessages(ctx.session.stadionMessages);
+      }
+      if (ctx.callbackQuery) {
+        try {
+          await ctx.answerCbQuery();
+        } catch (error) {}
+      }
+
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+        include: {
+          children: {
+            orderBy: { updatedAt: 'desc' },
+          },
+        },
+      });
+
+      if (!stadion?.children.length) {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('stadions.stadium_not_divided', { lang }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('stadions.stadium_divide', {
+                    lang,
+                  }),
+                  callback_data: `owner_stadionSplit_${stadionId}`,
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'stadion',
+                    id: stadionId,
+                  }),
+                },
+              ],
+            ],
+          },
+        );
+        return;
+      }
+
+      const button: InlineKeyboardButton[][] = [];
+      for (const child of stadion.children) {
+        const priceText = child.price
+          ? this.i18n.translate('stadions.price_label', {
+              lang,
+              args: { price: child.price },
+            })
+          : this.i18n.translate('stadions.price_unknown', { lang });
+        button.push([
+          {
+            text: this.i18n.translate('stadions.stadium_button', {
+              lang,
+              args: { name: child.name, price: priceText },
+            }),
+            callback_data: `owner_miniStadion_${child.id}`,
+          },
+        ]);
+      }
+
+      button.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: JSON.stringify({
+            type: 'stadion',
+            id: stadion.id,
+          }),
+        },
+      ]);
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('stadions.mini_stadium_list', { lang }),
+        {
+          inline_keyboard: button,
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async stadionMenyu(ctx: MyContext, stadionID: number, lang: string) {
+    try {
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionID },
+      });
+      if (!stadion) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      const keyboard: InlineKeyboardButton[][] = [
+        [
+          {
+            text: this.i18n.translate('stadions.stadium.name', { lang }),
+            callback_data: JSON.stringify({
+              type: 'Stadion_nomi',
+              id: stadion.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('stadions.payment_method', { lang }),
+            callback_data: JSON.stringify({
+              type: 'payment_method',
+              id: stadion.id,
+            }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('schedule.working', { lang }),
+            callback_data: JSON.stringify({
+              type: 'schedule',
+              id: stadion.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.price', { lang }),
+            callback_data: JSON.stringify({ type: 'price', id: stadion.id }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('schedule.location', { lang }),
+            callback_data: JSON.stringify({
+              type: 'lokation',
+              id: stadion.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.image', { lang }),
+            callback_data: JSON.stringify({ type: 'image', id: stadion.id }),
+          },
+        ],
+      ];
+
+      if (!stadion.stadion_mini && !stadion.mini) {
+        keyboard.push([
+          {
+            text: this.i18n.translate('stadions.mini_stadium.my_stadiums', {
+              lang,
+            }),
+            callback_data: JSON.stringify({
+              type: 'miniStadionlar',
+              id: stadion.id,
+            }),
+          },
+        ]);
+      }
+      keyboard.push(
+        [
+          {
+            text: this.i18n.translate('stadions.menyu.all_data', {
+              lang,
+            }),
+            callback_data: JSON.stringify({
+              type: 'all_data',
+              id: stadion.id,
+            }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('schedule.delete', { lang }),
+            callback_data: JSON.stringify({
+              type: 'delete',
+              id: stadion.id,
+            }),
+          },
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: JSON.stringify({
+              type: 'back_1',
+              id: stadion.id,
+            }),
+          },
+        ],
+      );
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('stadions.stadion_settings', { lang }),
+        {
+          inline_keyboard: keyboard,
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+      console.log(error);
+    }
+  }
+  async stadionPayments(ctx: MyContext, stadionId: number, lang: string) {
+    try {
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+      });
+      if (!stadion) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      if (stadion.stadion_mini) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      const paymentText = getPaymentText(
+        stadion.payments_type,
+        this.i18n.translate('peyments', { lang }),
+      );
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('stadions.current_payment_type', {
+          lang,
+          args: { payment: paymentText },
+        }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('success.edit', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'Update_Payments',
+                  id: stadion.id,
+                }),
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'stadion',
+                  id: stadion.id,
+                }),
+              },
+            ],
+          ],
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
 

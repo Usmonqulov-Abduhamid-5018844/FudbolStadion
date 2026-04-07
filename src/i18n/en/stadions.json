@@ -44,5 +44,44 @@
 
   "booking_history_empty": "📭 You don't have any booking history yet.\n\nYou haven't made any bookings so far.\n\nTo get started, choose a stadium and select a convenient time from the menu ⚽",
 
-  "no_active_bookings": "📭 You currently have no active bookings.\n\nYou haven't booked any stadium yet, or all your bookings have already been completed.\n\nTo make a new booking, choose a stadium and select a convenient time from the menu ⚽"
+  "no_active_bookings": "📭 You currently have no active bookings.\n\nYou haven't booked any stadium yet, or all your bookings have already been completed.\n\nTo make a new booking, choose a stadium and select a convenient time from the menu ⚽",
+
+  "stadion_settings": "⚙️ Stadium settings",
+
+  "stadionSplit": {
+    "title": "✂️ How many parts do you want to split the stadium into?",
+    "options": ["2️⃣ parts", "4️⃣ parts", "6️⃣ parts", "8️⃣ parts"],
+    "name": "🏟 Stadium name: <b>{name}</b>",
+    "enterNewName": "✏️ Enter a new name for your stadium..."
+  },
+
+  "payments": {
+    "alert": "⚠️ The selected payment method is the same as the current one.\nPlease choose a different option."
+  },
+
+  "max_players": "Maximum number of players in your stadium: {count}",
+
+  "stadium_capacity_prompt": "🏟 Enter the stadium capacity\n\n👥 How many players can play at the same time?\n\n🔢 Enter only a number (e.g., 6, 8, 12, 20)",
+  "players_count": "👥 Players Count",
+
+  "mini_stadium_settings": "⚙️ Mini Stadium Settings",
+
+  "stadium_not_divided": "🏟️ Stadium not divided yet",
+  "stadium_divide": "⚡ Divide Stadium",
+
+  "price_unknown": "❌",
+  "price_label": "💰 {price} UZS",
+  "stadium_button": "🏟️ {name}\n{price}",
+
+  "mini_stadium_list": "📋 Mini Stadiums List",
+
+  "payment_method": "💳 Payment Method",
+
+  "mini_stadium": {
+    "my_stadiums": "🏟️ My Mini Stadiums"
+  },
+  
+  "current_payment_type":"💳 Your current payment method: {payment}"
+
+
 }

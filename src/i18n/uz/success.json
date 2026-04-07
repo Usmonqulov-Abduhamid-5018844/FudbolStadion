@@ -3,5 +3,11 @@
   "your_phone": "📞 Sizning telefon raqamingiz",
   "edit": "✏️ O‘zgartirish",
 
-  "user_checked_in": "✅ Foydalanuvchi stadionga keldi"
+  "user_checked_in": "✅ Foydalanuvchi stadionga keldi",
+
+  "stadium_name_updated": "✅ Stadioningiz nomi muvaffaqiyatli o'zgartirildi",
+
+  "max_players_updated": "✅ Maksimal o'yinchilar soni yangilandi",
+
+  "mini_stadium_created": "🎉 {count} ta mini stadion yaratildi"
 }

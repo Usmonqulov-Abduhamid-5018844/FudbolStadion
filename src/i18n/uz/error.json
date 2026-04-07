@@ -13,5 +13,11 @@
   "qr_error": "❌ QR noto‘g‘ri yoki eskirgan",
   "booking_not_found": "❌ Bron topilmadi",
   "not_admin_for_stadion": "❌ Siz bu stadion uchun admin emassiz",
-  "payment_unpaid_or_unconfirmed": "⚠️ To‘lov qilinmagan yoki tasdiqlanmagan"
+  "payment_unpaid_or_unconfirmed": "⚠️ To‘lov qilinmagan yoki tasdiqlanmagan",
+
+  "enter_number_error": "❌ Iltimos, son kiriting",
+
+  "only_number_error": "❌ Faqat son kiriting (masalan: 10)",
+
+  "invalid_range_error": "❌ Iltimos, 6 dan katta va 20 dan kichik son kiriting"
 }

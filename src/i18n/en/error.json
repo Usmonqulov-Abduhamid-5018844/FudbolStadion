@@ -13,5 +13,10 @@
   "qr_error": "❌ QR is invalid or expired",
   "booking_not_found": "❌ Booking not found",
   "not_admin_for_stadion": "❌ You are not an admin for this stadium",
-  "payment_unpaid_or_unconfirmed": "⚠️ Payment not made or not confirmed"
+  "payment_unpaid_or_unconfirmed": "⚠️ Payment not made or not confirmed",
+
+  "enter_number_error": "❌ Please enter a number",
+  "only_number_error": "❌ Please enter numbers only (e.g., 10)",
+
+  "invalid_range_error": "❌ Please enter a number greater than 6 and less than 20"
 }

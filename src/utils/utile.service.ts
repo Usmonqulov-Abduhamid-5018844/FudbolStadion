@@ -61,10 +61,12 @@ export class UtilisService implements OnModuleInit {
   async safeEditOrReply(ctx: MyContext, text: string, keyboard: any) {
     try {
       await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
         reply_markup: keyboard,
       });
     } catch (e) {
       await ctx.reply(text, {
+        parse_mode: 'HTML',
         reply_markup: keyboard,
       });
     }

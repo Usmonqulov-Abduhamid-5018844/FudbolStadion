@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "sesion" ALTER COLUMN "lang" DROP NOT NULL,
-ALTER COLUMN "step" DROP NOT NULL;

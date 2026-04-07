@@ -44,5 +44,46 @@
   "Select": "Sahifani tanlang",
 
   "booking_history_empty": "📭 Sizda hozircha bronlar tarixi mavjud emas.\n\nSiz hali birorta stadionni bron qilmagansiz.\n\nYangi bron qilish uchun menyudan stadion tanlab, qulay vaqtni band qiling ⚽",
-  "no_active_bookings": "📭 Sizda hozircha faol bronlar mavjud emas.\n\nHozircha siz hech qanday stadionni bron qilmagansiz yoki barcha bronlaringiz yakunlangan.\n\nYangi bron qilish uchun menyudan stadion tanlang va qulay vaqtni band qiling ⚽"
+  "no_active_bookings": "📭 Sizda hozircha faol bronlar mavjud emas.\n\nHozircha siz hech qanday stadionni bron qilmagansiz yoki barcha bronlaringiz yakunlangan.\n\nYangi bron qilish uchun menyudan stadion tanlang va qulay vaqtni band qiling ⚽",
+
+  "stadion_settings": "⚙️ Stadion sozlamalari",
+
+  "stadionSplit": {
+    "title": "✂️ Stadionni nechtaga bo'lmoqchisiz?",
+    "options": ["2️⃣ ta", "4️⃣ ta", "6️⃣ ta", "8️⃣ ta"],
+    "name": "🏟 Stadion nomi: <b>{name}</b>",
+    "enterNewName": "✏️ Stadioningiz uchun yangi nom kiriting..."
+  },
+
+  "payments": {
+    "alert": "⚠️ Tanlangan to‘lov turi avvalgisi bilan bir xil.\nIltimos, boshqa turini tanlang."
+  },
+
+  "max_players": "Sizning stadioningizda maksimal o'yinchilar soni: {count}",
+
+  "stadium_capacity_prompt": "🏟 Stadion sig‘imini kiriting\n\n👥 Bir vaqtning o'zida nechta o‘yinchi o‘ynashi mumkin?\n\n🔢 Faqat raqam yozing (masalan: 6, 8, 12, 20)",
+  "stadium": {
+    "name": "🏟️ Stadion nomi"
+  },
+  "players_count": "👥 O'yinchilar soni",
+
+  "mini_stadium_settings": "⚙️ Mini stadion sozlamalari",
+
+  "stadium_not_divided": "🏟️ Stadion hali bo'linmagan",
+
+  "stadium_divide": "⚡ Stadionni bo'lish",
+
+  "price_unknown": "❌",
+  "price_label": "💰 {price} so'm",
+  "stadium_button": "🏟️ {name}\n{price}",
+
+  "mini_stadium_list": "📋 Mini stadionlar ro‘yxati",
+
+  "payment_method": "💳 To‘lov usuli",
+
+  "mini_stadium": {
+    "my_stadiums": "🏟️ Mini stadionlarim"
+  },
+
+  "current_payment_type": "💳 Sizning hozirgi to'lov turingiz: {payment}"
 }

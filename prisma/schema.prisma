@@ -7,6 +7,180 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Owners {
+  id        Int         @id @default(autoincrement())
+  full_name String
+  username  String?
+  chatID    String      @unique
+  phone     String
+  email     String      @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  ownerCard Owner_card?
+  stadions  Stadion[]
+}
+
+model Users {
+  id                 Int                 @id @default(autoincrement())
+  username           String?
+  phone              String
+  full_name          String
+  chatID             String              @unique
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  bookings           Booking[]
+  myFavoriteStadiums MyFavoriteStadium[]
+  tranzaktions       Tranzaktion[]
+}
+
+model Stadion {
+  id                      Int                        @id @default(autoincrement())
+  name                    String
+  latitude                Float
+  longitude               Float
+  image                   String
+  price                   Int
+  region_id               Int
+  max_count               Int
+  region_item_id          Int
+  mini                    Boolean                    @default(false)
+  stadion_mini            Boolean                    @default(false)
+  owner_id                Int
+  admin_checked           Boolean                    @default(false)
+  working_status          Boolean                    @default(true)
+  length                  Int
+  width                   Int
+  payments_type           Payments                   @default(GIBRID)
+  is_premium              Boolean                    @default(false)
+  parent_id               Int?
+  parent                  Stadion?                   @relation("StadionToChild", fields: [parent_id], references: [id])
+  children                Stadion[]                  @relation("StadionToChild")
+  createdAt               DateTime                   @default(now())
+  updatedAt               DateTime                   @updatedAt
+  bookings                Booking[]
+  myFavoriteStadiums      MyFavoriteStadium[]
+  owner                   Owners                     @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  region                  Region                     @relation(fields: [region_id], references: [id], onDelete: Cascade)
+  region_items            Region_item                @relation(fields: [region_item_id], references: [id], onDelete: Cascade)
+  stadionChedules         Stadion_chedule[]
+  stadionOffDays          stadion_off_days[]
+  stadionSpecialSchedules stadion_special_schedule[]
+}
+
+model Stadion_chedule {
+  id          Int     @id @default(autoincrement())
+  stadion_id  Int
+  day_of_week Int
+  start_time  String
+  end_time    String
+  stadion     Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+}
+
+model stadion_off_days {
+  id         Int      @id @default(autoincrement())
+  stadion_id Int
+  date       DateTime @db.Date
+  createdAt  DateTime @default(now())
+  desc       String?
+  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+}
+
+model stadion_special_schedule {
+  id         Int      @id @default(autoincrement())
+  stadion_id Int
+  date       DateTime @db.Date
+  start_time String
+  end_time   String
+  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+}
+
+model Region {
+  id          Int           @id @default(autoincrement())
+  name        String        @unique
+  regionItems Region_item[]
+  stadions    Stadion[]
+}
+
+model Region_item {
+  id        Int       @id @default(autoincrement())
+  name      String
+  region_id Int
+  region    Region    @relation(fields: [region_id], references: [id], onDelete: Cascade)
+  stadions  Stadion[]
+
+  @@unique([name, region_id])
+}
+
+model Owner_card {
+  id           Int           @id @default(autoincrement())
+  owner_id     Int           @unique
+  createdAt    DateTime      @default(now())
+  cardMask     String
+  cardToken    String
+  cardType     String
+  expireMonth  String
+  expireYear   String
+  isActive     Boolean
+  provider     String
+  owner        Owners        @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  tranzaktions Tranzaktion[]
+}
+
+model Booking {
+  id               Int            @id @default(autoincrement())
+  user_id          Int
+  stadion_id       Int
+  date             DateTime       @db.Date
+  start_time       String
+  end_time         String
+  total_price      Decimal
+  check_in         Boolean        @default(false)
+  status           Booking_status @default(PENDING)
+  payment_method   Pay_method
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  expires_at       DateTime?
+  status_pay_later Boolean        @default(false)
+  stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+  user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tranzaktions     Tranzaktion?
+}
+
+model Tranzaktion {
+  id                     Int                @id @default(autoincrement())
+  user_id                Int
+  booking_id             Int                @unique
+  systeam_fee            Int
+  owner_amount           Int
+  provider               String
+  provider_transactionId String
+  status                 Tranzaktion_status @default(PENDING)
+  amount_received        Int
+  createdAt              DateTime           @default(now())
+  owner_card_id          Int
+  booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade)
+  owner_cards            Owner_card         @relation(fields: [owner_card_id], references: [id], onDelete: Cascade)
+  user                   Users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+}
+
+model sesion {
+  id      Int     @id @default(autoincrement())
+  lang    String?
+  step    String?
+  chat_id String  @unique
+}
+
+model MyFavoriteStadium {
+  id         Int      @id @default(autoincrement())
+  chat_id    String
+  stadion_id Int
+  createdAt  DateTime @default(now())
+  user       Users    @relation(fields: [chat_id], references: [chatID], onDelete: Cascade)
+  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+
+  @@unique([chat_id, stadion_id])
+}
+
 enum Payments {
   CASH
   CARD
@@ -32,175 +206,4 @@ enum Tranzaktion_status {
   PENDING
   PAID
   FAILED
-}
-
-model Owners {
-  id        Int         @id @default(autoincrement())
-  full_name String
-  username  String?
-  chatID    String      @unique
-  phone     String
-  email     String      @unique
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  ownerCard Owner_card?
-  stadions  Stadion[]
-}
-
-model Users {
-  id                 Int                 @id @default(autoincrement())
-  username           String?
-  phone              String
-  full_name          String
-  chatID             String              @unique
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  tranzaktions       Tranzaktion[]
-  bookings           Booking[]
-  myFavoriteStadiums MyFavoriteStadium[]
-}
-
-model Stadion {
-  id                 Int                 @id @default(autoincrement())
-  name               String
-  latitude           Float
-  longitude          Float
-  image              String
-  price              Int
-  region_id          Int
-  max_count          Int
-  region_item_id     Int
-  owner_id           Int
-  working_status     Boolean             @default(true)
-  length             Int
-  width              Int
-  payments_type      Payments            @default(GIBRID)
-  is_premium         Boolean             @default(false)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  stadionChedules    Stadion_chedule[]
-  bookings           Booking[]
-  myFavoriteStadiums MyFavoriteStadium[]
-
-  region                  Region                     @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  region_items            Region_item                @relation(fields: [region_item_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  owner                   Owners                     @relation(fields: [owner_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  stadionOffDays          stadion_off_days[]
-  stadionSpecialSchedules stadion_special_schedule[]
-}
-
-model Stadion_chedule {
-  id          Int     @id @default(autoincrement())
-  stadion_id  Int
-  day_of_week Int
-  start_time  String
-  end_time    String
-  stadion     Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-}
-
-model stadion_off_days {
-  id         Int      @id @default(autoincrement())
-  stadion_id Int
-  date       DateTime @db.Date
-  desc       String?
-  createdAt  DateTime @default(now())
-  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-}
-
-model stadion_special_schedule {
-  id         Int      @id @default(autoincrement())
-  stadion_id Int
-  date       DateTime @db.Date
-  start_time String
-  end_time   String
-  stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-}
-
-model Region {
-  id          Int           @id @default(autoincrement())
-  name        String        @unique
-  regionItems Region_item[]
-  stadions    Stadion[]
-}
-
-model Region_item {
-  id        Int       @id @default(autoincrement())
-  name      String
-  region_id Int
-  region    Region    @relation(fields: [region_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  stadions  Stadion[]
-
-  @@unique([name, region_id])
-}
-
-model Owner_card {
-  id           Int           @id @default(autoincrement())
-  owner_id     Int           @unique
-  provider     String
-  cardToken    String
-  cardMask     String
-  cardType     String
-  expireMonth  String
-  expireYear   String
-  isActive     Boolean
-  createdAt    DateTime      @default(now())
-  owner        Owners        @relation(fields: [owner_id], references: [id], onDelete: Cascade)
-  tranzaktions Tranzaktion[]
-}
-
-model Booking {
-  id               Int            @id @default(autoincrement())
-  user_id          Int
-  stadion_id       Int
-  date             DateTime       @db.Date
-  start_time       String
-  end_time         String
-  total_price      Decimal
-  status           Booking_status @default(PENDING)
-  status_pay_later Boolean        @default(false)
-  payment_method   Pay_method
-  check_in         Boolean        @default(false)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  expires_at       DateTime?
-  tranzaktions     Tranzaktion?
-  user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-}
-
-model Tranzaktion {
-  id                     Int                @id @default(autoincrement())
-  user_id                Int
-  booking_id             Int                @unique
-  systeam_fee            Int
-  owner_amount           Int
-  provider               String
-  provider_transactionId String
-  status                 Tranzaktion_status @default(PENDING)
-  owner_card_id          Int
-  amount_received        Int
-  createdAt              DateTime           @default(now())
-  user                   Users              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-  booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-
-  owner_cards Owner_card @relation(fields: [owner_card_id], references: [id], onDelete: Cascade, onUpdate: Cascade)
-}
-
-model sesion {
-  id      Int     @id @default(autoincrement())
-  lang    String?
-  step    String?
-  chat_id String  @unique
-}
-
-model MyFavoriteStadium {
-  id         Int      @id @default(autoincrement())
-  chat_id    String
-  stadion_id Int
-  createdAt  DateTime @default(now())
-
-  user    Users   @relation(fields: [chat_id], references: [chatID], onDelete: Cascade)
-  stadion Stadion @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
-
-  @@unique([chat_id, stadion_id])
 }

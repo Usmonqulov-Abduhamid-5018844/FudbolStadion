@@ -9,6 +9,9 @@ export interface ISession {
   owner_registor: registerOwner;
   user_registor: registorUser;
   stadion: Stadion;
+  maxCount?: string | null;
+  mini?: boolean | null;
+  ownerStadions?: number[];
   stadionMessages?: number[];
   stadionFavoritMessages?: number[];
   bookingBrones?: number[];
