@@ -259,7 +259,6 @@ export class UtilisService implements OnModuleInit {
     stadion_peyments: Payments,
     data: Date,
     start_time: string,
-    pay_later: boolean,
     price: number,
     transaction_id: number | undefined,
     page: number,

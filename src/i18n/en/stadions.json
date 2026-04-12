@@ -24,7 +24,7 @@
   "stadion_added_success": "🎉 Stadium added successfully.",
   "not_fount": "❌ No data found!",
 
-  "stadions_not_found": "❌ Unfortunately, no stadium was found within a 5 km radius of your location. Please try another area or wait.",
+  "stadions_not_found": "❌ Unfortunately, no stadium was found within a 3 km radius of your location. Please try another area or wait.",
 
   "menyu": {
     "location": "📌 Update Location",
@@ -80,8 +80,13 @@
   "mini_stadium": {
     "my_stadiums": "🏟️ My Mini Stadiums"
   },
-  
-  "current_payment_type":"💳 Your current payment method: {payment}"
 
+  "current_payment_type": "💳 Your current payment method: {payment}",
 
+  "type_label": "🏷️ Stadium type:",
+  "type": {
+    "mini": "🏟️ Mini stadium 🟢",
+    "big": "🏟️ Big stadium 🔵",
+    "big_child": "🏟️ Big stadium's mini stadiums 🟡"
+  }
 }

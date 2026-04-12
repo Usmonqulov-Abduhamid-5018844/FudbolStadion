@@ -7,5 +7,6 @@
   "email_format": "📧 Please enter your email in the correct format!\nKindly try again.",
   "phone": "📞 Please send your phone number",
   "send_phone": "📱 Send phone number",
-  "finish":"🎉 Congratulations! You have successfully registered!"
+  "finish": "🎉 Congratulations! You have successfully registered!",
+  "email_exists_error": "⚠️ This email is already registered"
 }

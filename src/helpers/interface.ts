@@ -29,9 +29,10 @@ export interface IStadion {
   is_premium: boolean;
   createdAt: Date;
   updatedAt: Date;
-  region?: Region;
-  mini?: boolean;
-  region_items?: Region_item;
+  region: Region;
+  mini: boolean;
+  stadion_mini: boolean;
+  region_items: Region_item;
   owner?: Owners;
   stadionChedules?: Stadion_chedule[];
   bookings?: Booking[];
@@ -40,15 +41,15 @@ export interface IStadion {
   stadionSpecialSchedules?: stadion_special_schedule[];
 }
 export enum EStadion_type {
-  BIG = "big",
-  SMOL = "smol",
+  BIG = 'big',
+  SMOL = 'smol',
 }
 
 export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
-  maxCount:null,
+  maxCount: null,
   booking_step: null,
   stadion_step: null,
   owner_registor: {

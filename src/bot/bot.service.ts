@@ -9,6 +9,8 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { UtilisService } from 'src/utils/utile.service';
 import { EStadion_type } from 'src/helpers/interface';
+import { getLocation } from 'src/helpers/url';
+import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 
 @Injectable()
 export class BotService {
@@ -143,8 +145,8 @@ export class BotService {
       let stadion: any;
       const owner = await this.prisma.owners.findUnique({
         where: { chatID: String(ctx.from?.id) },
-        include:{
-          ownerCard:true
+        include: {
+          ownerCard: true,
         },
       });
       if (!owner) {
@@ -178,7 +180,7 @@ export class BotService {
       return this.all_data(ctx, stadion.id);
     } catch (error) {
       console.log(error);
-      
+
       await this.utils.errorFunction(ctx);
     }
   }
@@ -784,13 +786,18 @@ export class BotService {
 
       let locationText = this.i18n.translate('view.not_available', { lang });
       if (stadion.latitude && stadion.longitude) {
-        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
-        locationText = `<a href="${mapsLink}">${stadion.region.name}, ${stadion.region_items.name}</a>`;
+        locationText = getLocation(
+          stadion.latitude,
+          stadion.longitude,
+          stadion.region.name,
+          stadion.region_items.name,
+        );
       }
 
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
+${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}

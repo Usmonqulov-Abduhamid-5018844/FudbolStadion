@@ -25,7 +25,7 @@
 
   "not_fount": "❌ Ma'lumot topilmadi!",
 
-  "stadions_not_found": "❌ Afsuski, sizning joylashuvingiz atrofida 5 km radiusda stadion topilmadi. Iltimos, boshqa hududni tanlang yoki biroz kuting.",
+  "stadions_not_found": "❌ Afsuski, sizning joylashuvingiz atrofida 3 km radiusda stadion topilmadi. Iltimos, boshqa hududni tanlang yoki biroz kuting.",
 
   "menyu": {
     "location": "📌 Joylashuvni yangilash",
@@ -85,5 +85,12 @@
     "my_stadiums": "🏟️ Mini stadionlarim"
   },
 
-  "current_payment_type": "💳 Sizning hozirgi to'lov turingiz: {payment}"
+  "current_payment_type": "💳 Sizning hozirgi to'lov turingiz: {payment}",
+
+  "type_label": "🏷️ Stadion turi:",
+  "type": {
+    "mini": "🏟️ Mini-stadion 🟢",
+    "big": "🏟️ Katta stadion 🔵",
+    "big_child": "🏟️ Katta stadionning mini-stadionlari 🟡"
+  }
 }

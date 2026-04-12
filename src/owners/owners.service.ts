@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Payments } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
-import { url } from 'inspector';
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
@@ -70,35 +69,56 @@ export class OwnersService {
           ctx.reply(this.i18n.translate('registor.email_format', { lang }));
           return;
         }
-        ctx.session.owner_registor.email = ctx.message.text;
-        ctx.session.owner_registor.step = 'phone';
-        ctx.reply(this.i18n.translate('registor.phone', { lang }), {
-          reply_markup: {
-            keyboard: [
-              [
-                {
-                  text: this.i18n.translate('registor.send_phone', { lang }),
-                  request_contact: true,
+        try {
+          const owner = await this.prisma.owners.findFirst({
+            where: { email: String(ctx.message.text) },
+          });
+          if (owner) {
+            ctx.reply(
+              this.i18n.translate('registor.email_exists_error', { lang }),
+              {
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'back_owner_6',
+                      },
+                    ],
+                  ],
+                  remove_keyboard: true,
+                  one_time_keyboard: true,
                 },
+              },
+            );
+            return;
+          }
+
+          ctx.session.owner_registor.email = ctx.message.text;
+          ctx.session.owner_registor.step = 'phone';
+          ctx.reply(this.i18n.translate('registor.phone', { lang }), {
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('registor.send_phone', { lang }),
+                    request_contact: true,
+                  },
+                ],
               ],
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                },
-              ],
-            ],
-            resize_keyboard: true,
-            one_time_keyboard: true,
-          },
-        });
-        return;
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          });
+          return;
+        } catch (error) {}
       }
     } else if (ctx.message && 'contact' in ctx.message) {
       if (ctx.session.owner_registor.step === 'phone') {
-        ctx.session.owner_registor.phone = ctx.message.contact.phone_number;
-        ctx.session.owner_registor.step = null;
-        ctx.session.step = 'finish';
         try {
+          ctx.session.owner_registor.phone = ctx.message.contact.phone_number;
+          ctx.session.owner_registor.step = null;
+          ctx.session.step = 'finish';
           const data = {
             username: String(ctx.from?.username),
             full_name: String(ctx.session.owner_registor.full_name),
@@ -125,7 +145,8 @@ export class OwnersService {
               .oneTime(),
           );
         } catch (error) {
-          ctx.reply(this.i18n.translate('error.error', { lang }));
+          console.log(error);
+          await this.utils.errorFunction(ctx);
         }
       }
     }

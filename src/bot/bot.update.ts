@@ -326,15 +326,6 @@ export class BotUpdate {
                 await this.utils.errorFunction(ctx);
                 return;
               }
-              if (
-                ctx.session.booking_step &&
-                ctx.session.booking_step === 'pay_later'
-              ) {
-                await this.prisma.booking.update({
-                  where: { id: Number(bookingId) },
-                  data: { status_pay_later: true },
-                });
-              }
               const { timeLeftText, totalMinutes } =
                 this.utils.bookingTimeCalculate(
                   booking.date,
@@ -353,6 +344,16 @@ export class BotUpdate {
                 return;
               }
               const days = format(booking.date, 'dd.MM.yyyy');
+
+              if (
+                ctx.session.booking_step &&
+                ctx.session.booking_step === 'pay_later'
+              ) {
+                await this.prisma.booking.update({
+                  where: { id: Number(bookingId) },
+                  data: { status_pay_later: true },
+                });
+              }
 
               const paymentTextMap = {
                 CARD: this.i18n.translate('peyments.card', { lang }),
@@ -540,7 +541,9 @@ export class BotUpdate {
                 const cardId = booking?.stadion?.owner?.ownerCard?.id;
                 const hasCard = !!cardId;
                 if (!hasCard) {
-                  await this.utils.errorFunction(ctx);
+                  ctx.answerCbQuery("Siz hozircha karta qo'shmagansiz", {
+                    show_alert: true,
+                  });
                   return;
                 }
                 const { totalMinutes } = this.utils.bookingTimeCalculate(
@@ -711,7 +714,7 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
-  @Action(/booking_(back|specialBack)_(\d+)$/)
+  @Action(/booking_back_(\d+)$/)
   async bookingBack(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -720,15 +723,30 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, type, id] = ctx.callbackQuery.data.split('_');
-      if (type === 'back') {
-        return this.userService.userbookingStadion(ctx, lang, Number(id));
-      } else if (type === 'specialBack') {
-        return this.userService.special(ctx, lang, Number(id));
-      }
+      const [_, __, stadionId] = ctx.callbackQuery.data.split('_');
+
+      return this.userService.userbookingStadion(ctx, lang, Number(stadionId));
     }
   }
-  @Action(/^booking_scheduleBack_(\d+)_(\d+)_(\d+)_(\d{4})$/)
+  @Action(/booking_specialBack_(\d+)_(\d+)$/)
+  async bookingSpecilaBack(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, specialId, stadionId] = ctx.callbackQuery.data.split('_');
+      return this.userService.special(
+        ctx,
+        lang,
+        Number(specialId),
+        Number(stadionId),
+      );
+    }
+  }
+  @Action(/^booking_scheduleBack_(\d+)_(\d+)_(\d+)_(\d{4})_(\d+)$/)
   async bookingScheduleBack(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -737,7 +755,7 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, scheduleId, day, monthNumber, years] =
+      const [_, __, scheduleId, day, monthNumber, years, stadionId] =
         ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_start(
         ctx,
@@ -745,12 +763,13 @@ export class BotUpdate {
         day,
         monthNumber,
         Number(scheduleId),
+        Number(stadionId),
         lang,
       );
     }
   }
 
-  @Action(/^booking_timeStart_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})$/)
+  @Action(/^booking_timeStart_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})_(\d+)$/)
   async bookingTimeStart(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
       try {
@@ -759,8 +778,16 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, scheduleId, day, monthNumber, years] =
-        ctx.callbackQuery.data.split('_');
+      const [
+        _,
+        __,
+        start_time,
+        scheduleId,
+        day,
+        monthNumber,
+        years,
+        stadionId,
+      ] = ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_end(
         ctx,
         years,
@@ -768,6 +795,7 @@ export class BotUpdate {
         Number(scheduleId),
         Number(day),
         Number(monthNumber),
+        Number(stadionId),
         lang,
       );
     }
@@ -805,7 +833,25 @@ export class BotUpdate {
       );
     }
   }
-  @Action(/^booking_special_(\d{2}:\d{2})_(\d+)$/)
+  @Action(/^booking_specials_(\d+)_(\d+)$/)
+  async bookingBookingSpecile(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch {}
+    }
+    if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+      const [_, __, specileId, stadionId] = ctx.callbackQuery.data.split('_');
+      return this.userService.special(
+        ctx,
+        lang,
+        Number(specileId),
+        Number(stadionId),
+      );
+    }
+  }
+  @Action(/^booking_special_(\d{2}:\d{2})_(\d+)_(\d+)$/)
   async userBookingSpecial(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery) {
@@ -814,11 +860,13 @@ export class BotUpdate {
       } catch {}
     }
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, id] = ctx.callbackQuery.data.split('_');
+      const [_, __, start_time, specialId, stadionId] =
+        ctx.callbackQuery.data.split('_');
       return this.userService.userbookingSpecialEnd(
         ctx,
         lang,
-        Number(id),
+        Number(specialId),
+        Number(stadionId),
         start_time,
       );
     }
@@ -861,19 +909,20 @@ export class BotUpdate {
     }
   }
 
-  @Action(/^booking_schedule_(\d{4})_(\d+)_(\d+)_(\d+)$/)
+  @Action(/^booking_schedule_(\d{4})_(\d+)_(\d+)_(\d+)_(\d+)$/)
   async userBookingSchedule(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
 
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, year, day, monthNumber, id] =
+      const [_, __, year, day, monthNumber, scheduleId, stadionId] =
         ctx.callbackQuery.data.split('_');
       return this.userService.bookingSchedule_start(
         ctx,
         year,
         day,
         monthNumber,
-        Number(id),
+        Number(scheduleId),
+        Number(stadionId),
         lang,
       );
     }
@@ -949,7 +998,7 @@ export class BotUpdate {
       }
     }
   }
-  @Action(/^booking_(region|regionItem|special|stadion|save)_(\d+)$/)
+  @Action(/^booking_(region|regionItem|stadion|save)_(\d+)$/)
   async userBooking(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery) {
@@ -967,8 +1016,6 @@ export class BotUpdate {
         return this.userService.userbookingStadion(ctx, lang, Number(id));
       } else if (type === 'save') {
         return this.userService.userSaveFnc(ctx, lang, Number(id));
-      } else if (type === 'special') {
-        return this.userService.special(ctx, lang, Number(id));
       }
     }
   }
@@ -992,6 +1039,165 @@ export class BotUpdate {
         }
       }
       return this.userService.userSwitch(ctx, data, lang);
+    }
+  }
+  @Action(/working_date_(.+)/)
+  async working_date(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    try {
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const date = ctx.callbackQuery.data.split('_')[2];
+        const data = new Date(date);
+        const stadion = await this.prisma.stadion.findMany({
+          where: {
+            OR: [
+              {
+                stadionOffDays: { none: { date: data } },
+                stadionChedules: { some: {} },
+              },
+              {
+                parent: {
+                  stadionChedules: { some: {} },
+                  stadionOffDays: { none: { date: data } },
+                },
+              },
+            ],
+          },
+        });
+        if (!stadion.length) {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.not_available_stadiums', { lang }),
+          );
+          return;
+        }
+        try {
+          await ctx.answerCbQuery();
+        } catch (error) {}
+        const slotPerKeyboard = 3;
+        const button: InlineKeyboardButton[][] = [];
+
+        const tzOffset = 5 * 60;
+        const today = new Date();
+        const tzNow = new Date(
+          today.getTime() + (tzOffset + today.getTimezoneOffset()) * 60000,
+        );
+        let startTime = '08:00';
+        const time = this.utils.roundUpToNextHour(tzNow);
+        const currentTime = time.toTimeString().slice(0, 5);
+
+        if (
+          today.getFullYear() === data.getFullYear() &&
+          today.getMonth() === data.getMonth() &&
+          today.getDate() === data.getDate()
+        ) {
+          startTime = currentTime;
+        }
+        const Slods = await this.utils.generateSlots(startTime, '23:00');
+        for (let i = 0; i < Slods.length; i += slotPerKeyboard) {
+          const row: InlineKeyboardButton[] = [];
+          for (let j = 0; j < slotPerKeyboard; j++) {
+            if (Slods[i + j]) {
+              row.push({
+                text: Slods[i + j].start,
+                callback_data: `search_working_start_${date}_${Slods[i + j].start}`,
+              });
+            }
+          }
+          button.push(row);
+        }
+        button.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: 'user_working',
+          },
+        ]);
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('booking.stadion.selectTime', { lang }),
+          { inline_keyboard: button },
+        );
+      }
+    } catch (error) {
+      this.utils.errorFunction(ctx);
+    }
+  }
+  @Action(/search_working_(start|end)_(.+)_(.+)/)
+  async search_working(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    try {
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const [_, __, type, date, time] = ctx.callbackQuery.data.split('_');
+        const slotPerKeyboard = 3;
+        const button: InlineKeyboardButton[][] = [];
+        if (type === 'start') {
+          if (ctx.callbackQuery) {
+            try {
+              await ctx.answerCbQuery();
+            } catch {}
+          }
+          const Slods = await this.utils.generateSlots(time, '23:00');
+          for (let i = 0; i < Slods.length; i += slotPerKeyboard) {
+            const row: InlineKeyboardButton[] = [];
+            for (let j = 0; j < slotPerKeyboard; j++) {
+              if (Slods[i + j]) {
+                row.push({
+                  text: Slods[i + j].end,
+                  callback_data: `search_working_end_${date}_${time}-${Slods[i + j].end}`,
+                });
+              }
+            }
+            button.push(row);
+          }
+          button.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `working_date_${date}`,
+            },
+          ]);
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('booking.stadion.selectEndTime', { lang }),
+            { inline_keyboard: button },
+          );
+        } else if (type === 'end') {
+          const [start_time, end_time] = time.split('-');
+          return this.userService.searchWorkingStadions(
+            ctx,
+            date,
+            start_time,
+            end_time,
+            lang,
+          );
+        }
+      }
+    } catch (error) {
+      this.utils.errorFunction(ctx);
+    }
+  }
+
+  @Action(/search_stadionsPage_(.+)/)
+  async search_stadionsPage(@Ctx() ctx: MyContext) {
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery();
+      } catch (error) {}
+    }
+    try {
+      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
+        const [_, __, date, start_time, end_time, lang, page] =
+          ctx.callbackQuery.data.split('_');
+        console.log(date, start_time, end_time, lang, page);
+        return this.userService.searchWorkingStadions(
+          ctx,
+          date,
+          start_time,
+          end_time,
+          lang,
+          Number(page),
+        );
+      }
+    } catch (error) {
+      this.utils.errorFunction(ctx);
     }
   }
 
@@ -2311,7 +2517,7 @@ export class BotUpdate {
             },
           );
         }
-        return
+        return;
       }
       if (ctx.session.step === 'image') {
         if (
@@ -2342,42 +2548,6 @@ export class BotUpdate {
   async Message(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
 
-    ctx.session.stadion = ctx.session.stadion || {
-      image: null,
-      length: null,
-      lockation: null,
-      name: null,
-      owner_id: null,
-      max_count: null,
-      payments_type: null,
-      latitude: null,
-      longitude: null,
-      price: null,
-      region_id: null,
-      region_item_id: null,
-      width: null,
-      id: null,
-      schedule_day: null,
-      step: null,
-      special: null,
-      schedule_id: null,
-      off: null,
-    };
-
-    ctx.session.owner_registor = ctx.session.owner_registor || {
-      email: null,
-      full_name: null,
-      id: 0,
-      phone: null,
-      step: null,
-    };
-    ctx.session.user_registor = ctx.session.user_registor || {
-      phone: null,
-      full_name: null,
-      step: null,
-      id: 0,
-    };
-    ctx.session.booking_step = null;
     try {
       if (!ctx.message || !('text' in ctx.message)) return;
 
@@ -2519,8 +2689,13 @@ export class BotUpdate {
             where: {
               working_status: true,
               name: { contains: searchName, mode: 'insensitive' },
+              stadionChedules: { some: {} },
             },
             take: 5,
+            include: {
+              region: true,
+              region_items: true,
+            },
           });
           if (!stadion.length) {
             ctx.session.stadion.name = null;
@@ -2575,8 +2750,6 @@ export class BotUpdate {
           } catch (error) {}
           ctx.session.ownerStadions = [];
         }
-
-        return;
       }
       if (ctx.session.step === 'registor') {
         if (

@@ -8,5 +8,6 @@
   "email_format": "📧 Email manzilingizni to'g'ri formatda kiriting!\nIltimos, qaytadan kiriting.",
   "phone": "📞 Iltimos, telefon raqamingizni yuboring",
   "send_phone": "📱 Telefon raqamni yuborish",
-  "finish": "🎉 Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz!"
+  "finish": "🎉 Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz!",
+  "email_exists_error": "⚠️ Bu email allaqachon ro‘yxatdan o‘tgan"
 }

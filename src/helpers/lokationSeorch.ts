@@ -19,3 +19,19 @@ export const getDistance = (
   const d = R * c;
   return d;
 };
+
+export const stadionTypeLabel = (
+  mini: boolean,
+  stadion_mini: boolean,
+  lang: string,
+  i18n: any,
+) => {
+  const label = i18n.translate('stadions.type_label', { lang });
+  let typeText = '';
+  if (stadion_mini)
+    typeText = i18n.translate('stadions.type.big_child', { lang });
+  else if (mini) typeText = i18n.translate('stadions.type.mini', { lang });
+  else typeText = i18n.translate('stadions.type.big', { lang });
+
+  return `${label} <b>${typeText}</b>`;
+};

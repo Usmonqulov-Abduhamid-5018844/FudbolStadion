@@ -4,7 +4,7 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { IStadion } from 'src/helpers/interface';
-import { getDistance } from 'src/helpers/lokationSeorch';
+import { getDistance, stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
@@ -13,6 +13,9 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { QrService } from 'src/qr/qr.service';
+import { getLocation, getPaymentUrl } from 'src/helpers/url';
+import { getStadionIds } from 'src/helpers/stadions';
+import { text } from 'stream/consumers';
 @Injectable()
 export class UsersService {
   constructor(
@@ -27,11 +30,7 @@ export class UsersService {
     ctx.session = ctx.session || {};
     ctx.session.step = 'user_registor';
 
-    ctx.session.user_registor = ctx.session.user_registor || {
-      full_name: null,
-      phone: null,
-      step: 'full_name',
-    };
+    ctx.session.user_registor.step = 'full_name';
     ctx.reply(this.i18n.translate('registor.name', { lang }));
   }
 
@@ -39,9 +38,8 @@ export class UsersService {
     if (ctx.message && 'text' in ctx.message) {
       if (ctx.session.user_registor.step === 'full_name') {
         ctx.session.user_registor.full_name = ctx.message.text;
-
         ctx.session.user_registor.step = 'phone';
-        ctx.reply(this.i18n.translate('registor.phone', { lang }), {
+        await ctx.reply(this.i18n.translate('registor.phone', { lang }), {
           reply_markup: {
             keyboard: [
               [
@@ -55,6 +53,7 @@ export class UsersService {
             one_time_keyboard: true,
           },
         });
+
         return;
       }
     } else if (ctx.message && 'contact' in ctx.message) {
@@ -71,7 +70,7 @@ export class UsersService {
           };
           await this.prisma.users.create({ data: { ...data } });
 
-          ctx.reply(
+          await ctx.reply(
             this.i18n.translate('registor.finish', { lang }),
             Markup.keyboard([
               [
@@ -88,7 +87,7 @@ export class UsersService {
               .oneTime(),
           );
         } catch (error) {
-          ctx.reply(this.i18n.translate('error.error', { lang }));
+          await this.utils.errorFunction(ctx);
         }
       }
     }
@@ -349,11 +348,6 @@ export class UsersService {
         }
         case 'stadionBron':
           {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
             try {
               const limit = 2;
               const user = await this.prisma.users.findUnique({
@@ -370,6 +364,9 @@ export class UsersService {
                     status: {
                       in: ['CONFIRMED', 'PAID', 'PENDING'],
                     },
+                  },
+                  orderBy: {
+                    updatedAt: 'desc',
                   },
                   include: {
                     stadion: {
@@ -430,6 +427,11 @@ export class UsersService {
                 );
                 return;
               }
+              try {
+                await ctx.answerCbQuery(
+                  this.i18n.translate('loading.loading', { lang }),
+                );
+              } catch (error) {}
               const statusMap = {
                 CONFIRMED: this.i18n.translate(
                   'bookingHestory.booking_status.confirmed',
@@ -456,8 +458,8 @@ export class UsersService {
                 const { totalMinutes: endMinutes } =
                   this.utils.bookingTimeCalculate(data, end_time, lang);
 
-                if (totalMinutes <= 0 && endMinutes >= 0) {
-                  return "O'yin boshlangan";
+                if (totalMinutes <= 0 && endMinutes > 0) {
+                  return this.i18n.translate('booking.game_started', { lang });
                 } else if (totalMinutes <= 0) {
                   return this.i18n.translate('bookingHestory.time_expired', {
                     lang,
@@ -472,18 +474,17 @@ export class UsersService {
                 return new Intl.NumberFormat('uz-UZ').format(Number(price));
               };
 
-              const msg = await ctx.reply(
-                this.i18n.translate('bookingHestory.booking.active_title', {
-                  lang,
-                }),
-              );
               if (!ctx.session.bookingBrones) {
                 ctx.session.bookingBrones = [];
               }
-              ctx.session.bookingBrones.push(msg.message_id);
 
               for (const item of bookings) {
-                const locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${item.stadion.region.name}, ${item.stadion.region_items.name}</a>`;
+                const locationText = getLocation(
+                  item.stadion.latitude,
+                  item.stadion.longitude,
+                  item.stadion.region.name,
+                  item.stadion.region_items.name,
+                );
 
                 const message = `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
 
@@ -511,7 +512,6 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                   item.stadion.payments_type,
                   item.date,
                   item.start_time,
-                  item.status_pay_later,
                   Number(item.total_price),
                   item.tranzaktions?.id,
                   page,
@@ -603,6 +603,9 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                       in: ['COMPLETED', 'NO_SHOW', 'CANCELED', 'REFUNDED'],
                     },
                   },
+                  orderBy: {
+                    updatedAt: 'desc',
+                  },
                   include: {
                     stadion: {
                       select: {
@@ -687,7 +690,12 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                 return new Intl.NumberFormat('uz-UZ').format(Number(price));
               };
               for (const item of booking) {
-                let locationText = `<a href="https://www.google.com/maps/search/?api=1&query=${item.stadion.latitude},${item.stadion.longitude}">${item.stadion.region.name}, ${item.stadion.region_items.name}</a>`;
+                let locationText = getLocation(
+                  item.stadion.latitude,
+                  item.stadion.longitude,
+                  item.stadion.region.name,
+                  item.stadion.region_items.name,
+                );
 
                 message += `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
 
@@ -761,8 +769,16 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
             const [favorites, total] = await Promise.all([
               this.prisma.myFavoriteStadium.findMany({
                 where: { chat_id: String(ctx.from?.id) },
+                orderBy: {
+                  createdAt: 'desc',
+                },
                 include: {
-                  stadion: true,
+                  stadion: {
+                    include: {
+                      region: true,
+                      region_items: true,
+                    },
+                  },
                 },
                 skip: (page - 1) * limit,
                 take: limit,
@@ -772,19 +788,18 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
               }),
             ]);
             if (!favorites.length) {
-              await ctx.reply(
+              await this.utils.safeEditOrReply(
+                ctx,
                 this.i18n.translate('booking.stadion.noFavorites', { lang }),
                 {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'back_user_3',
-                        },
-                      ],
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'back_user_3',
+                      },
                     ],
-                  },
+                  ],
                 },
               );
               return;
@@ -915,7 +930,69 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 }
               } catch (error) {}
 
-              ctx.reply('Tez kunda');
+              const tz = 'Asia/Tashkent';
+              const now = toZonedTime(new Date(), tz);
+
+              const todayStr = format(now, 'yyyy-MM-dd');
+              const tomorrowStr = format(
+                new Date(now.getTime() + 86400000),
+                'yyyy-MM-dd',
+              );
+
+              const buttons: any[] = [];
+
+              for (let i = 0; i < 7; i++) {
+                const date = new Date(now);
+                date.setDate(now.getDate() + i);
+
+                const dateStr = format(date, 'yyyy-MM-dd');
+
+                const day = format(date, 'd');
+                const monthNumber = date.getMonth() + 1;
+
+                const weekDay = date.getDay() === 0 ? 7 : date.getDay();
+
+                const monthText = this.i18n.translate(
+                  `schedule.months.${monthNumber}`,
+                  { lang },
+                );
+
+                const weekDayText = this.i18n.translate(
+                  `schedule.week_days.${weekDay}`,
+                  { lang },
+                );
+
+                let dateLabel = `${day} - ${monthText}. ${weekDayText}`;
+
+                if (dateStr === todayStr) {
+                  dateLabel = `${this.i18n.translate('schedule.today', { lang })}. ${weekDayText}`;
+                }
+
+                if (dateStr === tomorrowStr) {
+                  dateLabel = `${this.i18n.translate('schedule.tomorrow', { lang })}. ${weekDayText}`;
+                }
+
+                buttons.push([
+                  {
+                    text: `${dateLabel}`,
+                    callback_data: `working_date_${dateStr}`,
+                  },
+                ]);
+              }
+              buttons.push([
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: 'back_user_6',
+                },
+              ]);
+
+              await this.utils.safeEditOrReply(
+                ctx,
+                this.i18n.translate('booking.working_time', { lang }),
+                {
+                  inline_keyboard: buttons,
+                },
+              );
             } catch (error) {}
           }
           break;
@@ -945,7 +1022,7 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                 }
                 await ctx.deleteMessage();
               } catch (error) {}
-              const max_price = 400000;
+              const max_price = 500000;
               const limit = 4;
               const [stadions, total] = await Promise.all([
                 this.prisma.stadion.findMany({
@@ -954,6 +1031,20 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                     price: {
                       lte: max_price,
                     },
+                    OR: [
+                      {
+                        stadionChedules: { some: {} },
+                      },
+                      {
+                        parent: {
+                          stadionChedules: { some: {} },
+                        },
+                      },
+                    ],
+                  },
+                  include: {
+                    region: true,
+                    region_items: true,
                   },
                   orderBy: {
                     price: 'asc',
@@ -962,7 +1053,20 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
                   take: limit,
                 }),
                 this.prisma.stadion.count({
-                  where: { working_status: true, price: { lte: max_price } },
+                  where: {
+                    working_status: true,
+                    price: { lte: max_price },
+                    OR: [
+                      {
+                        stadionChedules: { some: {} },
+                      },
+                      {
+                        parent: {
+                          stadionChedules: { some: {} },
+                        },
+                      },
+                    ],
+                  },
                 }),
               ]);
               if (!stadions.length) {
@@ -1022,6 +1126,42 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
   }
   async userHelp(ctx: MyContext, lang: string) {
     ctx.reply('Help');
+    try {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('help.help.title', { lang }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('help.booking', { lang }),
+                callback_data: 'user_help_booking',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('help.stadion', { lang }),
+                callback_data: 'user_help_stadion',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('help.profile', { lang }),
+                callback_data: 'user_help_profile',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: 'back_user_1',
+              },
+            ],
+          ],
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
   }
   async userBooking(ctx: MyContext, lang: string) {
     try {
@@ -1087,7 +1227,19 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
         where: { region_id: id },
         include: {
           stadions: {
-            where: { working_status: true },
+            where: {
+              working_status: true,
+              OR: [
+                {
+                  stadionChedules: { some: {} },
+                },
+                {
+                  parent: {
+                    stadionChedules: { some: {} },
+                  },
+                },
+              ],
+            },
             select: { id: true },
           },
         },
@@ -1115,7 +1267,8 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
         { inline_keyboard: button },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      console.log(error);
+      await this.utils.errorFunction(ctx);
     }
   }
   async userbookingRegionItems(
@@ -1128,12 +1281,42 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
       const limit = 4;
       const [stadions, total] = await Promise.all([
         this.prisma.stadion.findMany({
-          where: { region_item_id: itemId, working_status: true },
+          where: {
+            region_item_id: itemId,
+            working_status: true,
+            OR: [
+              {
+                stadionChedules: { some: {} },
+              },
+              {
+                parent: {
+                  stadionChedules: { some: {} },
+                },
+              },
+            ],
+          },
           skip: (page - 1) * limit,
           take: limit,
+          include: {
+            region: true,
+            region_items: true,
+          },
         }),
         this.prisma.stadion.count({
-          where: { region_item_id: itemId, working_status: true },
+          where: {
+            region_item_id: itemId,
+            working_status: true,
+            OR: [
+              {
+                stadionChedules: { some: {} },
+              },
+              {
+                parent: {
+                  stadionChedules: { some: {} },
+                },
+              },
+            ],
+          },
         }),
       ]);
 
@@ -1175,14 +1358,40 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
         reply_markup: { inline_keyboard: [row] },
       });
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      console.log(error);
+      await this.utils.errorFunction(ctx);
     }
   }
 
   async userBookingFanc(ctx: MyContext, lang: string) {
     try {
       const stadions = await this.prisma.stadion.findMany({
-        where: { working_status: true },
+        where: {
+          working_status: true,
+          OR: [
+            {
+              stadionChedules: { some: {} },
+            },
+            {
+              parent: {
+                stadionChedules: { some: {} },
+              },
+            },
+          ],
+        },
+        include: {
+          region: {
+            select: {
+              name: true,
+            },
+          },
+          region_items: {
+            select: {
+              name: true,
+            },
+          },
+          parent: true,
+        },
       });
       if (!stadions.length) {
         try {
@@ -1283,14 +1492,19 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
 
       let locationText = this.i18n.translate('view.not_available', { lang });
       if (stadion.latitude && stadion.longitude) {
-        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
-        locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
+        locationText = getLocation(
+          stadion.latitude,
+          stadion.longitude,
+          stadion.region.name,
+          stadion.region_items.name,
+        );
       }
 
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
-${distanceKm ? this.i18n.translate('view.distance', { lang }) : ''} ${distanceKm ? distanceKm + ' km\n' : ''}${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
+${distanceKm ? this.i18n.translate('view.distance', { lang }) : ''} ${distanceKm ? distanceKm + ' km\n' : ''}${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
+${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
 ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
 ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
@@ -1436,7 +1650,23 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
         await ctx.deleteMessage(send.message_id);
       } catch (error) {}
       const stadiums = await this.prisma.stadion.findMany({
-        where: { working_status: true },
+        where: {
+          working_status: true,
+          OR: [
+            {
+              stadionChedules: { some: {} },
+            },
+            {
+              parent: {
+                stadionChedules: { some: {} },
+              },
+            },
+          ],
+        },
+        include: {
+          region: true,
+          region_items: true,
+        },
       });
 
       const nearby = stadiums
@@ -1451,7 +1681,7 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
           return { ...s, distance };
         })
         .filter(Boolean)
-        .filter((s) => s!.distance <= 5000)
+        .filter((s) => s!.distance <= 3000)
         .sort((a, b) => a!.distance - b!.distance)
         .slice(0, 5);
 
@@ -1511,13 +1741,18 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
 
       let locationText = this.i18n.translate('view.not_available', { lang });
       if (stadion.latitude && stadion.longitude) {
-        const mapsLink = `https://www.google.com/maps/search/?api=1&query=${stadion.latitude},${stadion.longitude}`;
-        locationText = `<a href="${mapsLink}">${this.i18n.translate('view.view', { lang })}</a>`;
+        locationText = getLocation(
+          stadion.latitude,
+          stadion.longitude,
+          stadion.region.name,
+          stadion.region_items.name,
+        );
       }
 
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
+${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
@@ -1611,21 +1846,22 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
+        include: { parent: true },
       });
 
       if (!stadion) {
         return this.utils.errorFunction(ctx);
       }
-
+      const targetStadionId = stadion.parent_id ?? stadion.id;
       const [schedule, offDays, specialDays] = await Promise.all([
         this.prisma.stadion_chedule.findMany({
-          where: { stadion_id: stadionId },
+          where: { stadion_id: targetStadionId },
         }),
         this.prisma.stadion_off_days.findMany({
-          where: { stadion_id: stadionId },
+          where: { stadion_id: targetStadionId },
         }),
         this.prisma.stadion_special_schedule.findMany({
-          where: { stadion_id: stadionId },
+          where: { stadion_id: targetStadionId },
         }),
       ]);
 
@@ -1699,7 +1935,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           return [
             {
               text: `⭐ ${dateLabel} || ${special.start_time} - ${special.end_time}`,
-              callback_data: `booking_special_${special.id}`,
+              callback_data: `booking_specials_${special.id}_${stadion.id}`,
             },
           ];
         }
@@ -1716,7 +1952,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         return [
           {
             text: `📅 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
-            callback_data: `booking_schedule_${date.getFullYear()}_${day}_${monthNumber}_${s.id}`,
+            callback_data: `booking_schedule_${date.getFullYear()}_${day}_${monthNumber}_${s.id}_${stadion.id}`,
           },
         ];
       });
@@ -1740,15 +1976,29 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       this.utils.errorFunction(ctx);
     }
   }
-  async special(ctx: MyContext, lang: string, specialId: number) {
+  async special(
+    ctx: MyContext,
+    lang: string,
+    specialId: number,
+    stadionId: number,
+  ) {
     try {
-      const special = await this.prisma.stadion_special_schedule.findUnique({
-        where: { id: specialId },
-      });
-      if (!special) {
+      const [special, stadion] = await Promise.all([
+        this.prisma.stadion_special_schedule.findUnique({
+          where: { id: specialId },
+        }),
+        this.prisma.stadion.findUnique({
+          where: { id: stadionId },
+          include: { parent: true, children: true },
+        }),
+      ]);
+      if (!special || !stadion) {
         this.utils.errorFunction(ctx);
         return;
       }
+
+      const stadionIds = getStadionIds(stadion);
+
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
@@ -1779,11 +2029,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         special.date.getMonth() + 1,
         special.date.getDate(),
       );
-      console.log(startOfDay);
 
       const bookings = await this.prisma.booking.findMany({
         where: {
-          stadion_id: special.stadion_id,
+          stadion_id: { in: stadionIds },
           date: startOfDay,
           status: {
             in: ['CONFIRMED', 'PAID', 'PENDING'],
@@ -1801,7 +2050,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].start,
-                  callback_data: `booking_special_${freeSlots[i + j].start}_${special.id}`,
+                  callback_data: `booking_special_${freeSlots[i + j].start}_${special.id}_${stadionId}`,
                 });
               }
             }
@@ -1823,7 +2072,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                     [
                       {
                         text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_back_${special.stadion_id}`,
+                        callback_data: `booking_back_${stadionId}`,
                       },
                     ],
                   ],
@@ -1839,7 +2088,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].start,
-                callback_data: `booking_special_${allSlots[i + j].start}_${special.id}`,
+                callback_data: `booking_special_${allSlots[i + j].start}_${special.id}_${stadionId}`,
               });
             }
           }
@@ -1848,7 +2097,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         button.push([
           {
             text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_back_${special.stadion_id}`,
+            callback_data: `booking_back_${stadionId}`,
           },
         ]);
       }
@@ -1866,17 +2115,26 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
   async userbookingSpecialEnd(
     ctx: MyContext,
     lang: string,
-    specilId: number,
+    specialId: number,
+    stadionId: number,
     start_time: string,
   ) {
     try {
-      const special = await this.prisma.stadion_special_schedule.findUnique({
-        where: { id: specilId },
-      });
-      if (!special) {
+      const [special, stadion] = await Promise.all([
+        this.prisma.stadion_special_schedule.findUnique({
+          where: { id: specialId },
+        }),
+        this.prisma.stadion.findUnique({
+          where: { id: stadionId },
+          include: { parent: true, children: true },
+        }),
+      ]);
+
+      if (!special || !stadion) {
         await this.utils.errorFunction(ctx);
         return;
       }
+      const stadionsIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
       const allSlots = await this.utils.generateSlots(
@@ -1888,11 +2146,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         special.date.getMonth() + 1,
         special.date.getDate(),
       );
-      console.log(startOfDay);
 
       const booking = await this.prisma.booking.findMany({
         where: {
-          stadion_id: special.stadion_id,
+          stadion_id: { in: stadionsIds },
           date: startOfDay,
           status: {
             in: ['CONFIRMED', 'PAID', 'PENDING'],
@@ -1910,7 +2167,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].end,
-                  callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
+                  callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${stadionId}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
                 });
               }
             }
@@ -1919,7 +2176,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           button.push([
             {
               text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_specialBack_${special.id}`,
+              callback_data: `booking_specialBack_${special.id}_${stadionId}`,
             },
           ]);
         } else {
@@ -1938,7 +2195,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                     [
                       {
                         text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_specialBack_${special.id}`,
+                        callback_data: `booking_specialBack_${special.id}_${stadionId}`,
                       },
                     ],
                   ],
@@ -1954,7 +2211,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].end,
-                callback_data: `booking_specialEnd_${start_time}_${allSlots[i + j].end}_${special.stadion_id}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
+                callback_data: `booking_specialEnd_${start_time}_${allSlots[i + j].end}_${stadionId}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
               });
             }
           }
@@ -1963,7 +2220,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         button.push([
           {
             text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_specialBack_${special.id}`,
+            callback_data: `booking_specialBack_${special.id}_${stadionId}`,
           },
         ]);
       }
@@ -1985,16 +2242,25 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     day: string,
     monthNumber: string,
     scheduleId: number,
+    stadionId: number,
     lang: string,
   ) {
     try {
-      const scheduleDate = await this.prisma.stadion_chedule.findUnique({
-        where: { id: scheduleId },
-      });
-      if (!scheduleDate) {
+      const [scheduleDate, stadion] = await Promise.all([
+        this.prisma.stadion_chedule.findUnique({
+          where: { id: scheduleId },
+        }),
+        this.prisma.stadion.findUnique({
+          where: { id: stadionId },
+          include: { parent: true, children: true },
+        }),
+      ]);
+
+      if (!scheduleDate || !stadion) {
         this.utils.errorFunction(ctx);
         return;
       }
+      const stadionsIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
@@ -2033,7 +2299,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
       const bookings = await this.prisma.booking.findMany({
         where: {
-          stadion_id: scheduleDate.stadion_id,
+          stadion_id: { in: stadionsIds },
           date: startOfDay,
           status: {
             in: ['CONFIRMED', 'PAID', 'PENDING'],
@@ -2053,7 +2319,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].start,
-                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}`,
+                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
                 });
               }
             }
@@ -2062,7 +2328,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           button.push([
             {
               text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_back_${scheduleDate.stadion_id}`,
+              callback_data: `booking_back_${stadionId}`,
             },
           ]);
         } else {
@@ -2081,7 +2347,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                     [
                       {
                         text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_back_${scheduleDate.stadion_id}`,
+                        callback_data: `booking_back_${stadionId}`,
                       },
                     ],
                   ],
@@ -2097,7 +2363,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].start,
-                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}`,
+                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
               });
             }
           }
@@ -2106,7 +2372,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         button.push([
           {
             text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_back_${scheduleDate.stadion_id}`,
+            callback_data: `booking_back_${stadionId}`,
           },
         ]);
       }
@@ -2130,16 +2396,24 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     scheduleId: number,
     day: number,
     monthNumber: number,
+    stadionId: number,
     lang: string,
   ) {
     try {
-      const scheduleDate = await this.prisma.stadion_chedule.findUnique({
-        where: { id: scheduleId },
-      });
-      if (!scheduleDate) {
+      const [scheduleDate, stadion] = await Promise.all([
+        this.prisma.stadion_chedule.findUnique({
+          where: { id: scheduleId },
+        }),
+        this.prisma.stadion.findUnique({
+          where: { id: stadionId },
+          include: { parent: true, children: true },
+        }),
+      ]);
+      if (!scheduleDate || !stadion) {
         this.utils.errorFunction(ctx);
         return;
       }
+      const stadionIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
@@ -2157,7 +2431,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
       const bookings = await this.prisma.booking.findMany({
         where: {
-          stadion_id: scheduleDate.stadion_id,
+          stadion_id: { in: stadionIds },
           date: startOfDay,
           status: {
             in: ['CONFIRMED', 'PAID', 'PENDING'],
@@ -2177,7 +2451,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               if (freeSlots[i + j]) {
                 row.push({
                   text: freeSlots[i + j].end,
-                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}_${years}`,
+                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}`,
                 });
               }
             }
@@ -2186,7 +2460,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           button.push([
             {
               text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
+              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
             },
           ]);
         } else {
@@ -2205,7 +2479,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                     [
                       {
                         text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
+                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
                       },
                     ],
                   ],
@@ -2221,7 +2495,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             if (allSlots[i + j]) {
               row.push({
                 text: allSlots[i + j].end,
-                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}_${scheduleDate.stadion_id}_${years}`,
+                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}`,
               });
             }
           }
@@ -2230,7 +2504,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         button.push([
           {
             text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}`,
+            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
           },
         ]);
       }
@@ -2260,9 +2534,11 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         include: {
           owner: {
             include: {
-              ownerCard: { select: { id: true } },
+              ownerCard: true,
             },
           },
+          children: true,
+          parent: true,
         },
       });
       if (!stadion) {
@@ -2324,7 +2600,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             owner_amount: total,
             provider: 'Click',
             provider_transactionId: '',
-            status: 'PENDING',
             owner_card_id: cardId,
             amount_received: 0,
           },
@@ -2337,7 +2612,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         };
         const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
 
-        const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction.id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+        const clickUrl = getPaymentUrl(total, transaction);
 
         const message = this.i18n.translate('booking.message_template', {
           lang,
@@ -2489,7 +2764,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           });
           const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
 
-          const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction.id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+          const clickUrl = getPaymentUrl(total, transaction);
           const warning = this.i18n.translate('booking.warning', { lang });
 
           const message = this.i18n.translate('booking.message_template', {
@@ -2599,6 +2874,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             warning = this.i18n.translate('booking.booking_warning.warning', {
               lang,
             });
+          } else if (noshowCount >= 2) {
+            warning = this.i18n.translate('booking.penalty', { lang });
           }
 
           const message = this.i18n.translate(
@@ -2649,38 +2926,36 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         } else {
           const shortDate = date.toISOString().split('T')[0];
 
-          await ctx.editMessageText(
+          await this.utils.safeEditOrReply(
+            ctx,
             this.i18n.translate('booking.select_payment_method', { lang }),
             {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('peyments.cash', { lang }),
-                      callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('peyments.card', { lang }),
-                      callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `booking_back_${stadionId}`,
-                    },
-                  ],
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('peyments.cash', { lang }),
+                    callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                  },
                 ],
-              },
+                [
+                  {
+                    text: this.i18n.translate('peyments.card', { lang }),
+                    callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `booking_back_${stadionId}`,
+                  },
+                ],
+              ],
             },
           );
         }
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log(error);
     }
   }
 
@@ -2756,6 +3031,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               warning = this.i18n.translate('booking.booking_warning.warning', {
                 lang,
               });
+            } else if (noshowCount >= 2) {
+              warning = this.i18n.translate('booking.penalty', { lang });
             }
 
             const message = this.i18n.translate(
@@ -2833,10 +3110,20 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               },
             });
             const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
+            let warning = '';
+
+            if (noshowCount == 1) {
+              warning = this.i18n.translate('booking.booking_warning.warning', {
+                lang,
+              });
+            } else if (noshowCount >= 2) {
+              warning = this.i18n.translate('booking.penalty', { lang });
+            }
 
             const message = this.i18n.translate('booking.booking_details', {
               lang,
               args: {
+                warning: warning,
                 date: dayss,
                 start_time,
                 end_time,
@@ -2846,7 +3133,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               },
             });
 
-            const clickUrl = `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${total}&transaction_id=${transaction.id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
+            const clickUrl = getPaymentUrl(total, transaction);
 
             await ctx.editMessageText(message, {
               parse_mode: 'Markdown',
@@ -2889,6 +3176,94 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           await this.utils.errorFunction(ctx);
         }
       }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async searchWorkingStadions(
+    ctx: MyContext,
+    date: string,
+    start_time: string,
+    end_time: string,
+    lang: string,
+    page: number = 1,
+  ) {
+    try {
+      const limit = 4;
+      const [stadion, total] = await Promise.all([
+        this.prisma.stadion.findMany({
+          where: {
+            bookings: {
+              none: {
+                date: new Date(date),
+                start_time: start_time,
+                end_time: end_time,
+              },
+            },
+          },
+          skip: (page - 1) * limit,
+          take: limit,
+          include: {
+            region: true,
+            region_items: true,
+          },
+        }),
+        this.prisma.stadion.count({
+          where: {
+            bookings: {
+              none: {
+                date: new Date(date),
+                start_time: start_time,
+                end_time: end_time,
+              },
+            },
+          },
+        }),
+      ]);
+      if (!stadion.length) {
+        try {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            { show_alert: true },
+          );
+        } catch (error) {}
+        return;
+      }
+      try {
+        await ctx.answerCbQuery();
+        await ctx.deleteMessage();
+        if (ctx.session.stadionMessages?.length) {
+          await ctx.deleteMessages(ctx.session.stadionMessages);
+        }
+      } catch (error) {}
+      for (let s of stadion) {
+        await this.stadionAll_data(ctx, lang, s, '', true);
+      }
+      const totalPages = Math.ceil(total / limit);
+      if (totalPages == 1) {
+        return;
+      }
+      const paginationButtons: InlineKeyboardButton[] = [];
+      if (page > 1) {
+        paginationButtons.push({
+          text: this.i18n.translate('stadions.Previous', { lang }),
+          callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page - 1}`,
+        });
+      }
+      paginationButtons.push({
+        text: `${page} / ${totalPages}`,
+        callback_data: 'ignore',
+      });
+      if (page < totalPages) {
+        paginationButtons.push({
+          text: this.i18n.translate('stadions.Next', { lang }),
+          callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page + 1}`,
+        });
+      }
+      ctx.reply(this.i18n.translate('booking.Select', { lang }), {
+        reply_markup: { inline_keyboard: [paginationButtons] },
+      });
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

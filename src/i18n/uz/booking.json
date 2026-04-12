@@ -50,7 +50,7 @@
 
   "select_payment_method": "💳 To'lov turini tanlayng",
 
-  "booking_details": "🏟 *Stadion bron qilish*\n\n📅 Sana: *{date}*\n⏰ Vaqt: *{start_time} - {end_time}*\n\n🕒 Davomiyligi: *{hours} soat*\n━━━━━━━━━━━━━━\n💰 *Umumiy to‘lov:* {total} so'm\n💵 To‘lov turi: *{payment_method}*",
+  "booking_details": "🏟 *Stadion bron qilish*\n\n{warning}\n📅 Sana: *{date}*\n⏰ Vaqt: *{start_time} - {end_time}*\n\n🕒 Davomiyligi: *{hours} soat*\n━━━━━━━━━━━━━━\n💰 *Umumiy to‘lov:* {total} so'm\n💵 To‘lov turi: *{payment_method}*",
 
   "payment_options": {
     "prepay": "💳 Oldindan to'lash",
@@ -92,7 +92,11 @@
     "cheap": "💸 Arzon stadionlar",
 
     "enter_name": "🏟 Stadion nomini kiriting...",
-    "format":"❌ Noto‘g‘ri format. Faqat harf va raqam kiriting",
+    "format": "❌ Noto‘g‘ri format. Faqat harf va raqam kiriting",
     "notFount_name": "Kechirasiz, bunday nomdagi stadion topilmadi"
-  }
+  },
+
+  "game_started": "⚽ O‘yin boshlangan",
+  "working_time": "📅 O'zingizga qulay vaqtni tanlang:",
+  "not_available_stadiums": "❌ Bu sanada bo'sh stadionlar topilmadi"
 }

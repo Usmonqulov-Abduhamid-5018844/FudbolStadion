@@ -49,7 +49,7 @@
 
   "select_payment_method": "💳 Select payment method",
 
-  "booking_details": "🏟 *Stadium Booking*\n\n📅 Date: *{date}*\n⏰ Time: *{start_time} - {end_time}*\n\n🕒 Duration: *{hours} hours*\n━━━━━━━━━━━━━━\n💰 *Total payment:* {total} UZS\n💵 Payment method: *{payment_method}*",
+  "booking_details": "🏟 *Stadium Booking*\n\n{warning}\n📅 Date: *{date}*\n⏰ Time: *{start_time} - {end_time}*\n\n🕒 Duration: *{hours} hours*\n━━━━━━━━━━━━━━\n💰 *Total payment:* {total} UZS\n💵 Payment method: *{payment_method}*",
 
   "payment_options": {
     "prepay": "💳 Pay in advance",
@@ -89,6 +89,12 @@
 
     "enter_name": "🏟 Enter the stadium name...",
     "format": "❌ Invalid format. Only letters and numbers are allowed",
-    "notFount_name":"Sorry, no stadium found with that name"
-  }
+    "notFount_name": "Sorry, no stadium found with that name"
+  },
+
+  "game_started": "⚽ The game has started",
+  "working_time": "📅 Choose a time that suits you:",
+
+  "not_available_stadiums": "❌ No available stadiums found for this date"
+
 }
