@@ -15,7 +15,7 @@ import { Decimal } from '@prisma/client/runtime/library';
 import { QrService } from 'src/qr/qr.service';
 import { getLocation, getPaymentUrl } from 'src/helpers/url';
 import { getStadionIds } from 'src/helpers/stadions';
-import { text } from 'stream/consumers';
+import { statusMap } from 'src/helpers/bookingStatus';
 @Injectable()
 export class UsersService {
   constructor(
@@ -245,6 +245,16 @@ export class UsersService {
           }
           return await this.userSwitch(ctx, 'stadionSearch', lang);
         }
+        case 'help': {
+          try {
+            await this.utils.safeEditHelpMenuReply_User(
+              ctx,
+              this.i18n.translate('user_help.menu.title', { lang }),
+            );
+          } catch (error) {
+            await this.utils.errorFunction(ctx);
+          }
+        }
         default: {
           break;
         }
@@ -432,20 +442,6 @@ export class UsersService {
                   this.i18n.translate('loading.loading', { lang }),
                 );
               } catch (error) {}
-              const statusMap = {
-                CONFIRMED: this.i18n.translate(
-                  'bookingHestory.booking_status.confirmed',
-                  { lang },
-                ),
-                PAID: this.i18n.translate(
-                  'bookingHestory.booking_status.paid',
-                  { lang },
-                ),
-                PENDING: this.i18n.translate(
-                  'bookingHestory.booking_status.pending',
-                  { lang },
-                ),
-              };
 
               const Time = (
                 data: Date,
@@ -500,18 +496,19 @@ ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(
 
 ${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
+${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap(item.status,this.i18n, lang)}
 
 ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
 `;
 
-                const buttons = this.utils.booking_status_hedler(
+                const buttons = this.utils.booking_status_handler(
                   item.status,
                   item.id,
                   item.payment_method,
                   item.stadion.payments_type,
                   item.date,
                   item.start_time,
+                  item.end_time,
                   Number(item.total_price),
                   item.tranzaktions?.id,
                   page,
@@ -581,11 +578,6 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
           break;
         case 'stadionBronHistory':
           {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
             try {
               const user = await this.prisma.users.findUnique({
                 where: { chatID: String(ctx.from?.id) },
@@ -657,33 +649,12 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                 );
                 return;
               }
+               try {
+                await ctx.answerCbQuery(
+                  this.i18n.translate('loading.loading', { lang }),
+                );
+              } catch (error) {}
               let message = `${this.i18n.translate('bookingHestory.booking.history_title', { lang })}\n\n`;
-              const statusMap = {
-                COMPLETED: this.i18n.translate(
-                  'bookingHestory.booking_status.completed',
-                  {
-                    lang,
-                  },
-                ),
-                NO_SHOW: this.i18n.translate(
-                  'bookingHestory.booking_status.no_show',
-                  {
-                    lang,
-                  },
-                ),
-                CANCELED: this.i18n.translate(
-                  'bookingHestory.booking_status.canceled',
-                  {
-                    lang,
-                  },
-                ),
-                REFUNDED: this.i18n.translate(
-                  'bookingHestory.booking_status.refunded',
-                  {
-                    lang,
-                  },
-                ),
-              };
 
               const formatPrice = (price?: number | string | Decimal) => {
                 if (!price) return '❌';
@@ -709,7 +680,7 @@ ${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(
 
 ${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap[item.status]}
+${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
 
 ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
 
@@ -760,11 +731,6 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
           break;
         case 'stadionFavorite':
           {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
             const limit = 4;
             const [favorites, total] = await Promise.all([
               this.prisma.myFavoriteStadium.findMany({
@@ -804,6 +770,11 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
               );
               return;
             }
+             try {
+                await ctx.answerCbQuery(
+                  this.i18n.translate('loading.loading', { lang }),
+                );
+              } catch (error) {}
             for (const favorite of favorites) {
               await this.stadionFavorite(ctx, lang, favorite.stadion);
             }
@@ -1120,45 +1091,6 @@ ${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationT
           break;
         }
       }
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
-  }
-  async userHelp(ctx: MyContext, lang: string) {
-    ctx.reply('Help');
-    try {
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('help.help.title', { lang }),
-        {
-          inline_keyboard: [
-            [
-              {
-                text: this.i18n.translate('help.booking', { lang }),
-                callback_data: 'user_help_booking',
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate('help.stadion', { lang }),
-                callback_data: 'user_help_stadion',
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate('help.profile', { lang }),
-                callback_data: 'user_help_profile',
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'back_user_1',
-              },
-            ],
-          ],
-        },
-      );
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

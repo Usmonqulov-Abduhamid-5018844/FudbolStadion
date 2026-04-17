@@ -797,6 +797,7 @@ export class BotService {
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
+${stadion.admin_checked ? "✅ Admin tomonidan tasqiqlangan" : "🔺Admin tomonidan tasqiqlanmagan"}
 ${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}

@@ -16,6 +16,7 @@ export interface ISession {
   stadionFavoritMessages?: number[];
   bookingBrones?: number[];
   booking_step: string | null;
+  ownerActiveBooking?: number[];
 }
 export interface Stadion {
   step: number;

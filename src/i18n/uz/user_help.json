@@ -1,0 +1,22 @@
+{
+  "menu": {
+    "title": "🆘 Yordam bo‘limi",
+    "booking": "📅 Stadion bron qilish",
+    "my_bookings": "📖 Mening bronlarim",
+    "how_booking": "❓ Qanday bron qilinadi",
+    "payment_penalty": "💳 To‘lov va jarimalar",
+    "cancel": "⏰ Bekor qilish",
+    "contact": "📞 Bog‘lanish"
+  },
+  
+  "booking": "📅 Stadion bron qilish:\nBu bo‘lim orqali siz o‘zingizga eng qulay stadionni tanlab, istalgan sana va vaqtga tez va oson bron qilishingiz mumkin.\n\n⚡ Tizim real vaqt rejimida ishlaydi — bo‘sh vaqtlar darhol yangilanadi.\n📍 Mini va katta stadionlar bir-biriga bog‘langan bo‘lishi mumkin.\n\n👉 Bosqichlar:\n1. Stadionni tanlang\n2. Sanani belgilang\n3. Bo‘sh vaqtni tanlang\n4. Tasdiqlang",
+  "my_bookings": "📖 Mening bronlarim:\nBu bo‘limda sizning barcha bronlaringiz ko‘rsatiladi — faol, yakunlangan va bekor qilingan bronlar.\n\n📊 Har bir bron holatini kuzatishingiz mumkin:\n- Tasdiqlangan\n- Kutilmoqda\n- Bekor qilingan\n\n⏱ Siz istalgan vaqtda bron tarixini tekshirishingiz mumkin.",
+  "how_booking":  "❓ Qanday bron qilinadi:\nStadion bron qilish juda oson va tez jarayon ⚡\n\n👉 Qadamlar:\n1. Kerakli stadionni tanlang\n2. Sanani belgilang\n3. Bo‘sh vaqtlarni ko‘ring\n4. Sizga mos vaqtni tanlang\n5. To‘lov turini tanlab tasdiqlang\n\n⏱ O‘rtacha vaqt: 1–2 daqiqa",
+  "payment_penalty": "💳 To‘lov va jarimalar:\nBizning tizimda to‘lov xavfsiz va qulay usulda amalga oshiriladi.\n\n💰 To‘lov turlari:\n- Karta orqali to‘lov\n- Naqd to‘lov\n\n⚠️ No-show (kelmaslik) holati:\n- 1-marta: ogohlantirish\n- 2-marta va undan ko‘p: jarima yoki karta majburiy to‘lov\n\n📌 Maqsad — stadionlardan adolatli foydalanish",
+  "cancel":  "⏰ Bekor qilish:\nSiz broningizni istalgan vaqtda bekor qilishingiz mumkin, lekin vaqtga e’tibor bering.\n\n⚠️ Qoidalar:\n- Erta bekor qilish tavsiya etiladi\n- Kech bekor qilish jarimaga sabab bo‘lishi mumkin\n\n📌 Tizim boshqalarning ham imkoniyatini saqlaydi",
+  "contact": "📞 Bog‘lanish:\nAgar sizda savol yoki muammo bo‘lsa, biz bilan bog‘laning.\n\n👨‍💻 Admin sizga tezkor yordam beradi.\n📩 Javoblar odatda qisqa vaqt ichida beriladi.\n\n🤝 Biz sizga har doim yordam berishga tayyormiz!\n\n💬 Admin username: @Abduhamid_1852\n\n📌 Odatda tez orada javob beriladi."
+
+
+
+}
+

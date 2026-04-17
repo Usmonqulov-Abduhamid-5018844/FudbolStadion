@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { Payments } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
+import { toZonedTime, format } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
+import { statusMap } from 'src/helpers/bookingStatus';
 import { MyContext } from 'src/helpers/bot.sesion';
+import { IBooking } from 'src/helpers/interface';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getPaymentText } from 'src/helpers/peyments_type';
+import { getPaymentUrl } from 'src/helpers/url';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
@@ -360,6 +364,13 @@ export class OwnersService {
   }
   async handleStadionSteps(ctx: MyContext, lang: string, text: string) {
     if (ctx.session.stadion.name === 'N') {
+      const isValidName = /^[a-zA-Zа-яА-ЯёЁ0-9\s'’-]+$/.test(text);
+      if (!isValidName) {
+        await ctx.reply(
+          this.i18n.translate('booking.stadions.format', { lang }),
+        );
+        return;
+      }
       ctx.session.stadion.name = text;
       ctx.session.stadion.step = 3;
 
@@ -878,6 +889,7 @@ export class OwnersService {
               }
               const stadion = await this.prisma.stadion.findMany({
                 where: { owner_id: owner.id, stadion_mini: false },
+                orderBy: { updatedAt: 'desc' },
               });
               if (!stadion.length) {
                 await ctx.reply(
@@ -911,7 +923,13 @@ export class OwnersService {
 
               stadion.forEach((s) => {
                 button.push([
-                  { text: `🏟 ${s.name}`, callback_data: `stadion_${s.id}` },
+                  {
+                    text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
+                    callback_data: JSON.stringify({
+                      type: 'stadion',
+                      id: s.id,
+                    }),
+                  },
                 ]);
               });
 
@@ -936,7 +954,7 @@ export class OwnersService {
                 },
               );
             } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
+              await this.utils.errorFunction(ctx);
             }
           }
           break;
@@ -970,7 +988,7 @@ export class OwnersService {
                 },
               );
             } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
+              await this.utils.errorFunction(ctx);
             }
           }
           break;
@@ -996,12 +1014,12 @@ export class OwnersService {
         case 'help':
           {
             try {
-              await this.utils.safeEditHelpMenyuReply(
+              await this.utils.safeEditHelpMenuReply(
                 ctx,
                 this.i18n.translate('help.help.title', { lang }),
               );
             } catch (error) {
-              ctx.reply(this.i18n.translate('error.error', { lang }));
+              await this.utils.errorFunction(ctx);
             }
           }
           break;
@@ -1024,12 +1042,20 @@ export class OwnersService {
         case '6': {
           return this.registor(ctx, lang);
         }
+        case '7': {
+          try {
+            if (ctx.session.ownerActiveBooking?.length) {
+              await ctx.deleteMessages(ctx.session.ownerActiveBooking);
+              ctx.session.ownerActiveBooking = [];
+            }
+          } catch (error) {}
+        }
         default: {
           break;
         }
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
     }
   }
   async stadionSplit(
@@ -1069,6 +1095,8 @@ export class OwnersService {
             working_status: true,
             latitude: parent.latitude,
             longitude: parent.longitude,
+            admin_checked: parent.admin_checked,
+            mini: parent.mini,
           },
         });
       }
@@ -1302,15 +1330,34 @@ export class OwnersService {
       ];
 
       if (!stadion.stadion_mini && !stadion.mini) {
+        keyboard.push(
+          [
+            {
+              text: this.i18n.translate('stadions.mini_stadium.my_stadiums', {
+                lang,
+              }),
+              callback_data: JSON.stringify({
+                type: 'miniStadionlar',
+                id: stadion.id,
+              }),
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('stadions.change_working_status', {
+                lang,
+              }),
+              callback_data: `stadion_type_workingStatus-${stadion.id}`,
+            },
+          ],
+        );
+      } else if (!stadion.stadion_mini) {
         keyboard.push([
           {
-            text: this.i18n.translate('stadions.mini_stadium.my_stadiums', {
+            text: this.i18n.translate('stadions.change_working_status', {
               lang,
             }),
-            callback_data: JSON.stringify({
-              type: 'miniStadionlar',
-              id: stadion.id,
-            }),
+            callback_data: `stadion_type_workingStatus-${stadion.id}`,
           },
         ]);
       }
@@ -1352,7 +1399,6 @@ export class OwnersService {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log(error);
     }
   }
   async stadionPayments(ctx: MyContext, stadionId: number, lang: string) {
@@ -1408,9 +1454,313 @@ export class OwnersService {
 
   async owner_Bron(ctx: MyContext, lang: string) {
     try {
-      ctx.reply('Tez kunlarda...');
+      const ownerData = await this.prisma.owners.findUnique({
+        where: { chatID: String(ctx.from?.id) },
+        include: {
+          ownerCard: {
+            select: {
+              id: true,
+            },
+          },
+          stadions: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+      if (!ownerData) {
+        return await this.utils.errorFunction(ctx);
+      }
+      if (!ownerData.stadions.length) {
+        await ctx.reply(
+          this.i18n.translate('owner_booking.no_stadion', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_owner_1',
+                  },
+                ],
+              ],
+            },
+          },
+        );
+        return;
+      }
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('owner_booking.booking_menu.title', { lang }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.active',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_active_${ownerData.id}_1`,
+              },
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.pending',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_pending_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.today',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_today_${ownerData.id}_1`,
+              },
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.tomorrow',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_tomorrow_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.upcoming',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_upcoming_${ownerData.id}_1`,
+              },
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.now',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_now_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.all',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_all_${ownerData.id}_1`,
+              },
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.cancelled',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_cancelled_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.by_stadion',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_by_stadion_${ownerData.id}_1`,
+              },
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.search',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_search_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate(
+                  'owner_booking.booking_menu.buttons.stats',
+                  { lang },
+                ),
+                callback_data: `ownerBooking_stats_${ownerData.id}_1`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: `back_owner_1`,
+              },
+            ],
+          ],
+        },
+      );
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async ownerBooking_select(
+    ctx: MyContext,
+    booking: IBooking,
+    page: number,
+    lang: string,
+  ) {
+    try {
+      const button = this.utils.ownerBooking(booking, page, lang);
+      const send = await ctx.reply(
+        this.i18n.translate('owner_booking.details', {
+          lang,
+          args: {
+            id: booking.id,
+            date: format(new Date(booking.date), 'dd.MM.yyyy'),
+            time: `${booking.start_time} - ${booking.end_time}`,
+            stadium: booking.stadion.name,
+            region: booking.stadion.region.name,
+            user: booking.user.full_name,
+            status: statusMap(booking.status, this.i18n, lang),
+            check_in: booking.check_in
+              ? this.i18n.translate('owner_booking.check_in', { lang })
+              : this.i18n.translate('owner_booking.not_check_in', { lang }),
+          },
+        }),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: button,
+          },
+        },
+      );
+      if (!ctx.session.ownerActiveBooking?.length) {
+        ctx.session.ownerActiveBooking = [];
+      }
+      ctx.session.ownerActiveBooking.push(send.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  async ownerBooking_today(
+    ctx: MyContext,
+    booking: IBooking,
+    page: number,
+    lang: string,
+  ) {
+    try {
+      const button = this.utils.ownerBooking_today(booking, page, lang);
+      const send = await ctx.reply(
+        this.i18n.translate('owner_booking.details', {
+          lang,
+          args: {
+            id: booking.id,
+            date: format(new Date(booking.date), 'dd.MM.yyyy'),
+            time: `${booking.start_time} - ${booking.end_time}`,
+            stadium: booking.stadion.name,
+            region: booking.stadion.region.name,
+            user: booking.user.full_name,
+            status: statusMap(booking.status, this.i18n, lang),
+          },
+        }),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: button,
+          },
+        },
+      );
+      if (!ctx.session.ownerActiveBooking?.length) {
+        ctx.session.ownerActiveBooking = [];
+      }
+      ctx.session.ownerActiveBooking.push(send.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  async bookingDetails(
+    ctx: MyContext,
+    bookingId: number,
+    page: number = 1,
+    lang: string,
+    type?: string | null,
+  ) {
+    try {
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          stadion: {
+            include: {
+              region: true,
+              region_items: true,
+              owner: true,
+            },
+          },
+          user: true,
+        },
+      });
+      if (!booking) {
+        return await this.utils.errorFunction(ctx);
+      }
+      const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
+        booking.date,
+        booking.start_time,
+        lang,
+      );
+      if (ctx.session.ownerActiveBooking) {
+        try {
+          await ctx.deleteMessages(ctx.session.ownerActiveBooking);
+        } catch (error) {}
+        ctx.session.ownerActiveBooking = [];
+      }
+
+      const message = this.i18n.translate('owner_booking.full_details', {
+        lang,
+        args: {
+          id: booking.id,
+          stadium: booking.stadion.name,
+          region: `${booking.stadion.region.name} / ${booking.stadion.region_items.name}`,
+          date: format(new Date(booking.date), 'dd.MM.yyyy'),
+          time: `${booking.start_time} - ${booking.end_time}`,
+          time_left:
+            totalMinutes > 0
+              ? timeLeftText
+              : this.i18n.translate('owner_booking.time_finished', { lang }),
+          user: booking.user.full_name,
+          phone: booking.user.phone,
+          username: booking.user.username ? `🔗 @${booking.user.username}` : '',
+          price: Number(booking.total_price),
+          payment: getPaymentText(
+            booking.payment_method,
+            this.i18n.translate('peyments', { lang }),
+          ),
+          status: statusMap(booking.status, this.i18n, lang),
+          created_at: format(new Date(booking.createdAt), 'dd.MM.yyyy HH:mm'),
+          check_in: booking.check_in
+            ? this.i18n.translate('owner_booking.check_in', { lang })
+            : this.i18n.translate('owner_booking.not_check_in', { lang }),
+        },
+      });
+
+      const callbackData =
+        type
+          ? `ownerBooking_${type}_${booking.stadion.owner_id}_${page}`
+          : `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner_id}_${page}`;
+
+      const send = await ctx.reply(message, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: callbackData,
+              },
+            ],
+          ],
+        },
+      });
+      if (!ctx.session.ownerActiveBooking?.length) {
+        ctx.session.ownerActiveBooking = [];
+      }
+      ctx.session.ownerActiveBooking?.push(send.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
 
@@ -1420,19 +1770,19 @@ export class OwnersService {
         where: { chatID: String(ctx.from?.id) },
       });
       if (!owner) {
-        throw new Error('Owner not found');
+        return await this.utils.errorFunction(ctx);
       }
-      const owner_cards = await this.prisma.owner_card.findFirst({
+      const owner_cards = await this.prisma.owner_card.findUnique({
         where: { owner_id: owner.id },
       });
       if (!owner_cards) {
-        await ctx.reply(this.i18n.translate('peyments.not_fount', { lang }), {
+        await ctx.reply(this.i18n.translate('peyments.not_found', { lang }), {
           reply_markup: {
             inline_keyboard: [
               [
                 {
                   text: this.i18n.translate('peyments.cards', { lang }),
-                  url: 'https://docs.click.uz/en/click-api/',
+                  url: getPaymentUrl(0, { id: 2 }),
                 },
               ],
               [
@@ -1459,7 +1809,7 @@ export class OwnersService {
         },
       });
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx);
     }
   }
 }

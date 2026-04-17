@@ -3,5 +3,10 @@
   "cash": "💵 Naqt",
   "both": "💳💵 Ikkalasi",
   "cards": "➕ Yangi karta qo'shish",
-  "not_fount": "⚠️ Karta ma’lumotlaringiz topilmadi"
+  "not_found": "⚠️ Karta ma’lumotlaringiz topilmadi",
+
+
+  "change_card_block": "💳 Ushbu stadion uchun karta ulangan emas.\n\n👤 Stadion egasi karta qo‘shmaguncha CARD rejimi ishlamaydi.\n\n➡️ Iltimos, boshqa to‘lov usulidan foydalaning."
+
+
 }

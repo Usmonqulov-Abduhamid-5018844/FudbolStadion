@@ -1,0 +1,51 @@
+{
+  "no_stadion": "⚠️ Sizda hali stadion mavjud emas.\n\n🏟 Stadion qo‘shib, bronlarni boshqarishni boshlashingiz mumkin.",
+
+  "booking_menu": {
+    "title": "📊 Stadion bronlarini boshqarish paneli",
+    "buttons": {
+      "active": "🟢 Aktiv",
+      "pending": "🟡 Kutilmoqda",
+      "today": "📅 Bugun",
+      "tomorrow": "📆 Ertaga",
+      "upcoming": "⏱ Yaqin bronlar",
+      "now": "⚡ Hozirgi bronlar",
+      "all": "📖 Barchasi",
+      "cancelled": "🔴 Bekor qilingan",
+      "by_stadion": "🏟 Stadion bo‘yicha",
+      "search": "🔍 Qidirish",
+      "stats": "📊 Statistikalar"
+    }
+  },
+
+  "check_in": "✅ <b>Mijoz kelgan</b>",
+  "not_check_in": "⏳ <b>Mijoz hali kelmagan</b>",
+
+  "buttons": {
+    "detail": "📄 Batafsil",
+    "check_in": "✅ Kelganini tasdiqlash",
+    "cancel": "🛑 Bekor qilish",
+
+    "confirm_cancel": "🛑 Ha, bekor qilish"
+  },
+
+  "no_active": "📭 Aktiv bronlar topilmadi.\n\n💡 Yangi bronlar paydo bo‘lganda shu yerda ko‘rasiz.",
+  "no_pending": "📭 Kutilayotgan bronlar yo‘q.\n\n💡 Yangi so‘rovlar shu yerda chiqadi.",
+  "no_today": "📭 Bugungi bronlar topilmadi.\n\n💡 Hozircha hech qanday bron yo‘q.",
+  "no_tomorrow": "📭 Ertangi kun uchun bronlar topilmadi.\n\n💡 Hozircha hech qanday bron yo‘q.",
+
+  "booking": {
+    "confirm_check_in": "❗️Haqiqatan ham mijoz stadionga kelganini tasdiqlaysizmi?\n\n⚠️ Bu amalni bekor qilib bo‘lmaydi.",
+    "confirm_yes": "✅ Ha, tasdiqlash",
+    "confirm_success": "✅ Muvaffaqiyatli tasdiqlandi.",
+
+    "confirm_cancel": "❗️Haqiqatan ham bronni bekor qilmoqchimisiz?\n\n⚠️ Bu amalni bekor qilib bo‘lmaydi.",
+    "cancel_success": "✅ Bron muvaffaqiyatli bekor qilindi."
+  },
+
+  "details": "📌 <b>Bron ma’lumotlari</b>\n\n🆔 <b>ID:</b> {id}\n\n📅 <b>Sana:</b> {date}\n\n⏰ <b>Vaqt:</b> {time}\n\n🏟 <b>Stadion:</b> {stadium}\n\n📍 <b>Hudud:</b> {region}\n\n👤 <b>Mijoz:</b> {user}\n\n📌 <b>Status:</b> {status}\n\n{check_in}",
+
+  "full_details": "<b>📄 Bron haqida ma’lumot</b>\n\n🆔 <b>ID:</b> {id}\n\n🏟 <b>Stadion:</b> {stadium}\n\n📍 <b>Hudud:</b> {region}\n\n📅 <b>Sana:</b> {date}\n\n🕒 <b>Vaqt:</b> {time}\n\n⏱ <b>Holat:</b> {time_left}\n\n👤 <b>Mijoz:</b> {user}\n\n📞 <b>Telefon:</b> {phone}\n\n{username}\n\n💰 <b>Narx:</b> {price} so‘m\n\n💳 <b>To‘lov:</b> {payment}\n\n📌 <b>Status:</b> {status}\n\n🕓 <b>Yaratilgan:</b> {created_at}\n\n{check_in}",
+
+  "time_finished": "Boshlangan yoki tugagan"
+}

@@ -56,7 +56,17 @@
   },
 
   "payments": {
-    "alert": "⚠️ The selected payment method is the same as the current one.\nPlease choose a different option."
+    "alert": "⚠️ The selected payment method is the same as the current one.\nPlease choose a different method.",
+
+    "ownerCard": "💳 To enable online payments, please add your bank card first!\n⚠️ This mode is not available without card details.",
+
+    "cardToCash": "🚫 This stadium has active bookings with online payments!\n💳 Switching to cash payments is not allowed.",
+
+    "cashToCard": "⚠️ Unable to change payment method!\n\n📌 Reason: there are active bookings.\n💡 Please complete or cancel all bookings first, then try again.\n\n🔒 Changes are temporarily restricted.",
+
+    "hybridToCash": "⚠️ Cannot switch from mixed payment mode to cash!\n💳 There are bookings created with online payment.",
+
+    "hybridToCard": "⚠️ Switching to full online payment is temporarily restricted!\n📌 Cannot change due to active bookings."
   },
 
   "max_players": "Maximum number of players in your stadium: {count}",
@@ -83,10 +93,26 @@
 
   "current_payment_type": "💳 Your current payment method: {payment}",
 
+  "stadion_type": {
+    "title": "🏟️ Select the stadium type:\n\n📌 Large stadium — can be divided into multiple smaller fields later.\n📌 Small stadium — works as an independent mini field and cannot be divided later.\n\n➡️ Please choose the option that suits you:",
+    "big": "🏟️ Large stadium",
+    "small": "🎯 Small stadium"
+  },
+
   "type_label": "🏷️ Stadium type:",
   "type": {
     "mini": "🏟️ Mini stadium 🟢",
     "big": "🏟️ Big stadium 🔵",
     "big_child": "🏟️ Big stadium's mini stadiums 🟡"
-  }
+  },
+
+  "change_working_status": "⚙️ Change working status",
+
+  "workingStatus": {
+    "alert": "⚠️ Cannot change working status!\nThere are active bookings right now 📅\n\nPlease complete or cancel them first.",
+    "on": "✅ Stadium is now active",
+    "off": "⛔ Stadium is now inactive",
+    "ownerCard": "⚠️ This stadium only supports card payments.\n\nYou must add a payment card before activating the stadium."
+  },
+  "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first."
 }

@@ -5,7 +5,14 @@ import { format, toZonedTime } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
-import { backKeyboard, helpMenuKeyboard } from 'src/helpers/Inline_keybort';
+import {
+  back_owner_Keyboard,
+  back_user_Keyboard,
+  helpMenuKeyboard_Owner,
+  helpMenuKeyboard_Users,
+} from 'src/helpers/Inline_keybort';
+import { IBooking } from 'src/helpers/interface';
+import { getPaymentUrl } from 'src/helpers/url';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
@@ -51,9 +58,7 @@ export class UtilisService implements OnModuleInit {
         return String(ctx.from?.language_code);
       }
     } catch (error) {
-      ctx.reply(
-        `${this.i18n.translate('error.error', { lang: ctx.session.lang || ctx.from?.language_code })}`,
-      );
+      await this.errorFunction(ctx);
       return String(ctx.from?.language_code);
     }
   }
@@ -72,24 +77,49 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditHelpReply(ctx: MyContext, text: string) {
-    const lang = await this.langs(ctx);
-    try {
-      await ctx.editMessageText(text, backKeyboard(this.i18n, String(lang)));
-    } catch (e) {
-      await ctx.reply(text, backKeyboard(this.i18n, String(lang)));
-    }
-  }
-
-  async safeEditHelpMenyuReply(ctx: MyContext, text: string) {
+  async safeEditHelpReplyOwner(ctx: MyContext, text: string) {
     const lang = await this.langs(ctx);
     try {
       await ctx.editMessageText(
         text,
-        helpMenuKeyboard(this.i18n, String(lang)),
+        back_owner_Keyboard(this.i18n, String(lang)),
       );
     } catch (e) {
-      await ctx.reply(text, helpMenuKeyboard(this.i18n, String(lang)));
+      await ctx.reply(text, back_owner_Keyboard(this.i18n, String(lang)));
+    }
+  }
+  async safeEditHelpReplyUser(ctx: MyContext, text: string) {
+    const lang = await this.langs(ctx);
+    try {
+      await ctx.editMessageText(
+        text,
+        back_user_Keyboard(this.i18n, String(lang)),
+      );
+    } catch (e) {
+      await ctx.reply(text, back_user_Keyboard(this.i18n, String(lang)));
+    }
+  }
+
+  async safeEditHelpMenuReply(ctx: MyContext, text: string) {
+    const lang = await this.langs(ctx);
+    try {
+      await ctx.editMessageText(
+        text,
+        helpMenuKeyboard_Owner(this.i18n, String(lang)),
+      );
+    } catch (e) {
+      await ctx.reply(text, helpMenuKeyboard_Owner(this.i18n, String(lang)));
+    }
+  }
+  async safeEditHelpMenuReply_User(ctx: MyContext, text: string) {
+    const lang = await this.langs(ctx);
+    try {
+      await ctx.editMessageText(
+        text,
+        helpMenuKeyboard_Users(this.i18n, String(lang)),
+      );
+    } catch (e) {
+      await ctx.reply(text, helpMenuKeyboard_Users(this.i18n, String(lang)));
     }
   }
 
@@ -252,13 +282,14 @@ export class UtilisService implements OnModuleInit {
     return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 
-  booking_status_hedler(
+  booking_status_handler(
     status: Booking_status,
     id: number,
     booking_peyments: Pay_method,
     stadion_peyments: Payments,
     data: Date,
     start_time: string,
+    end_time: string,
     price: number,
     transaction_id: number | undefined,
     page: number,
@@ -269,6 +300,17 @@ export class UtilisService implements OnModuleInit {
   ) {
     const buttons: InlineKeyboardButton[][] = [];
     const isSinglePage = page === 1 && Math.ceil(total / limit) === 1;
+
+    const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
+      data,
+      start_time,
+      lang,
+    );
+    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
+      data,
+      end_time,
+      lang,
+    );
 
     const backBtn = {
       text: this.i18n.translate('schedule.back', { lang }),
@@ -295,44 +337,29 @@ export class UtilisService implements OnModuleInit {
       callback_data: `booking_confirm_QR_${id}`,
     };
 
-    const getClickUrl = () =>
-      `https://my.click.uz/pay?merchant_id=${process.env.CLICK_MERCHANT_ID}&amount=${price}&transaction_id=${transaction_id}&callback_url=${encodeURIComponent('https://your-server.com/click-webhook')}`;
-
-    const getPayBtn = () => ({
-      text: this.i18n.translate('booking.pay_by_card', { lang }),
-      url: getClickUrl(),
-    });
+    const payBtn = transaction_id
+      ? {
+          text: this.i18n.translate('booking.pay_by_card', { lang }),
+          url: getPaymentUrl(price, { id: Number(transaction_id) }),
+        }
+      : null;
 
     if (status === 'PENDING') {
-      if (booking_peyments === 'CASH' && stadion_peyments === 'CASH') {
+      if (booking_peyments === 'CASH') {
+        if (stadion_peyments === 'GIBRID') {
+          buttons.push([changePaymentBtn]);
+        }
         buttons.push([confirmBtn, cancelBtn]);
       }
 
-      if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
-        buttons.push([changePaymentBtn]);
-        buttons.push([confirmBtn, cancelBtn]);
+      if (booking_peyments === 'CARD' && payBtn) {
+        buttons.push([payBtn, cancelBtn]);
       }
-
-      if (booking_peyments === 'CARD') {
-        if (!transaction_id) return buttons;
-        buttons.push([getPayBtn(), cancelBtn]);
-      }
-
-      if (isSinglePage) buttons.push([backBtn]);
-      return buttons;
     }
 
-    if (status === 'CONFIRMED') {
-      const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
-        data,
-        start_time,
-        lang,
-      );
-
+    if (['CONFIRMED', 'PAID'].includes(status)) {
       if (check_in) {
-        if (isSinglePage) {
-          buttons.push([backBtn]);
-        }
+        if (isSinglePage) buttons.push([backBtn]);
         return buttons;
       }
 
@@ -341,68 +368,162 @@ export class UtilisService implements OnModuleInit {
           buttons.push([changePaymentBtn]);
         }
 
-        if (booking_peyments === 'CARD') {
-          if (!transaction_id) return buttons;
-          buttons.push([getPayBtn()]);
+        if (status !== 'PAID' && booking_peyments === 'CARD' && payBtn) {
+          buttons.push([payBtn]);
         }
 
-        buttons.push(isSinglePage ? [cancelBtn, backBtn] : [cancelBtn]);
-      } else if (totalMinutes > 0) {
-        if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
-          buttons.push([changePaymentBtn]);
-        }
-        if (booking_peyments === 'CARD') {
-          if (!transaction_id) return buttons;
-          buttons.push([getPayBtn()]);
-        }
-
-        buttons.push([
-          {
-            text: this.i18n.translate(timeLeftText, { lang }),
-            callback_data: `booking_confirm_alerd_${id}`,
-          },
-          qrBtn,
-        ]);
-
-        if (isSinglePage) buttons.push([backBtn]);
-      } else if (totalMinutes > -120) {
-        buttons.push([qrBtn]);
-        if (isSinglePage) buttons.push([backBtn]);
-      }
-
-      return buttons;
-    }
-    if (status === 'PAID') {
-      const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
-        data,
-        start_time,
-        lang,
-      );
-      if (check_in) {
-        if (isSinglePage) {
-          buttons.push([backBtn]);
-        }
-        return buttons;
-      }
-      if (totalMinutes > 60) {
-        buttons.push(isSinglePage ? [cancelBtn, backBtn] : [cancelBtn]);
+        buttons.push([cancelBtn]);
       } else if (totalMinutes > 0) {
         buttons.push([
           {
             text: this.i18n.translate(timeLeftText, { lang }),
-            callback_data: `booking_confirm_alerd_${id}`,
+            callback_data: `booking_confirm_alert_${id}`,
           },
           qrBtn,
         ]);
-
-        if (isSinglePage) buttons.push([backBtn]);
-      } else if (totalMinutes > -120) {
+      } else if (endMinutes >= 0) {
         buttons.push([qrBtn]);
-        if (isSinglePage) buttons.push([backBtn]);
       }
-
-      return buttons;
     }
+
+    if (isSinglePage) {
+      buttons.push([backBtn]);
+    }
+
     return buttons;
+  }
+
+  ownerBooking(booking: IBooking, page: number, lang: string) {
+    const button: InlineKeyboardButton[][] = [];
+    const { totalMinutes } = this.bookingTimeCalculate(
+      booking.date,
+      booking.start_time,
+      lang,
+    );
+    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
+      booking.date,
+      booking.end_time,
+      lang,
+    );
+
+    const detailBtn = {
+      text: this.i18n.translate('owner_booking.buttons.detail', { lang }),
+      callback_data: `bookingChild_detail_${booking.id}_${page}`,
+    };
+
+    const checkInBtn = {
+      text: this.i18n.translate('owner_booking.buttons.check_in', { lang }),
+      callback_data: `bookingChild_checkin_${booking.id}_${page}`,
+    };
+
+    const cancelBtn = {
+      text: this.i18n.translate('owner_booking.buttons.cancel', { lang }),
+      callback_data: `bookingChild_cancel_${booking.id}_${page}`,
+    };
+
+    if (booking.status === 'PAID') {
+      if (!booking.check_in && totalMinutes <= 60 && endMinutes > 0) {
+        button.push([detailBtn, checkInBtn]);
+      } else {
+        button.push([detailBtn]);
+      }
+    }
+
+    else if (booking.status === 'CONFIRMED') {
+      if (!booking.check_in) {
+        if (totalMinutes > 60) {
+          button.push([detailBtn, cancelBtn]);
+        } else if (totalMinutes >= 0) {
+          button.push([detailBtn, cancelBtn]);
+          button.push([checkInBtn]);
+        } else if (endMinutes > 0) {
+          button.push([detailBtn, checkInBtn]);
+        } else {
+          button.push([detailBtn]);
+        }
+      } else {
+        button.push([detailBtn]);
+      }
+    }
+    else if (booking.status === 'PENDING') {
+      button.push([detailBtn, cancelBtn]);
+    }
+
+    button.push([
+      {
+        text: this.i18n.translate('schedule.back', { lang }),
+        callback_data: 'back_owner_7',
+      },
+    ]);
+
+    return button;
+  }
+  ownerBooking_today(booking: IBooking, page: number, lang: string) {
+    const button: InlineKeyboardButton[][] = [];
+    const { totalMinutes } = this.bookingTimeCalculate(
+      booking.date,
+      booking.start_time,
+      lang,
+    );
+    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
+      booking.date,
+      booking.end_time,
+      lang,
+    );
+
+    const detailBtn = {
+      text: this.i18n.translate('owner_booking.buttons.detail', { lang }),
+      callback_data: `bookingChild_detailToday_${booking.id}_${page}`,
+    };
+
+    const checkInBtn = {
+      text: this.i18n.translate('owner_booking.buttons.check_in', { lang }),
+      callback_data: `bookingChild_checkinToday_${booking.id}_${page}`,
+    };
+
+    const cancelBtn = {
+      text: this.i18n.translate('owner_booking.buttons.cancel', { lang }),
+      callback_data: `bookingChild_cancelToday_${booking.id}_${page}`,
+    };
+
+    if (booking.status === 'PAID') {
+      if (!booking.check_in && totalMinutes <= 60 && endMinutes > 0) {
+        button.push([detailBtn, checkInBtn]);
+      } else {
+        button.push([detailBtn]);
+      }
+    }
+
+    else if (booking.status === 'CONFIRMED') {
+      if (!booking.check_in) {
+        if (totalMinutes > 60) {
+          button.push([detailBtn, cancelBtn]);
+        } else if (totalMinutes >= 0) {
+          button.push([detailBtn, cancelBtn]);
+          button.push([checkInBtn]);
+        } else if (endMinutes > 0) {
+          button.push([detailBtn, checkInBtn]);
+        } else {
+          button.push([detailBtn]);
+        }
+      } else {
+        button.push([detailBtn]);
+      }
+    }
+    else if (booking.status === 'PENDING') {
+      button.push([detailBtn, cancelBtn]);
+    }
+    else if (booking.status === "COMPLETED" || booking.status === "NO_SHOW"){
+            button.push([detailBtn])
+    }
+
+    button.push([
+      {
+        text: this.i18n.translate('schedule.back', { lang }),
+        callback_data: 'back_owner_7',
+      },
+    ]);
+
+    return button;
   }
 }

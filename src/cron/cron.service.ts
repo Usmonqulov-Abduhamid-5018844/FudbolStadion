@@ -12,7 +12,6 @@ export class CronService {
   @Cron(CronExpression.EVERY_MINUTE)
   async cancelExpiredBookings() {
     try {
-      const now = new Date();
 
       await this.prisma.booking.updateMany({
         where: {
@@ -39,7 +38,13 @@ export class CronService {
           status: {
             in: ['CONFIRMED', 'PAID'],
           },
+          check_in: false,
         },
+        select:{
+          id:true,
+          date:true,
+          end_time:true,
+        }
       });
       await this.prisma.booking.updateMany({
         where: {
@@ -65,7 +70,15 @@ export class CronService {
       const booking = await this.prisma.booking.findMany({
         where: {
           check_in: true,
+          status:{
+            in: ['CONFIRMED', 'PAID'],
+          }
         },
+        select:{
+          id:true,
+          date:true,
+          end_time:true,
+        }
       });
       await this.prisma.booking.updateMany({
         where: {
@@ -96,6 +109,11 @@ export class CronService {
           },
           status_pay_later: true,
         },
+        select:{
+          id:true,
+          date:true,
+          start_time:true,
+        }
       });
       await this.prisma.booking.updateMany({
         where: {

@@ -159,8 +159,8 @@ model Tranzaktion {
   createdAt              DateTime           @default(now())
   owner_card_id          Int
   booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  owner_cards            Owner_card         @relation(fields: [owner_card_id], references: [id], onDelete: Cascade)
-  user                   Users              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  owner_cards            Owner_card         @relation(fields: [owner_card_id], references: [id])
+  user                   Users             @relation(fields: [user_id], references: [id])
 }
 
 model sesion {

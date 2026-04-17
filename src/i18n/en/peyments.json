@@ -3,7 +3,9 @@
   "cash": "💵 Cash",
   "both": "💳💵 Both",
   "cards": "➕ Add New Card",
-  "not_fount": "⚠️ Your card information was not found"
+  "not_found": "⚠️ Your card information was not found",
+
+  "change_card_block": "💳 No card is connected for this stadium.\n\n👤 CARD mode will be available only after the stadium owner adds a payment card.\n\n➡️ Please choose another payment method."
 }
 
 

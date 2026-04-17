@@ -56,7 +56,17 @@
   },
 
   "payments": {
-    "alert": "⚠️ Tanlangan to‘lov turi avvalgisi bilan bir xil.\nIltimos, boshqa turini tanlang."
+    "alert": "⚠️ Tanlangan to‘lov usuli avvalgisi bilan bir xil.\nIltimos, boshqa usulni tanlang.",
+
+    "ownerCard": "💳 Onlayn to‘lovni faollashtirish uchun avval o‘z bank kartangizni qo‘shing!\n⚠️ Karta ma’lumotisiz bu rejimni yoqib bo‘lmaydi.",
+
+    "cardToCash": "🚫 Bu stadionda onlayn to‘lov orqali qilingan faol bronlar mavjud!\n💳 Naqd to‘lovga o‘tish mumkin emas, chunki mavjud bronlar raqamli to‘lov asosida yaratilgan.",
+
+    "cashToCard": "⚠️ To‘lov usulini o‘zgartirib bo‘lmaydi!\n\n📌 Sabab: ushbu stadionda faol bronlar mavjud.\n💡 Avval barcha bronlarni yakunlang yoki bekor qiling, so‘ng qayta urinib ko‘ring.",
+
+    "hybridToCash": "⚠️ Aralash to‘lov rejimidan naqd to‘lovga o‘tish mumkin emas!\n💳 Chunki onlayn to‘lov bilan qilingan bronlar mavjud.",
+
+    "hybridToCard": "⚠️ Aralash to‘lov rejimidan faqat onlayn to‘lovga o‘tish vaqtincha cheklangan!\n📌 Faol bronlar sababli o‘zgartirish mumkin emas."
   },
 
   "max_players": "Sizning stadioningizda maksimal o'yinchilar soni: {count}",
@@ -87,10 +97,26 @@
 
   "current_payment_type": "💳 Sizning hozirgi to'lov turingiz: {payment}",
 
+  "stadion_type": {
+    "title": "🏟️ Stadion turini tanlang:\n\n📌 Katta stadion — keyinchalik uni bir nechta kichik maydonlarga bo‘lish imkoniyati mavjud.\n📌 Kichik stadion — alohida mini maydon sifatida ishlatiladi va keyinchalik bo‘linmaydi.\n\n➡️ Iltimos, mos variantni tanlang:",
+    "big": "🏟️ Katta stadion",
+    "small": "🎯 Kichik stadion"
+  },
+
   "type_label": "🏷️ Stadion turi:",
   "type": {
     "mini": "🏟️ Mini-stadion 🟢",
     "big": "🏟️ Katta stadion 🔵",
     "big_child": "🏟️ Katta stadionning mini-stadionlari 🟡"
-  }
+  },
+
+  "change_working_status": "⚙️ Ish holatini o‘zgartirish",
+
+  "workingStatus": {
+    "alert": "⚠️ Ish holatini o‘zgartirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling.",
+    "on": "✅ Stadion ishga tushirildi",
+    "off": "⛔ Stadion o‘chirildi",
+    "ownerCard": "⚠️ Ushbu stadionda to‘lov faqat karta orqali amalga oshiriladi.\n\nStadionni yoqish uchun avval to‘lov kartangizni qo‘shishingiz shart."
+  },
+  "deleteAlert": "⚠️ Bu stadionni o‘chirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling."
 }

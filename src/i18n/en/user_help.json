@@ -1,0 +1,18 @@
+{
+  "menu": {
+    "title": "🆘 Help section",
+    "booking": "📅 Book a stadium",
+    "my_bookings": "📖 My bookings",
+    "how_booking": "❓ How to book",
+    "payment_penalty": "💳 Payments and penalties",
+    "cancel": "⏰ Cancellation",
+    "contact": "📞 Contact"
+  },
+
+  "booking": "📅 Stadium booking:\nIn this section you can choose a suitable stadium and quickly reserve it for your preferred date and time.\n\n⚡ The system works in real time — available slots update instantly.\n📍 Mini and main stadiums may be connected.\n\n👉 Steps:\n1. Select stadium\n2. Choose date\n3. Select time slot\n4. Confirm booking",
+  "my_bookings": "📖 My bookings:\nThis section shows all your bookings — active, completed, and cancelled.\n\n📊 You can track each booking status:\n- Confirmed\n- Pending\n- Cancelled\n\n⏱ You can check your booking history anytime.",
+  "how_booking": "❓ How to book:\nBooking a stadium is a simple and fast process ⚡\n\n👉 Steps:\n1. Select a stadium\n2. Choose a date\n3. Check available slots\n4. Pick a suitable time\n5. Choose payment and confirm\n\n⏱ Average time: 1–2 minutes",
+  "payment_penalty": "💳 Payments and penalties:\nOur system provides safe and convenient payment options.\n\n💰 Payment methods:\n- Card payment\n- Cash payment\n\n⚠️ No-show:\n- 1 time: warning\n- 2+ times: penalty or mandatory card payment\n\n📌 Goal: fair usage of stadiums",
+  "cancel": "⏰ Cancellation:\nYou can cancel your booking anytime, but timing matters.\n\n⚠️ Rules:\n- Early cancellation is recommended\n- Late cancellation may result in penalties\n\n📌 The system ensures fairness for all users",
+  "contact": "📞 Contact:\nIf you have questions or issues, contact us.\n\n👨‍💻 The admin will help you quickly.\n📩 Replies are usually fast.\n\n🤝 We are always ready to help you!\n\n👉 Contact admin\n\n💬 @Abduhamid_1852"
+}

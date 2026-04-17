@@ -7,8 +7,11 @@ import {
   Booking,
   stadion_off_days,
   stadion_special_schedule,
+  Booking_status,
+  Pay_method,
 } from '@prisma/client';
 import { ISession } from './bot.sesion';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export interface IStadion {
   id: number;
@@ -39,7 +42,37 @@ export interface IStadion {
   ownerStadions?: number[];
   stadionOffDays?: stadion_off_days[];
   stadionSpecialSchedules?: stadion_special_schedule[];
+  ownerActiveBooking?: number[];
 }
+export interface IBooking {
+  id: number;
+  user_id: number;
+  stadion_id: number;
+  date: Date;
+  start_time: string;
+  end_time: string;
+  total_price: Decimal;
+  check_in: boolean;
+  status: Booking_status;
+  payment_method: Pay_method;
+  createdAt: Date;
+  updatedAt: Date;
+  expires_at?: Date | null;
+  status_pay_later: boolean;
+
+  stadion: IStadion;
+  user: IUser;
+}
+export interface IUser {
+  id: number;
+  username?: string | null;
+  phone: string;
+  full_name: string;
+  chatID: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export enum EStadion_type {
   BIG = 'big',
   SMOL = 'smol',
