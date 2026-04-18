@@ -64,11 +64,11 @@
   "booking_cancelled": "❌ *Bron bekor qilindi*.\n\n📂 Bron butunlay o‘chirilgan va qayta tiklanmaydi.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
   "time_left": {
-    "days_hours_minutes": "{days} kun {hours} soat {minutes} minut",
+    "days_hours_minutes": "🟢 {days} kun {hours} soat {minutes} minut",
 
-    "hours_minutes": "{hours} soat {minutes} minut",
+    "hours_minutes": "🟡 {hours} soat {minutes} minut",
 
-    "minutes_only": "{minutes} minut"
+    "minutes_only": "🔴 {minutes} minut"
   },
 
   "payment_time_alert": "❌ O'yin boshlanishiga {time_left} qoldi.\nTo'lov kamida 1 soat oldin amalga oshirilishi kerak.",

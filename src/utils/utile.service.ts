@@ -393,13 +393,23 @@ export class UtilisService implements OnModuleInit {
     return buttons;
   }
 
-  ownerBooking(booking: IBooking, page: number, lang: string) {
+  buildOwnerBookingButtons(
+    booking: IBooking,
+    page: number,
+    lang: string,
+    type: string,
+  ) {
     const button: InlineKeyboardButton[][] = [];
+
+    const makeCb = (action: string) =>
+  `bookingChild_${action}_${booking.id}_${page}_${type}`;
+
     const { totalMinutes } = this.bookingTimeCalculate(
       booking.date,
       booking.start_time,
       lang,
     );
+
     const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
       booking.date,
       booking.end_time,
@@ -408,45 +418,55 @@ export class UtilisService implements OnModuleInit {
 
     const detailBtn = {
       text: this.i18n.translate('owner_booking.buttons.detail', { lang }),
-      callback_data: `bookingChild_detail_${booking.id}_${page}`,
+      callback_data: makeCb('detail'),
     };
 
     const checkInBtn = {
       text: this.i18n.translate('owner_booking.buttons.check_in', { lang }),
-      callback_data: `bookingChild_checkin_${booking.id}_${page}`,
+      callback_data: makeCb('checkin'),
     };
 
     const cancelBtn = {
       text: this.i18n.translate('owner_booking.buttons.cancel', { lang }),
-      callback_data: `bookingChild_cancel_${booking.id}_${page}`,
+      callback_data: makeCb('cancel'),
     };
 
-    if (booking.status === 'PAID') {
-      if (!booking.check_in && totalMinutes <= 60 && endMinutes > 0) {
-        button.push([detailBtn, checkInBtn]);
-      } else {
-        button.push([detailBtn]);
-      }
-    }
-
-    else if (booking.status === 'CONFIRMED') {
-      if (!booking.check_in) {
-        if (totalMinutes > 60) {
-          button.push([detailBtn, cancelBtn]);
-        } else if (totalMinutes >= 0) {
-          button.push([detailBtn, cancelBtn]);
-          button.push([checkInBtn]);
-        } else if (endMinutes > 0) {
+    switch (booking.status) {
+      case 'PAID':
+        if (!booking.check_in && totalMinutes <= 60 && endMinutes > 0) {
           button.push([detailBtn, checkInBtn]);
         } else {
           button.push([detailBtn]);
         }
-      } else {
+        break;
+
+      case 'CONFIRMED':
+        if (!booking.check_in) {
+          if (totalMinutes > 60) {
+            button.push([detailBtn, cancelBtn]);
+          } else if (totalMinutes >= 0) {
+            button.push([detailBtn, cancelBtn]);
+            button.push([checkInBtn]);
+          } else if (endMinutes > 0) {
+            button.push([detailBtn, checkInBtn]);
+          } else {
+            button.push([detailBtn]);
+          }
+        } else {
+          button.push([detailBtn]);
+        }
+        break;
+
+      case 'PENDING':
+        button.push([detailBtn, cancelBtn]);
+        break;
+
+      case 'COMPLETED':
+      case 'NO_SHOW':
+      case 'CANCELED':
+      case 'REFUNDED':
         button.push([detailBtn]);
-      }
-    }
-    else if (booking.status === 'PENDING') {
-      button.push([detailBtn, cancelBtn]);
+        break;
     }
 
     button.push([
@@ -458,72 +478,56 @@ export class UtilisService implements OnModuleInit {
 
     return button;
   }
-  ownerBooking_today(booking: IBooking, page: number, lang: string) {
-    const button: InlineKeyboardButton[][] = [];
-    const { totalMinutes } = this.bookingTimeCalculate(
-      booking.date,
-      booking.start_time,
-      lang,
-    );
-    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
-      booking.date,
-      booking.end_time,
-      lang,
-    );
 
-    const detailBtn = {
-      text: this.i18n.translate('owner_booking.buttons.detail', { lang }),
-      callback_data: `bookingChild_detailToday_${booking.id}_${page}`,
-    };
+  async clearSessionMessages(ctx: MyContext) {
+    if (ctx.session.ownerActiveBooking?.length) {
+      try {
+        await ctx.deleteMessages(ctx.session.ownerActiveBooking);
+      } catch {}
+      ctx.session.ownerActiveBooking = [];
+    }
+  }
 
-    const checkInBtn = {
-      text: this.i18n.translate('owner_booking.buttons.check_in', { lang }),
-      callback_data: `bookingChild_checkinToday_${booking.id}_${page}`,
-    };
+  async sendPagination(
+    ctx: MyContext,
+    page: number,
+    total: number,
+    limit: number,
+    callback: string,
+    lang: string,
+  ) {
+    const totalPages = Math.ceil(total / limit);
+    if (page === 1 && totalPages === 1) return;
 
-    const cancelBtn = {
-      text: this.i18n.translate('owner_booking.buttons.cancel', { lang }),
-      callback_data: `bookingChild_cancelToday_${booking.id}_${page}`,
-    };
+    const buttons: InlineKeyboardButton[] = [];
 
-    if (booking.status === 'PAID') {
-      if (!booking.check_in && totalMinutes <= 60 && endMinutes > 0) {
-        button.push([detailBtn, checkInBtn]);
-      } else {
-        button.push([detailBtn]);
-      }
+    if (page > 1) {
+      buttons.push({
+        text: this.i18n.translate('stadions.Previous', { lang }),
+        callback_data: `${callback}_${page - 1}`,
+      });
     }
 
-    else if (booking.status === 'CONFIRMED') {
-      if (!booking.check_in) {
-        if (totalMinutes > 60) {
-          button.push([detailBtn, cancelBtn]);
-        } else if (totalMinutes >= 0) {
-          button.push([detailBtn, cancelBtn]);
-          button.push([checkInBtn]);
-        } else if (endMinutes > 0) {
-          button.push([detailBtn, checkInBtn]);
-        } else {
-          button.push([detailBtn]);
-        }
-      } else {
-        button.push([detailBtn]);
-      }
-    }
-    else if (booking.status === 'PENDING') {
-      button.push([detailBtn, cancelBtn]);
-    }
-    else if (booking.status === "COMPLETED" || booking.status === "NO_SHOW"){
-            button.push([detailBtn])
+    buttons.push({
+      text: `${page} / ${totalPages}`,
+      callback_data: 'ignore',
+    });
+
+    if (page < totalPages) {
+      buttons.push({
+        text: this.i18n.translate('stadions.Next', { lang }),
+        callback_data: `${callback}_${page + 1}`,
+      });
     }
 
-    button.push([
+    const send = await ctx.reply(
+      this.i18n.translate('stadions.Select', { lang }),
       {
-        text: this.i18n.translate('schedule.back', { lang }),
-        callback_data: 'back_owner_7',
+        reply_markup: { inline_keyboard: [buttons] },
       },
-    ]);
+    );
 
-    return button;
+    ctx.session.ownerActiveBooking ??= [];
+    ctx.session.ownerActiveBooking.push(send.message_id);
   }
 }

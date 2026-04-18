@@ -33,6 +33,12 @@
   "no_pending": "📭 No pending bookings.\n\n💡 New requests will appear here.",
   "no_today": "📭 No bookings found for today.\n\n💡 There are currently no bookings.",
   "no_tomorrow": "📭 No bookings found for tomorrow.\n\n💡 There are currently no bookings.",
+  "no_upcoming": "📭 No upcoming bookings found.\n\n💡 There are no bookings in the next 5 hours.",
+  "no_now": "📭 No active matches right now.\n\n💡 There are currently no ongoing games.",
+  "no_all": "📭 No bookings found.\n\n💡 There are currently no bookings.",
+  "no_cancelled": "📭 No cancelled bookings found.\n\n💡 There are currently no cancelled bookings.",
+  "no_stats": "📭 Not enough data for statistics.\n\n💡 There are not enough bookings yet.",
+
 
   "booking": {
     "confirm_check_in": "❗️Are you sure you want to confirm that the customer has arrived at the stadium?\n\n⚠️ This action cannot be undone.",

@@ -2461,6 +2461,12 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     stadionId: number,
   ) {
     try {
+      const startAt = new Date(
+        `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
+      );
+      const endAt = new Date(
+        `${format(date, 'yyyy-MM-dd')}T${end_time}:00`,
+      );
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -2519,6 +2525,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             date: date,
             start_time,
             end_time,
+            startAt,
+            endAt,
             total_price: total,
             payment_method: 'CARD',
             expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -2633,6 +2641,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             date: date,
             start_time,
             end_time,
+            startAt,
+            endAt,
             total_price: total,
             payment_method: 'CASH',
             expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -2676,6 +2686,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               date: date,
               start_time,
               end_time,
+              startAt,
+              endAt,
               total_price: total,
               payment_method: 'CARD',
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -2775,6 +2787,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               date: date,
               start_time,
               end_time,
+              startAt,
+              endAt,
               total_price: total,
               payment_method: 'CASH',
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -2832,6 +2846,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               date: date,
               start_time,
               end_time,
+              startAt,
+              endAt,
               total_price: total,
               payment_method: 'CASH',
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -2927,6 +2943,12 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         await this.utils.errorFunction(ctx);
         return;
       }
+         const startAt = new Date(
+        `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
+      );
+      const endAt = new Date(
+        `${format(date, 'yyyy-MM-dd')}T${end_time}:00`,
+      );
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -2990,6 +3012,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 date: date,
                 start_time,
                 end_time,
+                startAt,
+                endAt,
                 total_price: total,
                 payment_method: 'CASH',
                 expires_at: new Date(Date.now() + 15 * 60 * 1000),
@@ -3024,6 +3048,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 date: date,
                 start_time,
                 end_time,
+                startAt,
+                endAt,
                 total_price: total,
                 payment_method: 'CARD',
                 expires_at: new Date(Date.now() + 15 * 60 * 1000),

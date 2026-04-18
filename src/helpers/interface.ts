@@ -52,6 +52,8 @@ export interface IBooking {
   start_time: string;
   end_time: string;
   total_price: Decimal;
+  startAt: Date;
+  endAt: Date;
   check_in: boolean;
   status: Booking_status;
   payment_method: Pay_method;

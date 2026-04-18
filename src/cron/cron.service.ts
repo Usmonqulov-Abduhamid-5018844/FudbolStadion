@@ -8,7 +8,7 @@ export class CronService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly utils: UtilisService,
-  ) {}
+  ) {} 
   @Cron(CronExpression.EVERY_MINUTE)
   async cancelExpiredBookings() {
     try {

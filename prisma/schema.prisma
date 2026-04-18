@@ -134,6 +134,8 @@ model Booking {
   start_time       String
   end_time         String
   total_price      Decimal
+  startAt          DateTime
+  endAt            DateTime
   check_in         Boolean        @default(false)
   status           Booking_status @default(PENDING)
   payment_method   Pay_method
@@ -160,7 +162,7 @@ model Tranzaktion {
   owner_card_id          Int
   booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade)
   owner_cards            Owner_card         @relation(fields: [owner_card_id], references: [id])
-  user                   Users             @relation(fields: [user_id], references: [id])
+  user                   Users              @relation(fields: [user_id], references: [id])
 }
 
 model sesion {

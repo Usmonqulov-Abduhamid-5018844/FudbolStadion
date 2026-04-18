@@ -33,6 +33,12 @@
   "no_pending": "📭 Kutilayotgan bronlar yo‘q.\n\n💡 Yangi so‘rovlar shu yerda chiqadi.",
   "no_today": "📭 Bugungi bronlar topilmadi.\n\n💡 Hozircha hech qanday bron yo‘q.",
   "no_tomorrow": "📭 Ertangi kun uchun bronlar topilmadi.\n\n💡 Hozircha hech qanday bron yo‘q.",
+  "no_upcoming": "📭 Yaqin vaqtlar uchun bronlar topilmadi.\n\n💡 Keyingi 5 soat ichida hech qanday bron yo‘q",
+  "no_now": "📭 Hozir o‘ynalayotgan bronlar yo‘q.\n\n💡 Ayni paytda hech qanday o‘yin faol emas.",
+  "no_all": "📭 Bronlar topilmadi.\n\n💡 Hozircha hech qanday bron mavjud emas.",
+  "no_cancelled": "📭 Bekor qilingan bronlar topilmadi.\n\n💡 Hozircha hech qanday bekor qilingan bron yo‘q.",
+  "no_stats": "📭 Statistika uchun yetarli ma’lumot yo‘q.\n\n💡 Hali bronlar yetarli emas.",
+
 
   "booking": {
     "confirm_check_in": "❗️Haqiqatan ham mijoz stadionga kelganini tasdiqlaysizmi?\n\n⚠️ Bu amalni bekor qilib bo‘lmaydi.",

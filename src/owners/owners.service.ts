@@ -1044,10 +1044,7 @@ export class OwnersService {
         }
         case '7': {
           try {
-            if (ctx.session.ownerActiveBooking?.length) {
-              await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-              ctx.session.ownerActiveBooking = [];
-            }
+            await this.utils.clearSessionMessages(ctx);
           } catch (error) {}
         }
         default: {
@@ -1565,7 +1562,7 @@ export class OwnersService {
                   'owner_booking.booking_menu.buttons.by_stadion',
                   { lang },
                 ),
-                callback_data: `ownerBooking_by_stadion_${ownerData.id}_1`,
+                callback_data: `ownerBooking_Bystadion_${ownerData.id}_1`,
               },
               {
                 text: this.i18n.translate(
@@ -1598,116 +1595,86 @@ export class OwnersService {
     }
   }
 
-  async ownerBooking_select(
+  async sendBookingMessage(
     ctx: MyContext,
     booking: IBooking,
     page: number,
     lang: string,
+    type: string,
   ) {
-    try {
-      const button = this.utils.ownerBooking(booking, page, lang);
-      const send = await ctx.reply(
-        this.i18n.translate('owner_booking.details', {
-          lang,
-          args: {
-            id: booking.id,
-            date: format(new Date(booking.date), 'dd.MM.yyyy'),
-            time: `${booking.start_time} - ${booking.end_time}`,
-            stadium: booking.stadion.name,
-            region: booking.stadion.region.name,
-            user: booking.user.full_name,
-            status: statusMap(booking.status, this.i18n, lang),
-            check_in: booking.check_in
-              ? this.i18n.translate('owner_booking.check_in', { lang })
-              : this.i18n.translate('owner_booking.not_check_in', { lang }),
-          },
-        }),
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: button,
-          },
+    const button = this.utils.buildOwnerBookingButtons(
+      booking,
+      page,
+      lang,
+      type,
+    );
+
+    const send = await ctx.reply(
+      this.i18n.translate('owner_booking.details', {
+        lang,
+        args: {
+          id: booking.id,
+          date: format(new Date(booking.date), 'dd.MM.yyyy'),
+          time: `${booking.start_time} - ${booking.end_time}`,
+          stadium: booking.stadion.name,
+          region: booking.stadion.region.name,
+          user: booking.user.full_name,
+          status: statusMap(booking.status, this.i18n, lang),
+          check_in: booking.check_in
+            ? this.i18n.translate('owner_booking.check_in', { lang })
+            : this.i18n.translate('owner_booking.not_check_in', { lang }),
         },
-      );
-      if (!ctx.session.ownerActiveBooking?.length) {
-        ctx.session.ownerActiveBooking = [];
-      }
-      ctx.session.ownerActiveBooking.push(send.message_id);
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
-  }
-  async ownerBooking_today(
-    ctx: MyContext,
-    booking: IBooking,
-    page: number,
-    lang: string,
-  ) {
-    try {
-      const button = this.utils.ownerBooking_today(booking, page, lang);
-      const send = await ctx.reply(
-        this.i18n.translate('owner_booking.details', {
-          lang,
-          args: {
-            id: booking.id,
-            date: format(new Date(booking.date), 'dd.MM.yyyy'),
-            time: `${booking.start_time} - ${booking.end_time}`,
-            stadium: booking.stadion.name,
-            region: booking.stadion.region.name,
-            user: booking.user.full_name,
-            status: statusMap(booking.status, this.i18n, lang),
-          },
-        }),
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: button,
-          },
+      }),
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: button,
         },
-      );
-      if (!ctx.session.ownerActiveBooking?.length) {
-        ctx.session.ownerActiveBooking = [];
-      }
-      ctx.session.ownerActiveBooking.push(send.message_id);
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
+      },
+    );
+
+    ctx.session.ownerActiveBooking ??= [];
+    ctx.session.ownerActiveBooking.push(send.message_id);
   }
+
   async bookingDetails(
     ctx: MyContext,
     bookingId: number,
     page: number = 1,
     lang: string,
-    type?: string | null,
+    type: string,
   ) {
     try {
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
           stadion: {
-            include: {
-              region: true,
-              region_items: true,
-              owner: true,
+            select: {
+              name: true,
+              owner_id: true,
+              region: { select: { name: true } },
+              region_items: { select: { name: true } },
             },
           },
-          user: true,
+          user: {
+            select: {
+              full_name: true,
+              phone: true,
+              username: true,
+            },
+          },
         },
       });
-      if (!booking) {
-        return await this.utils.errorFunction(ctx);
-      }
+
+      if (!booking) return this.utils.errorFunction(ctx);
+
       const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
         booking.date,
         booking.start_time,
         lang,
       );
-      if (ctx.session.ownerActiveBooking) {
-        try {
-          await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-        } catch (error) {}
-        ctx.session.ownerActiveBooking = [];
-      }
+
+      await this.utils.clearSessionMessages(ctx);
 
       const message = this.i18n.translate('owner_booking.full_details', {
         lang,
@@ -1715,7 +1682,7 @@ export class OwnersService {
           id: booking.id,
           stadium: booking.stadion.name,
           region: `${booking.stadion.region.name} / ${booking.stadion.region_items.name}`,
-          date: format(new Date(booking.date), 'dd.MM.yyyy'),
+          date: format(booking.date, 'dd.MM.yyyy'),
           time: `${booking.start_time} - ${booking.end_time}`,
           time_left:
             totalMinutes > 0
@@ -1730,17 +1697,12 @@ export class OwnersService {
             this.i18n.translate('peyments', { lang }),
           ),
           status: statusMap(booking.status, this.i18n, lang),
-          created_at: format(new Date(booking.createdAt), 'dd.MM.yyyy HH:mm'),
+          created_at: format(booking.createdAt, 'dd.MM.yyyy HH:mm'),
           check_in: booking.check_in
             ? this.i18n.translate('owner_booking.check_in', { lang })
             : this.i18n.translate('owner_booking.not_check_in', { lang }),
         },
       });
-
-      const callbackData =
-        type
-          ? `ownerBooking_${type}_${booking.stadion.owner_id}_${page}`
-          : `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner_id}_${page}`;
 
       const send = await ctx.reply(message, {
         parse_mode: 'HTML',
@@ -1749,16 +1711,15 @@ export class OwnersService {
             [
               {
                 text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: callbackData,
+                callback_data: `ownerBooking_${type}_${booking.stadion.owner_id}_${page}`,
               },
             ],
           ],
         },
       });
-      if (!ctx.session.ownerActiveBooking?.length) {
-        ctx.session.ownerActiveBooking = [];
-      }
-      ctx.session.ownerActiveBooking?.push(send.message_id);
+
+      ctx.session.ownerActiveBooking ??= [];
+      ctx.session.ownerActiveBooking.push(send.message_id);
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

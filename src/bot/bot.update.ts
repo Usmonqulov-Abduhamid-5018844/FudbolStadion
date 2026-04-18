@@ -7,7 +7,7 @@ import { OwnersService } from 'src/owners/owners.service';
 import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
-import { Booking_status, Payments } from '@prisma/client';
+import { Booking_status, Payments, Prisma } from '@prisma/client';
 import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
@@ -16,11 +16,12 @@ import { UtilisService } from 'src/utils/utile.service';
 import { format } from 'date-fns';
 import { QrService } from 'src/qr/qr.service';
 import { startWith } from 'rxjs';
-import { EStadion_type } from 'src/helpers/interface';
+import { EStadion_type, IBooking } from 'src/helpers/interface';
 import { log } from 'console';
 import { getRelatedStadionIds, getTodayStart } from 'src/helpers/stadions';
 import { getLocation } from 'src/helpers/url';
 import { string } from 'yaml/dist/schema/common/string';
+import { statusMap } from 'src/helpers/bookingStatus';
 
 @Update()
 export class BotUpdate {
@@ -208,702 +209,275 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
       const lang = await this.utils.langs(ctx);
-      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, type, ownerId, pages = 1] = ctx.callbackQuery.data.split('_');
-        const page = Number(pages);
 
-        if (
-          type === 'paid' ||
-          type === 'confirmed' ||
-          type === 'active' ||
-          type === 'pending'
-        ) {
-          try {
-            if (ctx.session.ownerActiveBooking?.length) {
-              await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-              ctx.session.ownerActiveBooking = [];
-            }
-          } catch (error) {}
-          try {
-            const limit = 2;
-            const stadions = await this.prisma.stadion.findMany({
-              where: { owner_id: Number(ownerId) },
-            });
-            if (!stadions.length) {
-              return await this.utils.errorFunction(ctx);
-            }
-            const stadionIds = stadions.map((s) => s.id);
-            const statusFilter: Booking_status[] = [];
-            if (type === 'paid' || type === 'active' || type === 'confirmed') {
-              statusFilter.push('PAID', 'CONFIRMED');
-            } else if (type === 'pending') {
-              statusFilter.push('PENDING');
-            }
-            const [bookings, total] = await Promise.all([
-              this.prisma.booking.findMany({
-                where: {
-                  stadion_id: { in: stadionIds },
-                  status: { in: statusFilter },
-                },
-                orderBy: {
-                  createdAt: 'desc',
-                },
-                include: {
-                  stadion: {
-                    include: {
-                      region: true,
-                      region_items: true,
-                    },
-                  },
-                  user: true,
-                },
-                skip: (page - 1) * limit,
-                take: limit,
-              }),
-              this.prisma.booking.count({
-                where: {
-                  stadion_id: { in: stadionIds },
-                  status: { in: statusFilter },
-                },
-              }),
-            ]);
-            if (!bookings.length) {
-              if (
-                type === 'paid' ||
-                type === 'active' ||
-                type === 'confirmed'
-              ) {
-                await ctx.answerCbQuery(
-                  this.i18n.translate('owner_booking.no_active', { lang }),
-                  { show_alert: true },
-                );
-              } else if (type === 'pending') {
-                await ctx.answerCbQuery(
-                  this.i18n.translate('owner_booking.no_pending', { lang }),
-                  { show_alert: true },
-                );
-              }
-              return;
-            }
-            try {
-              await ctx.answerCbQuery(
-                this.i18n.translate('loading.loading', { lang }),
-              );
-            } catch (error) {}
+      const [_, type, ownerId, pageStr] = (ctx.callbackQuery as any).data.split(
+        '_',
+      );
 
-            for (const item of bookings) {
-              await this.ownerService.ownerBooking_select(
-                ctx,
-                item,
-                page,
-                lang,
-              );
-            }
-            const buttons: InlineKeyboardButton[] = [];
-            const totalPages = Math.ceil(total / limit);
+      const page = Number(pageStr);
+      const limit = 5;
 
-            if (!(page === 1 && totalPages === 1)) {
-              if (page > 1) {
-                buttons.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: `ownerBooking_${type}_${ownerId}_${page - 1}`,
-                });
-              }
+      await this.utils.clearSessionMessages(ctx);
 
-              buttons.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
+      const where: any = {
+        stadion: {
+          owner_id: Number(ownerId),
+        },
+      };
+      let order: Prisma.BookingOrderByWithRelationInput = {
+        createdAt: 'desc',
+      };
 
-              if (page < totalPages) {
-                buttons.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: `ownerBooking_${type}_${ownerId}_${page + 1}`,
-                });
-              }
-
-              const send = await ctx.reply(
-                this.i18n.translate('stadions.Select', { lang }),
-                {
-                  reply_markup: {
-                    inline_keyboard: [buttons],
-                  },
-                },
-              );
-              if (!ctx.session.ownerActiveBooking?.length) {
-                ctx.session.ownerActiveBooking = [];
-              }
-              ctx.session.ownerActiveBooking.push(send.message_id);
-            }
-          } catch (error) {
-            await this.utils.errorFunction(ctx);
-          }
-        } else if (type === 'today' || type === "tomorrow") {
-          try {
-            if (ctx.session.ownerActiveBooking?.length) {
-              await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-              ctx.session.ownerActiveBooking = [];
-            }
-          } catch (error) {}
-          try {
-            const limit = 2;
-            const today = new Date();
-            today.setHours(5, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(today.getDate() + 1);
-            console.log("1");
-            
-
-            const stadions = await this.prisma.stadion.findMany({
-              where: { owner_id: Number(ownerId) },
-            });
-            if (!stadions.length) {
-              return await this.utils.errorFunction(ctx);
-            }
-            const stadionIds = stadions.map((s) => s.id);
-            let selectDate: Date = tomorrow
-            if(type === "today"){
-              selectDate = today
-            }
-            console.log("2");
-            console.log(selectDate);
-
-            const [bookings, total] = await Promise.all([
-              this.prisma.booking.findMany({
-                where: {
-                  stadion_id: { in: stadionIds },
-                  date: selectDate,
-                  status: {
-                    in: [
-                      'COMPLETED',
-                      'CONFIRMED',
-                      'PAID',
-                      'PENDING',
-                      'NO_SHOW',
-                    ],
-                  },
-                },
-                include: {
-                  stadion: {
-                    include: {
-                      region: true,
-                      region_items: true,
-                      owner: true,
-                    },
-                  },
-                  user: true,
-                },
-                skip: (page - 1) * limit,
-                take: limit,
-                orderBy: {
-                  createdAt: 'desc',
-                },
-              }),
-              this.prisma.booking.count({
-                where: {
-                  stadion_id: { in: stadionIds },
-                  date: selectDate,
-                  status: {
-                    in: [
-                      'COMPLETED',
-                      'CONFIRMED',
-                      'PAID',
-                      'PENDING',
-                      'NO_SHOW',
-                    ],
-                  },
-                },
-              }),
-            ]);
-            if (!bookings.length) {
-              if(type === "today"){
-                await ctx.answerCbQuery(
-                  this.i18n.translate('owner_booking.no_today', { lang }),
-                  { show_alert: true },
-                );
-              }
-              else if(type === "tomorrow"){
-                await ctx.answerCbQuery(
-                  this.i18n.translate('owner_booking.no_tomorrow', { lang }),
-                  { show_alert: true },
-                );
-              }
-              return;
-            }
-            console.log("3");
-            
-            try {
-              await ctx.answerCbQuery(
-                this.i18n.translate('loading.loading', { lang }),
-              );
-            } catch (error) {}
-            console.log(bookings);
-            
-            for (const item of bookings) {
-              await this.ownerService.ownerBooking_today(ctx, item, page, lang);
-            }
-            const buttons: InlineKeyboardButton[] = [];
-            const totalPages = Math.ceil(total / limit);
-
-            if (!(page === 1 && totalPages === 1)) {
-              if (page > 1) {
-                buttons.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: `ownerBooking_${type}_${ownerId}_${page - 1}`,
-                });
-              }
-
-              buttons.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
-
-              if (page < totalPages) {
-                buttons.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: `ownerBooking_${type}_${ownerId}_${page + 1}`,
-                });
-              }
-
-              const send = await ctx.reply(
-                this.i18n.translate('stadions.Select', { lang }),
-                {
-                  reply_markup: {
-                    inline_keyboard: [buttons],
-                  },
-                },
-              );
-              if (!ctx.session.ownerActiveBooking?.length) {
-                ctx.session.ownerActiveBooking = [];
-              }
-              ctx.session.ownerActiveBooking.push(send.message_id);
-            }
-          } catch (error) {
-            await this.utils.errorFunction(ctx);
-          }
-        }
+      if (type === 'active') {
+        where.status = { in: ['PAID', 'CONFIRMED'] };
+      } else if (type === 'pending') {
+        where.status = 'PENDING';
       }
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
-  }
-  @Action(/bookingChild_(.+)_(\d+)_(.+)$/)
-  async bookingChild(@Ctx() ctx: MyContext) {
-    try {
-      const lang = await this.utils.langs(ctx);
-      if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, type, bookingId, page] = ctx.callbackQuery.data.split('_');
+      if (['today', 'tomorrow'].includes(type)) {
+        const base = new Date();
+        base.setHours(5, 0, 0, 0);
+        if (type === 'tomorrow') {
+          base.setDate(base.getDate() + 1);
+        }
+        where.status = { in: ['PAID', 'CONFIRMED', 'PENDING', 'COMPLETED'] };
+        where.date = base;
+      }
+      if (type === 'cancelled') {
+        where.status = 'CANCELED';
+      }
+      if (type === 'upcoming') {
+        const now = new Date();
+        const in5Hours = new Date(now.getTime() + 5 * 60 * 60 * 1000);
 
-        const booking = await this.prisma.booking.findUnique({
-          where: { id: Number(bookingId) },
+        where.status = { in: ['PAID', 'CONFIRMED'] };
+        where.startAt = {
+          gte: now,
+          lte: in5Hours,
+        };
+        order = {
+          startAt: 'asc',
+        };
+      }
+      if (type === 'now') {
+        const now = new Date();
+        where.startAt = {
+          lte: now,
+        };
+        where.endAt = {
+          gte: now,
+        };
+        where.status = { in: ['PAID', 'CONFIRMED'] };
+        order = {
+          startAt: 'asc',
+        };
+      }
+
+      const [bookings, total] = await Promise.all([
+        this.prisma.booking.findMany({
+          where,
           include: {
-            user: true,
             stadion: {
               include: {
                 region: true,
                 region_items: true,
-                owner: {
-                  select: {
-                    id: true,
-                  },
-                },
               },
             },
+            user: true,
           },
+          orderBy: order,
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.booking.count({ where }),
+      ]);
+
+      if (!bookings.length) {
+        await ctx.answerCbQuery(
+          this.i18n.translate(`owner_booking.no_${type}`, { lang }),
+          { show_alert: true },
+        );
+        return;
+      }
+
+      await ctx.answerCbQuery(this.i18n.translate('loading.loading', { lang }));
+
+      await Promise.all(
+        bookings.map((b) =>
+          this.ownerService.sendBookingMessage(ctx, b, page, lang, type),
+        ),
+      );
+      const callback = `ownerBooking_${type}_${ownerId}`;
+      await this.utils.sendPagination(ctx, page, total, limit, callback, lang);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  @Action(/bookingChild_(.+)/)
+  async bookingChild(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const data = (ctx.callbackQuery as any).data.split('_');
+
+      const action = data[1];
+      const bookingId = Number(data[2]);
+      const page = Number(data[3]);
+      const type = data[4];
+
+      const booking = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        include: {
+          user: true,
+          stadion: {
+            include: {
+              region: true,
+              region_items: true,
+              owner: { select: { id: true } },
+            },
+          },
+        },
+      });
+
+      if (!booking) return this.utils.errorFunction(ctx);
+
+      const backCb = `ownerBooking_${type}_${booking.stadion.owner.id}_${page}`;
+
+      await this.utils.clearSessionMessages(ctx);
+      await ctx.answerCbQuery();
+
+      if (action === 'detail') {
+        return this.ownerService.bookingDetails(
+          ctx,
+          booking.id,
+          page,
+          lang,
+          type,
+        );
+      }
+      if (action === 'checkin') {
+        const send = await ctx.reply(
+          this.i18n.translate('owner_booking.booking.confirm_check_in', {
+            lang,
+          }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate(
+                      'owner_booking.booking.confirm_yes',
+                      { lang },
+                    ),
+                    callback_data: `bookingChild_yesCheckin_${booking.id}_${page}_${type}`,
+                  },
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: backCb,
+                  },
+                ],
+              ],
+            },
+          },
+        );
+
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(send.message_id);
+        return;
+      }
+      if (action === 'yesCheckin') {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { check_in: true },
         });
-        if (!booking) {
-          await this.utils.errorFunction(ctx);
-          return;
-        }
-        switch (type) {
-          case 'checkin':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                  if (ctx.session.ownerActiveBooking?.length) {
-                    await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-                    ctx.session.ownerActiveBooking = [];
-                  }
-                } catch (error) {}
-                const send = await ctx.reply(
-                  this.i18n.translate(
-                    'owner_booking.booking.confirm_check_in',
-                    { lang },
-                  ),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate(
-                              'owner_booking.booking.confirm_yes',
-                              { lang },
-                            ),
-                            callback_data: `bookingChild_yesActive_${booking.id}_${page}`,
-                          },
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'yesActive':
-            {
-              try {
-                if (ctx.callbackQuery) {
-                  await ctx.answerCbQuery();
-                }
-              } catch (error) {}
-              try {
-                await this.prisma.booking.update({
-                  where: { id: booking.id },
-                  data: { check_in: true },
-                });
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.confirm_success', {
-                    lang,
-                  }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-                return;
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'detail': {
-            return this.ownerService.bookingDetails(
-              ctx,
-              booking.id,
-              Number(page),
-              lang,
-            );
-          }
-          case 'cancel':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                  if (ctx.session.ownerActiveBooking?.length) {
-                    await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-                    ctx.session.ownerActiveBooking = [];
-                  }
-                } catch (error) {}
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.confirm_cancel', {
-                    lang,
-                  }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate(
-                              'owner_booking.buttons.confirm_cancel',
-                              { lang },
-                            ),
-                            callback_data: `bookingChild_yesCancel_${booking.id}_${page}`,
-                          },
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'yesCancel':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                } catch (error) {}
-                await this.prisma.booking.update({
-                  where: { id: booking.id },
-                  data: { status: 'CANCELED' },
-                });
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.cancel_success', {
-                    lang,
-                  }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_${booking.status.toLowerCase()}_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
 
-          case 'detailToday': {
-            return this.ownerService.bookingDetails(
-              ctx,
-              booking.id,
-              Number(page),
-              lang,
-              'today',
-            );
-          }
-          case 'checkinToday':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                  if (ctx.session.ownerActiveBooking?.length) {
-                    await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-                    ctx.session.ownerActiveBooking = [];
-                  }
-                } catch (error) {}
-                const send = await ctx.reply(
-                  this.i18n.translate(
-                    'owner_booking.booking.confirm_check_in',
-                    { lang },
-                  ),
+        const send = await ctx.reply(
+          this.i18n.translate('owner_booking.booking.confirm_success', {
+            lang,
+          }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
                   {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate(
-                              'owner_booking.booking.confirm_yes',
-                              { lang },
-                            ),
-                            callback_data: `bookingChild_yesToday_${booking.id}_${page}`,
-                          },
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_today_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: backCb,
                   },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'yesToday':
-            {
-              try {
-                if (ctx.callbackQuery) {
-                  await ctx.answerCbQuery();
-                }
-              } catch (error) {}
-              try {
-                await this.prisma.booking.update({
-                  where: { id: booking.id },
-                  data: { check_in: true },
-                });
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.confirm_success', {
-                    lang,
-                  }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_today_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-                return;
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
+                ],
+              ],
+            },
+          },
+        );
 
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(send.message_id);
+        return;
+      }
+      if (action === 'cancel') {
+        const send = await ctx.reply(
+          this.i18n.translate('owner_booking.booking.confirm_cancel', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate(
+                      'owner_booking.buttons.confirm_cancel',
+                      { lang },
+                    ),
+                    callback_data: `bookingChild_yesCancel_${booking.id}_${page}_${type}`,
+                  },
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: backCb,
+                  },
+                ],
+              ],
+            },
+          },
+        );
 
-            break;
-          
-           case 'cancelToday':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                  if (ctx.session.ownerActiveBooking?.length) {
-                    await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-                    ctx.session.ownerActiveBooking = [];
-                  }
-                } catch (error) {}
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.confirm_cancel', {
-                    lang,
-                  }),
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(send.message_id);
+        return;
+      }
+      if (action === 'yesCancel') {
+        await this.prisma.booking.update({
+          where: { id: booking.id },
+          data: { status: 'CANCELED' },
+        });
+
+        const send = await ctx.reply(
+          this.i18n.translate('owner_booking.booking.cancel_success', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
                   {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate(
-                              'owner_booking.buttons.confirm_cancel',
-                              { lang },
-                            ),
-                            callback_data: `bookingChild_yesCancelToday_${booking.id}_${page}`,
-                          },
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_today_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: backCb,
                   },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'yesCancelToday':
-            {
-              try {
-                try {
-                  if (ctx.callbackQuery) {
-                    await ctx.answerCbQuery();
-                  }
-                } catch (error) {}
-                await this.prisma.booking.update({
-                  where: { id: booking.id },
-                  data: { status: 'CANCELED' },
-                });
-                const send = await ctx.reply(
-                  this.i18n.translate('owner_booking.booking.cancel_success', {
-                    lang,
-                  }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `ownerBooking_today_${booking.stadion.owner.id}_${page}`,
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                if (!ctx.session.ownerActiveBooking?.length) {
-                  ctx.session.ownerActiveBooking = [];
-                }
-                ctx.session.ownerActiveBooking.push(send.message_id);
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-            default:
-            {
-              await this.utils.errorFunction(ctx);
-            }
-            break;
-        }
+                ],
+              ],
+            },
+          },
+        );
+
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(send.message_id);
+        return;
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
   }
+
+  ///////////////////////////////////////////////////////////////////////////////////////////////
 
   @Action(/^booking_confirm_(.+)_(\d+)$/)
   async confirment(@Ctx() ctx: MyContext) {
