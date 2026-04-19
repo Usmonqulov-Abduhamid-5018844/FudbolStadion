@@ -39,7 +39,6 @@
   "no_cancelled": "📭 No cancelled bookings found.\n\n💡 There are currently no cancelled bookings.",
   "no_stats": "📭 Not enough data for statistics.\n\n💡 There are not enough bookings yet.",
 
-
   "booking": {
     "confirm_check_in": "❗️Are you sure you want to confirm that the customer has arrived at the stadium?\n\n⚠️ This action cannot be undone.",
     "confirm_yes": "✅ Yes, confirm",
@@ -54,5 +53,12 @@
 
   "full_details": "<b>📄 Booking Information</b>\n\n🆔 <b>ID:</b> {id}\n\n🏟 <b>Stadium:</b> {stadium}\n\n📍 <b>Region:</b> {region}\n\n📅 <b>Date:</b> {date}\n\n🕒 <b>Time:</b> {time}\n\n⏱ <b>Status:</b> {time_left}\n\n👤 <b>User:</b> {user}\n\n📞 <b>Phone:</b> {phone}\n\n{username}\n\n💰 <b>Price:</b> {price} UZS\n\n💳 <b>Payment:</b> {payment}\n\n📌 <b>Status:</b> {status}\n\n🕓 <b>Created at:</b> {created_at}\n\n{check_in}",
 
-  "time_finished": "Started or finished"
+  "time_finished": "Started or finished",
+
+  "by_stadion": {
+    "title": "📊 Choose one of the options below to filter bookings:",
+    "date": "📅 By date",
+    "status": "📊 By status",
+    "stadium": "🏟 By stadium"
+  }
 }

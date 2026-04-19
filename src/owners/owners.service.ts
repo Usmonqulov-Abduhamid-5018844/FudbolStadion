@@ -1042,11 +1042,21 @@ export class OwnersService {
         case '6': {
           return this.registor(ctx, lang);
         }
-        case '7': {
-          try {
-            await this.utils.clearSessionMessages(ctx);
-          } catch (error) {}
-        }
+        case '7':
+          {
+            try {
+              await this.utils.clearSessionMessages(ctx);
+            } catch (error) {}
+          }
+          break;
+        case '8':
+          {
+            try {
+              await this.utils.clearSessionMessages(ctx);
+              return this.owner_Bron(ctx, lang);
+            } catch (error) {}
+          }
+          break;
         default: {
           break;
         }
@@ -1546,7 +1556,7 @@ export class OwnersService {
                   'owner_booking.booking_menu.buttons.all',
                   { lang },
                 ),
-                callback_data: `ownerBooking_all_${ownerData.id}_1`,
+                callback_data: `bookingAllData_all_${ownerData.id}_1`,
               },
               {
                 text: this.i18n.translate(
@@ -1559,10 +1569,10 @@ export class OwnersService {
             [
               {
                 text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.by_stadion',
+                  'owner_booking.booking_menu.buttons.stats',
                   { lang },
                 ),
-                callback_data: `ownerBooking_Bystadion_${ownerData.id}_1`,
+                callback_data: `ownerBooking_stats_${ownerData.id}_1`,
               },
               {
                 text: this.i18n.translate(
@@ -1570,15 +1580,6 @@ export class OwnersService {
                   { lang },
                 ),
                 callback_data: `ownerBooking_search_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.stats',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_stats_${ownerData.id}_1`,
               },
             ],
             [

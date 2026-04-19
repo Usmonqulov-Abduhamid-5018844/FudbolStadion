@@ -7,13 +7,19 @@ import { UtilisService } from 'src/utils/utile.service';
 export class CronService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly utils: UtilisService,
-  ) {} 
-  @Cron(CronExpression.EVERY_MINUTE)
-  async cancelExpiredBookings() {
-    try {
+  ) {}
+  private isCancelRunning = false;
+  private isNoShowRunning = false;
+  private isCompletedRunning = false;
+  private isPayLaterCancelRunning = false;
 
-      await this.prisma.booking.updateMany({
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async cancelExpiredBookings() {
+    if (this.isCancelRunning) return;
+    this.isCancelRunning = true;
+
+    try {
+      const result = await this.prisma.booking.updateMany({
         where: {
           status: 'PENDING',
           status_pay_later: false,
@@ -21,116 +27,91 @@ export class CronService {
             lt: new Date(),
           },
         },
-        data: {
-          status: 'CANCELED',
-        },
+        data: { status: 'CANCELED' },
       });
+
+      console.log(`Expired bookings canceled: ${result.count}`);
     } catch (error) {
-      console.log(error.message);
+      console.log('Cancel cron error:', error.message);
+    } finally {
+      this.isCancelRunning = false;
     }
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async no_showBooking() {
+    if (this.isNoShowRunning) return;
+    this.isNoShowRunning = true;
+
     try {
-      const booking = await this.prisma.booking.findMany({
+      const now = new Date();
+
+      const result = await this.prisma.booking.updateMany({
         where: {
-          status: {
-            in: ['CONFIRMED', 'PAID'],
-          },
+          status: { in: ['CONFIRMED', 'PAID'] },
+          endAt: { lte: now },
           check_in: false,
-        },
-        select:{
-          id:true,
-          date:true,
-          end_time:true,
-        }
-      });
-      await this.prisma.booking.updateMany({
-        where: {
-          id: {
-            in: booking
-              .filter(
-                (b) =>
-                  this.utils.bookingTimeCalculate(b.date, b.end_time)
-                    .totalMinutes <= 0,
-              )
-              .map((b) => b.id),
-          },
         },
         data: { status: 'NO_SHOW' },
       });
+
+      console.log(`NO_SHOW updated: ${result.count}`);
     } catch (error) {
-      console.log(error.message);
+      console.log('NoShow cron error:', error.message);
+    } finally {
+      this.isNoShowRunning = false;
     }
   }
-  @Cron(CronExpression.EVERY_30_MINUTES)
-  async bookingCampleted() {
+
+  @Cron(CronExpression.EVERY_10_MINUTES)
+  async bookingCompleted() {
+    if (this.isCompletedRunning) return;
+    this.isCompletedRunning = true;
+
     try {
-      const booking = await this.prisma.booking.findMany({
+      const now = new Date();
+
+      const result = await this.prisma.booking.updateMany({
         where: {
+          status: { in: ['CONFIRMED', 'PAID'] },
+          endAt: { lte: now },
           check_in: true,
-          status:{
-            in: ['CONFIRMED', 'PAID'],
-          }
-        },
-        select:{
-          id:true,
-          date:true,
-          end_time:true,
-        }
-      });
-      await this.prisma.booking.updateMany({
-        where: {
-          id: {
-            in: booking
-              .filter(
-                (b) =>
-                  this.utils.bookingTimeCalculate(b.date, b.end_time)
-                    .totalMinutes <= 0,
-              )
-              .map((b) => b.id),
-          },
         },
         data: { status: 'COMPLETED' },
       });
+
+      console.log(`Bookings completed: ${result.count}`);
     } catch (error) {
-      console.log(error.message);
+      console.log('Completed cron error:', error.message);
+    } finally {
+      this.isCompletedRunning = false;
     }
   }
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async bookingCancel() {
+    if(this.isPayLaterCancelRunning) return;
+    this.isPayLaterCancelRunning = true;
     try {
-      const booking = await this.prisma.booking.findMany({
+      const now = new Date();
+
+      const result = await this.prisma.booking.updateMany({
         where: {
-          status: {
-            in: ['PENDING'],
+          status: 'PENDING',
+          startAt: {
+            lte: new Date(now.getTime() + 60 * 60 * 1000),
           },
           status_pay_later: true,
         },
-        select:{
-          id:true,
-          date:true,
-          start_time:true,
-        }
-      });
-      await this.prisma.booking.updateMany({
-        where: {
-          id: {
-            in: booking
-              .filter(
-                (b) =>
-                  this.utils.bookingTimeCalculate(b.date, b.start_time)
-                    .totalMinutes < 60,
-              )
-              .map((b) => b.id),
-          },
-        },
         data: { status: 'CANCELED' },
       });
+
+      console.log(`Pay-later canceled: ${result.count}`);
     } catch (error) {
-      console.log(error.message);
+      console.log('Cron error:', error.message);
+    }
+    finally{
+      this.isPayLaterCancelRunning = false;
     }
   }
 }

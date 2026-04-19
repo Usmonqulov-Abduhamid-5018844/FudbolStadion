@@ -400,7 +400,6 @@ export class UtilisService implements OnModuleInit {
     type: string,
   ) {
     const button: InlineKeyboardButton[][] = [];
-
     const makeCb = (action: string) =>
   `bookingChild_${action}_${booking.id}_${page}_${type}`;
 

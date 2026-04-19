@@ -22,6 +22,7 @@ import { getRelatedStadionIds, getTodayStart } from 'src/helpers/stadions';
 import { getLocation } from 'src/helpers/url';
 import { string } from 'yaml/dist/schema/common/string';
 import { statusMap } from 'src/helpers/bookingStatus';
+import { text } from 'stream/consumers';
 
 @Update()
 export class BotUpdate {
@@ -209,7 +210,7 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
-  ////////////////////////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////// OWNER BOOKING //////////////////////////////////////////////////////
 
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
@@ -236,8 +237,15 @@ export class BotUpdate {
 
       if (type === 'active') {
         where.status = { in: ['PAID', 'CONFIRMED'] };
-      } else if (type === 'pending') {
+        order = {
+          startAt: 'asc',
+        };
+      }
+      if (type === 'pending') {
         where.status = 'PENDING';
+        order = {
+          startAt: 'asc',
+        };
       }
       if (['today', 'tomorrow'].includes(type)) {
         const base = new Date();
@@ -247,9 +255,15 @@ export class BotUpdate {
         }
         where.status = { in: ['PAID', 'CONFIRMED', 'PENDING', 'COMPLETED'] };
         where.date = base;
+        order = {
+          startAt: 'asc',
+        };
       }
       if (type === 'cancelled') {
         where.status = 'CANCELED';
+        order = {
+          startAt: 'asc',
+        };
       }
       if (type === 'upcoming') {
         const now = new Date();
@@ -349,7 +363,6 @@ export class BotUpdate {
       const backCb = `ownerBooking_${type}_${booking.stadion.owner.id}_${page}`;
 
       await this.utils.clearSessionMessages(ctx);
-      await ctx.answerCbQuery();
 
       if (action === 'detail') {
         return this.ownerService.bookingDetails(
@@ -474,10 +487,88 @@ export class BotUpdate {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    } finally {
+      await ctx.answerCbQuery().catch(() => {});
     }
   }
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////
+  @Action(/bookingAllData_(.+)_(\d+)_(\d+)$/)
+  async bookingAllData(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const data = (ctx.callbackQuery as any).data.split('_');
+      const action = data[1];
+      const ownerId = data[2];
+      const page = data[3];
+
+      if (action === 'all') {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('owner_booking.by_stadion.title', { lang }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('owner_booking.by_stadion.date'),
+                  callback_data: 'filter_date',
+                },
+                {
+                  text: this.i18n.translate('owner_booking.by_stadion.status'),
+                  callback_data:
+                    'bookingAllData_status_' + ownerId + '_' + page,
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('owner_booking.by_stadion.stadium'),
+                  callback_data: 'filter_stadium',
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: 'back_owner_8',
+                },
+              ],
+            ],
+          },
+        );
+        return;
+      }
+      if (action === 'status') {
+        const statuses: Booking_status[] = [
+          'PENDING',
+          'CONFIRMED',
+          'PAID',
+          'COMPLETED',
+          'CANCELED',
+          'NO_SHOW',
+          'REFUNDED',
+        ];
+        const button: InlineKeyboardButton[][] = statuses.map((status) => ([{
+          text: statusMap(status, this.i18n, lang),
+          callback_data: `filter_status_${status}`,
+        }]));
+        button.push([{
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: 'bookingAllData_all_' + ownerId + '_' + page,
+        }]);
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('owner_booking.filter_by_status', { lang }),
+          {
+            inline_keyboard: button
+          },
+        );
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    } finally {
+      await ctx.answerCbQuery().catch(() => {});
+    }
+  }
+
+  /////////////////////////////////////// OWNER BOOKING /////////////////////////////////////////////////////
 
   @Action(/^booking_confirm_(.+)_(\d+)$/)
   async confirment(@Ctx() ctx: MyContext) {

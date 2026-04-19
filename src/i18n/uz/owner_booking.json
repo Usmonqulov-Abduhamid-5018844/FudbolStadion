@@ -39,7 +39,6 @@
   "no_cancelled": "📭 Bekor qilingan bronlar topilmadi.\n\n💡 Hozircha hech qanday bekor qilingan bron yo‘q.",
   "no_stats": "📭 Statistika uchun yetarli ma’lumot yo‘q.\n\n💡 Hali bronlar yetarli emas.",
 
-
   "booking": {
     "confirm_check_in": "❗️Haqiqatan ham mijoz stadionga kelganini tasdiqlaysizmi?\n\n⚠️ Bu amalni bekor qilib bo‘lmaydi.",
     "confirm_yes": "✅ Ha, tasdiqlash",
@@ -53,5 +52,12 @@
 
   "full_details": "<b>📄 Bron haqida ma’lumot</b>\n\n🆔 <b>ID:</b> {id}\n\n🏟 <b>Stadion:</b> {stadium}\n\n📍 <b>Hudud:</b> {region}\n\n📅 <b>Sana:</b> {date}\n\n🕒 <b>Vaqt:</b> {time}\n\n⏱ <b>Holat:</b> {time_left}\n\n👤 <b>Mijoz:</b> {user}\n\n📞 <b>Telefon:</b> {phone}\n\n{username}\n\n💰 <b>Narx:</b> {price} so‘m\n\n💳 <b>To‘lov:</b> {payment}\n\n📌 <b>Status:</b> {status}\n\n🕓 <b>Yaratilgan:</b> {created_at}\n\n{check_in}",
 
-  "time_finished": "Boshlangan yoki tugagan"
+  "time_finished": "Boshlangan yoki tugagan",
+
+  "by_stadion": {
+    "title": "📊 Bronlarni filtrlash uchun quyidagi variantlardan birini tanlang:",
+    "date": " 📅 Sana bo‘yicha",
+    "status": "📊 Status bo‘yicha",
+    "stadium": "🏟 Stadion bo‘yicha"
+  }
 }

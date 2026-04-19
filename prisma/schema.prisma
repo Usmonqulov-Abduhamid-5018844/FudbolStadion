@@ -142,6 +142,8 @@ model Booking {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   expires_at       DateTime?
+  @@index([status, startAt, status_pay_later])
+  @@index([status, endAt, check_in])
   status_pay_later Boolean        @default(false)
   stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
   user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
