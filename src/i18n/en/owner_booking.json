@@ -19,7 +19,7 @@
   },
 
   "check_in": "✅ <b>Customer has arrived</b>",
-  "not_check_in": "⏳ <b>Customer has not arrived yet</b>",
+  "not_check_in": "⏳ <b>The client did not arrive</b>",
 
   "buttons": {
     "detail": "📄 Details",
@@ -35,9 +35,15 @@
   "no_tomorrow": "📭 No bookings found for tomorrow.\n\n💡 There are currently no bookings.",
   "no_upcoming": "📭 No upcoming bookings found.\n\n💡 There are no bookings in the next 5 hours.",
   "no_now": "📭 No active matches right now.\n\n💡 There are currently no ongoing games.",
-  "no_all": "📭 No bookings found.\n\n💡 There are currently no bookings.",
   "no_cancelled": "📭 No cancelled bookings found.\n\n💡 There are currently no cancelled bookings.",
-  "no_stats": "📭 Not enough data for statistics.\n\n💡 There are not enough bookings yet.",
+
+  "no_PENDING": "📭 No pending bookings.\n\n💡 New requests will appear here.",
+  "no_CONFIRMED": "📭 No confirmed bookings.\n\n💡 Confirmed bookings will appear here.",
+  "no_PAID": "📭 No paid bookings.\n\n💡 Paid bookings will appear here.",
+  "no_COMPLETED": "📭 No completed bookings.\n\n💡 Completed bookings will appear here.",
+  "no_CANCELED": "📭 No canceled bookings.\n\n💡 Canceled bookings will appear here.",
+  "no_NOSHOW": "📭 No no-show bookings.\n\n💡 No-show bookings will appear here.",
+  "no_REFUNDED": "📭 No refunded bookings.\n\n💡 Refunded payments will appear here.",
 
   "booking": {
     "confirm_check_in": "❗️Are you sure you want to confirm that the customer has arrived at the stadium?\n\n⚠️ This action cannot be undone.",
@@ -53,12 +59,38 @@
 
   "full_details": "<b>📄 Booking Information</b>\n\n🆔 <b>ID:</b> {id}\n\n🏟 <b>Stadium:</b> {stadium}\n\n📍 <b>Region:</b> {region}\n\n📅 <b>Date:</b> {date}\n\n🕒 <b>Time:</b> {time}\n\n⏱ <b>Status:</b> {time_left}\n\n👤 <b>User:</b> {user}\n\n📞 <b>Phone:</b> {phone}\n\n{username}\n\n💰 <b>Price:</b> {price} UZS\n\n💳 <b>Payment:</b> {payment}\n\n📌 <b>Status:</b> {status}\n\n🕓 <b>Created at:</b> {created_at}\n\n{check_in}",
 
-  "time_finished": "Started or finished",
-
   "by_stadion": {
     "title": "📊 Choose one of the options below to filter bookings:",
     "date": "📅 By date",
     "status": "📊 By status",
     "stadium": "🏟 By stadium"
-  }
+  },
+  "filter_by_status": "📊 Select a status:",
+
+  "filterData": "📅 Enter the date\n\n📝 Correct format: 16.05.2026",
+
+  "invalid_format": "⚠️ Invalid date format.\n\n📌 Correct format: 15.05.2026",
+  "invalid_date": "⚠️ This date does not exist.",
+  "out_of_range": "⚠️ Date must be between 2026 and 2060.",
+  "no_bookings": "📭 No bookings found for this date.",
+
+  "stadion": {
+    "select": "🏟 Choose one of the stadiums"
+  },
+
+  "booking_filter": {
+    "title": "📊 Filter bookings",
+    "seven_days": "📅 Last 7 days",
+    "thirty_days": "📆 Last 30 days",
+    "active": "🟢 Active bookings",
+    "all": "📋 All"
+  },
+
+  "not_found_7days": "📭 No bookings found in the last 7 days.",
+  "not_found_30days": "📭 No bookings found in the last 30 days.",
+  "not_found_active": "📭 No active bookings at the moment.",
+  "not_found_allFilter": "📭 No bookings available yet.",
+
+  "not_found_stadium_bookings": "📭 There are no bookings for this stadium yet."
+
 }

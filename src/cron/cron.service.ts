@@ -52,7 +52,7 @@ export class CronService {
           endAt: { lte: now },
           check_in: false,
         },
-        data: { status: 'NO_SHOW' },
+        data: { status: 'NOSHOW' },
       });
 
       console.log(`NO_SHOW updated: ${result.count}`);

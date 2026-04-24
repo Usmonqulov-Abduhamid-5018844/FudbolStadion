@@ -457,7 +457,7 @@ export class UsersService {
                 if (totalMinutes <= 0 && endMinutes > 0) {
                   return this.i18n.translate('booking.game_started', { lang });
                 } else if (totalMinutes <= 0) {
-                  return this.i18n.translate('bookingHestory.time_expired', {
+                  return this.i18n.translate('bookingHistory.time_expired', {
                     lang,
                   });
                 }
@@ -482,23 +482,23 @@ export class UsersService {
                   item.stadion.region_items.name,
                 );
 
-                const message = `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
+                const message = `${this.i18n.translate('bookingHistory.booking.id', { lang })}: ${item.id}
 
-${this.i18n.translate('bookingHestory.booking.stadion', { lang })}: ${item.stadion.name}
+${this.i18n.translate('bookingHistory.booking.stadion', { lang })}: ${item.stadion.name}
 
-${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
+${this.i18n.translate('bookingHistory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
 
-${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
+${this.i18n.translate('bookingHistory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
 
-${this.i18n.translate('bookingHestory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, item.end_time, lang)}
+${this.i18n.translate('bookingHistory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, item.end_time, lang)}
 
-${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
+${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}
 
-${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap(item.status,this.i18n, lang)}
+${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status,this.i18n, lang)}
 
-${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
+${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
 `;
 
                 const buttons = this.utils.booking_status_handler(
@@ -592,7 +592,7 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NO_SHOW', 'CANCELED', 'REFUNDED'],
+                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED'],
                     },
                   },
                   orderBy: {
@@ -625,7 +625,7 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NO_SHOW', 'CANCELED', 'REFUNDED'],
+                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED'],
                     },
                   },
                 }),
@@ -654,7 +654,7 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                   this.i18n.translate('loading.loading', { lang }),
                 );
               } catch (error) {}
-              let message = `${this.i18n.translate('bookingHestory.booking.history_title', { lang })}\n\n`;
+              let message = `${this.i18n.translate('bookingHistory.booking.history_title', { lang })}\n\n`;
 
               const formatPrice = (price?: number | string | Decimal) => {
                 if (!price) return '❌';
@@ -668,21 +668,21 @@ ${item.check_in ? this.i18n.translate('bookingHestory.booking.check_in', { lang 
                   item.stadion.region_items.name,
                 );
 
-                message += `${this.i18n.translate('bookingHestory.booking.id', { lang })}: ${item.id}
+                message += `${this.i18n.translate('bookingHistory.booking.id', { lang })}: ${item.id}
 
-${this.i18n.translate('bookingHestory.booking.stadion', { lang })}: ${item.stadion.name}
+${this.i18n.translate('bookingHistory.booking.stadion', { lang })}: ${item.stadion.name}
 
-${this.i18n.translate('bookingHestory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
+${this.i18n.translate('bookingHistory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
 
-${this.i18n.translate('bookingHestory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
+${this.i18n.translate('bookingHistory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
 
-${this.i18n.translate('bookingHestory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHestory.booking.price_title', { lang })}
+${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}
 
-${this.i18n.translate('bookingHestory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
+${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHestory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
+${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
 
-${this.i18n.translate('bookingHestory.booking.location', { lang })}: ${locationText}
+${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -2497,7 +2497,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         where: {
           user_id: user.id,
           stadion_id: stadion.id,
-          status: { in: ['NO_SHOW', 'REFUNDED'] },
+          status: { in: ['NOSHOW', 'REFUNDED'] },
         },
       });
 

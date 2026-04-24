@@ -87,6 +87,8 @@ export const INITIAL_SESSION: ISession = {
   maxCount: null,
   booking_step: null,
   stadion_step: null,
+  ownerBrons: null,
+  ownerDataFilter: null,
   owner_registor: {
     full_name: null,
     email: null,

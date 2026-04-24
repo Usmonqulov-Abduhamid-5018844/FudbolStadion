@@ -1046,6 +1046,8 @@ export class OwnersService {
           {
             try {
               await this.utils.clearSessionMessages(ctx);
+              ctx.session.ownerDataFilter = null;
+              ctx.session.owner_registor.id = null;
             } catch (error) {}
           }
           break;
@@ -1602,40 +1604,46 @@ export class OwnersService {
     page: number,
     lang: string,
     type: string,
+    callback_data: string,
   ) {
-    const button = this.utils.buildOwnerBookingButtons(
-      booking,
-      page,
-      lang,
-      type,
-    );
-
-    const send = await ctx.reply(
-      this.i18n.translate('owner_booking.details', {
+    try {
+      const button = this.utils.buildOwnerBookingButtons(
+        booking,
+        page,
         lang,
-        args: {
-          id: booking.id,
-          date: format(new Date(booking.date), 'dd.MM.yyyy'),
-          time: `${booking.start_time} - ${booking.end_time}`,
-          stadium: booking.stadion.name,
-          region: booking.stadion.region.name,
-          user: booking.user.full_name,
-          status: statusMap(booking.status, this.i18n, lang),
-          check_in: booking.check_in
-            ? this.i18n.translate('owner_booking.check_in', { lang })
-            : this.i18n.translate('owner_booking.not_check_in', { lang }),
-        },
-      }),
-      {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: button,
-        },
-      },
-    );
+        type,
+        callback_data,
+      );
 
-    ctx.session.ownerActiveBooking ??= [];
-    ctx.session.ownerActiveBooking.push(send.message_id);
+      const send = await ctx.reply(
+        this.i18n.translate('owner_booking.details', {
+          lang,
+          args: {
+            id: booking.id,
+            date: format(new Date(booking.date), 'dd.MM.yyyy'),
+            time: `${booking.start_time} - ${booking.end_time}`,
+            stadium: booking.stadion.name,
+            region: booking.stadion.region.name,
+            user: booking.user.full_name,
+            status: statusMap(booking.status, this.i18n, lang),
+            check_in: booking.check_in
+              ? this.i18n.translate('owner_booking.check_in', { lang })
+              : this.i18n.translate('owner_booking.not_check_in', { lang }),
+          },
+        }),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: button,
+          },
+        },
+      );
+
+      ctx.session.ownerActiveBooking ??= [];
+      ctx.session.ownerActiveBooking.push(send.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
   }
 
   async bookingDetails(
@@ -1644,8 +1652,12 @@ export class OwnersService {
     page: number = 1,
     lang: string,
     type: string,
+    callback_data: string,
   ) {
     try {
+     const isFilterType = ["7days","30days","active","allFilter"].includes(type);
+     callback_data = isFilterType ? "bookingFilter": callback_data;
+
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
         include: {
@@ -1668,14 +1680,13 @@ export class OwnersService {
       });
 
       if (!booking) return this.utils.errorFunction(ctx);
-
       const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
         booking.date,
         booking.start_time,
         lang,
       );
 
-      await this.utils.clearSessionMessages(ctx);
+      await this.utils.clearSessionMessages(ctx).catch(()=>{});
 
       const message = this.i18n.translate('owner_booking.full_details', {
         lang,
@@ -1688,11 +1699,11 @@ export class OwnersService {
           time_left:
             totalMinutes > 0
               ? timeLeftText
-              : this.i18n.translate('owner_booking.time_finished', { lang }),
+              : this.i18n.translate('bookingHistory.time_expired', { lang }),
           user: booking.user.full_name,
           phone: booking.user.phone,
-          username: booking.user.username ? `🔗 @${booking.user.username}` : '',
-          price: Number(booking.total_price),
+          username: booking.user.username ? `🔗 @${booking.user.username}` : '_',
+          price: new Intl.NumberFormat('uz-UZ').format(Number(booking.total_price)),
           payment: getPaymentText(
             booking.payment_method,
             this.i18n.translate('peyments', { lang }),
@@ -1712,7 +1723,7 @@ export class OwnersService {
             [
               {
                 text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: `ownerBooking_${type}_${booking.stadion.owner_id}_${page}`,
+                callback_data: `${callback_data}_${type}_${isFilterType ? booking.stadion_id : booking.stadion.owner_id}_${page}`,
               },
             ],
           ],
@@ -1770,6 +1781,118 @@ export class OwnersService {
           ],
         },
       });
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async handleDataFilter(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+    owner_Id?: number,
+    page:number = 1
+  ) {
+    try {
+      const input = text.trim();
+      let sent: any;
+      const limit = 5
+      ctx.session.ownerActiveBooking ??= [];
+      const regex = /^\d{2}\.\d{2}\.\d{4}$/;
+      if (!regex.test(input)) {
+        sent = await ctx.reply(this.i18n.translate("owner_booking.invalid_format",{lang}));
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        return;
+      }
+
+      const [day, month, year] = input.split('.').map(Number);
+      const selectedDate = new Date(Date.UTC(year, month - 1, day));
+
+      if (
+        selectedDate.getUTCFullYear() !== year ||
+        selectedDate.getUTCMonth() !== month - 1 ||
+        selectedDate.getUTCDate() !== day
+      ) {
+        sent = await ctx.reply(this.i18n.translate("owner_booking.invalid_date",{lang}));
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        return;
+      }
+
+      if (year < 2026 || year > 2060) {
+        sent = await ctx.reply(this.i18n.translate("owner_booking.out_of_range",{lang}));
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        return;
+      }
+      const ownerId = owner_Id
+        ? owner_Id
+        : Number(ctx.session.owner_registor.id);
+
+        const [bookings, total]= await Promise.all([
+          this.prisma.booking.findMany({
+            where:{
+              stadion:{owner_id:ownerId},
+              date:selectedDate
+            },
+            skip:(page -1) * limit,
+            take: limit,
+            orderBy:{
+              date:'asc',
+            },
+            include:{
+              stadion:{
+                include:{
+                  region:true,
+                  region_items:true,
+                  owner:true
+                }
+              },
+              user:true
+            }
+          }),
+          this.prisma.booking.count({
+            where:{stadion:{owner_id:ownerId},date:selectedDate}
+          })
+        ])
+      if (!bookings.length) {
+        sent = await ctx.reply(this.i18n.translate('owner_booking.no_bookings', { lang }), {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: `bookingAllData_all_${ownerId}_1`,
+                },
+              ],
+            ],
+          },
+        });
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        if (ctx.updateType === 'message') {
+          await ctx.deleteMessage().catch(() => {});
+        }
+        return;
+      }
+      ctx.session.ownerDataFilter = input;
+      if (ctx.updateType === 'message') {
+        await ctx.deleteMessage().catch(() => {});
+      }
+      await Promise.all(
+        bookings.map((booking) =>
+          this.sendBookingMessage(
+            ctx,
+            booking,
+            page,
+            lang,
+            'all',
+            'bookingAllData',
+          ),
+        ),
+      );
+      ctx.session.owner_registor.id = null;
+      ctx.session.ownerBrons = null;
+      const callback_data = `bookingAllData_all_${ownerId}`
+      await this.utils.sendPagination(ctx,page,total,limit,lang,callback_data)
+      return;
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

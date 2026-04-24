@@ -17,12 +17,9 @@ import { format } from 'date-fns';
 import { QrService } from 'src/qr/qr.service';
 import { startWith } from 'rxjs';
 import { EStadion_type, IBooking } from 'src/helpers/interface';
-import { log } from 'console';
-import { getRelatedStadionIds, getTodayStart } from 'src/helpers/stadions';
-import { getLocation } from 'src/helpers/url';
-import { string } from 'yaml/dist/schema/common/string';
+import { getRelatedStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
-import { text } from 'stream/consumers';
+import { addDays } from 'date-fns';
 
 @Update()
 export class BotUpdate {
@@ -185,11 +182,6 @@ export class BotUpdate {
   }
   @Action(/delete_stadion_fovorite_(\d+)$/)
   async deletStadion(@Ctx() ctx: MyContext) {
-    if (ctx.callbackQuery) {
-      try {
-        await ctx.answerCbQuery();
-      } catch (error) {}
-    }
     try {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
@@ -208,6 +200,8 @@ export class BotUpdate {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    } finally {
+      ctx.answerCbQuery().catch(() => {});
     }
   }
   /////////////////////////////////////// OWNER BOOKING //////////////////////////////////////////////////////
@@ -217,16 +211,17 @@ export class BotUpdate {
     try {
       const lang = await this.utils.langs(ctx);
 
-      const [_, type, ownerId, pageStr] = (ctx.callbackQuery as any).data.split(
-        '_',
-      );
+      const data = (ctx.callbackQuery as any).data.split('_');
+      const type = data[1];
+      const ownerId = data[2];
+      const pageStr = data[3];
 
       const page = Number(pageStr);
       const limit = 5;
 
       await this.utils.clearSessionMessages(ctx);
 
-      const where: any = {
+      const where: Prisma.BookingWhereInput = {
         stadion: {
           owner_id: Number(ownerId),
         },
@@ -248,8 +243,13 @@ export class BotUpdate {
         };
       }
       if (['today', 'tomorrow'].includes(type)) {
-        const base = new Date();
-        base.setHours(5, 0, 0, 0);
+        const now = new Date();
+
+        const base = new Date(
+          Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+        );
+        console.log('base', base);
+
         if (type === 'tomorrow') {
           base.setDate(base.getDate() + 1);
         }
@@ -321,13 +321,22 @@ export class BotUpdate {
 
       await ctx.answerCbQuery(this.i18n.translate('loading.loading', { lang }));
 
+      const callback_data: string = 'ownerBooking';
+
       await Promise.all(
-        bookings.map((b) =>
-          this.ownerService.sendBookingMessage(ctx, b, page, lang, type),
+        bookings.map((item: IBooking) =>
+          this.ownerService.sendBookingMessage(
+            ctx,
+            item,
+            page,
+            lang,
+            type,
+            callback_data,
+          ),
         ),
       );
       const callback = `ownerBooking_${type}_${ownerId}`;
-      await this.utils.sendPagination(ctx, page, total, limit, callback, lang);
+      await this.utils.sendPagination(ctx, page, total, limit, lang, callback);
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
@@ -343,6 +352,7 @@ export class BotUpdate {
       const bookingId = Number(data[2]);
       const page = Number(data[3]);
       const type = data[4];
+      const callback_data = data[5];
 
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
@@ -360,7 +370,7 @@ export class BotUpdate {
 
       if (!booking) return this.utils.errorFunction(ctx);
 
-      const backCb = `ownerBooking_${type}_${booking.stadion.owner.id}_${page}`;
+      const backCb = `${callback_data}_${type}_${booking.stadion.owner.id}_${page}`;
 
       await this.utils.clearSessionMessages(ctx);
 
@@ -371,6 +381,7 @@ export class BotUpdate {
           page,
           lang,
           type,
+          callback_data,
         );
       }
       if (action === 'checkin') {
@@ -387,7 +398,7 @@ export class BotUpdate {
                       'owner_booking.booking.confirm_yes',
                       { lang },
                     ),
-                    callback_data: `bookingChild_yesCheckin_${booking.id}_${page}_${type}`,
+                    callback_data: `bookingChild_yesCheckin_${booking.id}_${page}_${type}_${callback_data}`,
                   },
                   {
                     text: this.i18n.translate('schedule.back', { lang }),
@@ -443,7 +454,7 @@ export class BotUpdate {
                       'owner_booking.buttons.confirm_cancel',
                       { lang },
                     ),
-                    callback_data: `bookingChild_yesCancel_${booking.id}_${page}_${type}`,
+                    callback_data: `bookingChild_yesCancel_${booking.id}_${page}_${type}_${callback_data}`,
                   },
                   {
                     text: this.i18n.translate('schedule.back', { lang }),
@@ -496,12 +507,23 @@ export class BotUpdate {
   async bookingAllData(@Ctx() ctx: MyContext) {
     try {
       const lang = await this.utils.langs(ctx);
-      const data = (ctx.callbackQuery as any).data.split('_');
-      const action = data[1];
-      const ownerId = data[2];
-      const page = data[3];
+
+      const match = ctx.match as RegExpMatchArray;
+      const action = match[1];
+      const ownerId = Number(match[2]);
+      const page = Number(match[3]);
 
       if (action === 'all') {
+        await this.utils.clearSessionMessages(ctx);
+        if (ctx.session.ownerDataFilter) {
+          return this.ownerService.handleDataFilter(
+            ctx,
+            ctx.session.ownerDataFilter,
+            lang,
+            ownerId,
+            page,
+          );
+        }
         await this.utils.safeEditOrReply(
           ctx,
           this.i18n.translate('owner_booking.by_stadion.title', { lang }),
@@ -510,7 +532,8 @@ export class BotUpdate {
               [
                 {
                   text: this.i18n.translate('owner_booking.by_stadion.date'),
-                  callback_data: 'filter_date',
+                  callback_data:
+                    'bookingAllData_dateFilter_' + ownerId + '_' + page,
                 },
                 {
                   text: this.i18n.translate('owner_booking.by_stadion.status'),
@@ -521,7 +544,8 @@ export class BotUpdate {
               [
                 {
                   text: this.i18n.translate('owner_booking.by_stadion.stadium'),
-                  callback_data: 'filter_stadium',
+                  callback_data:
+                    'bookingAllData_stadiumFilter_' + ownerId + '_' + page,
                 },
               ],
               [
@@ -542,23 +566,301 @@ export class BotUpdate {
           'PAID',
           'COMPLETED',
           'CANCELED',
-          'NO_SHOW',
+          'NOSHOW',
           'REFUNDED',
         ];
-        const button: InlineKeyboardButton[][] = statuses.map((status) => ([{
-          text: statusMap(status, this.i18n, lang),
-          callback_data: `filter_status_${status}`,
-        }]));
-        button.push([{
-          text: this.i18n.translate('schedule.back', { lang }),
-          callback_data: 'bookingAllData_all_' + ownerId + '_' + page,
-        }]);
+        const button: InlineKeyboardButton[][] = statuses.map((status) => [
+          {
+            text: statusMap(status, this.i18n, lang),
+            callback_data: `bookingAllData_STATUS.${status}_${ownerId}_${page}`,
+          },
+        ]);
+
+        button.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: 'bookingAllData_all_' + ownerId + '_' + page,
+          },
+        ]);
         await this.utils.safeEditOrReply(
           ctx,
           this.i18n.translate('owner_booking.filter_by_status', { lang }),
           {
-            inline_keyboard: button
+            inline_keyboard: button,
           },
+        );
+        return;
+      }
+      if (action.startsWith('STATUS')) {
+        const status = action.replace('STATUS.', '') as Booking_status;
+
+        await this.utils.clearSessionMessages(ctx);
+        const limit = 5;
+        const where: Prisma.BookingWhereInput = {
+          stadion: {
+            owner_id: ownerId,
+          },
+          status: status,
+        };
+        const orderBy: Prisma.BookingOrderByWithRelationInput = {
+          startAt: 'asc',
+        };
+        const [bookings, total] = await Promise.all([
+          this.prisma.booking.findMany({
+            where,
+            orderBy,
+            include: {
+              stadion: {
+                include: {
+                  region: true,
+                  region_items: true,
+                },
+              },
+              user: true,
+            },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          this.prisma.booking.count({ where }),
+        ]);
+        if (!bookings.length) {
+          await ctx.answerCbQuery(
+            this.i18n.translate(`owner_booking.no_${status}`, { lang }),
+            { show_alert: true },
+          );
+          return;
+        }
+        await ctx.answerCbQuery(
+          this.i18n.translate('loading.loading', { lang }),
+        );
+
+        const callback_data: string = 'bookingAllData';
+
+        await Promise.all(
+          bookings.map((item: IBooking) =>
+            this.ownerService.sendBookingMessage(
+              ctx,
+              item,
+              page,
+              lang,
+              action,
+              callback_data,
+            ),
+          ),
+        );
+
+        const callback: string = `bookingAllData_${action}_${ownerId}`;
+        await this.utils.sendPagination(
+          ctx,
+          page,
+          total,
+          limit,
+          lang,
+          callback,
+        );
+        return;
+      }
+      if (action === 'dateFilter') {
+        let sent = await ctx.reply(
+          this.i18n.translate('owner_booking.filterData', { lang }),
+        );
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        ctx.session.ownerBrons = 'dataFilter';
+        ctx.session.owner_registor.id = ownerId;
+        return;
+      }
+      if (action === 'stadiumFilter') {
+        const stadions = await this.prisma.stadion.findMany({
+          where: { owner_id: ownerId },
+          select: {
+            id: true,
+            name: true,
+          },
+        });
+        if (!stadions.length) return this.utils.errorFunction(ctx);
+
+        const buttons = stadions.map((s) => [
+          {
+            text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
+            callback_data: `bookingAllData_STADION.${s.id}_${ownerId}_${page}`,
+          },
+        ]);
+        buttons.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: `bookingAllData_all_${ownerId}_${page}`,
+          },
+        ]);
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('owner_booking.stadion.select', { lang }),
+          {
+            inline_keyboard: buttons,
+          },
+        );
+        return;
+      }
+      if (action.startsWith('STADION')) {
+        const stadionId = Number(action.replace('STADION.', ''));
+        const booking = await this.prisma.booking.count({
+          where: { stadion_id: stadionId },
+        });
+        if (booking === 0) {
+          await ctx.answerCbQuery(
+            this.i18n.translate('owner_booking.not_found_stadium_bookings', { lang }),
+            { show_alert: true },
+          );
+          return;
+        }
+        const buttons: InlineKeyboardButton[][] = [
+          [
+            {
+              text: this.i18n.translate(
+                'owner_booking.booking_filter.seven_days',
+                { lang },
+              ),
+              callback_data: `bookingFilter_7days_${stadionId}_${page}`,
+            },
+            {
+              text: this.i18n.translate(
+                'owner_booking.booking_filter.thirty_days',
+                { lang },
+              ),
+              callback_data: `bookingFilter_30days_${stadionId}_${page}`,
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('owner_booking.booking_filter.active', {
+                lang,
+              }),
+              callback_data: `bookingFilter_active_${stadionId}_${page}`,
+            },
+            {
+              text: this.i18n.translate('owner_booking.booking_filter.all', {
+                lang,
+              }),
+              callback_data: `bookingFilter_allFilter_${stadionId}_${page}`,
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `bookingAllData_stadiumFilter_${ownerId}_${page}`,
+            },
+          ],
+        ];
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('owner_booking.booking_filter.title', { lang }),
+          {
+            inline_keyboard: buttons,
+          },
+        );
+        return;
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    } finally {
+      ctx.answerCbQuery().catch(() => {});
+    }
+  }
+
+  @Action(/^bookingFilter_(.+)_(\d+)_(\d+)$/)
+  async filter(@Ctx() ctx: MyContext) {
+    const match = ctx.match as RegExpMatchArray;
+    const action = match[1];
+    const stadionId = Number(match[2]);
+    const page = Number(match[3]);
+    try {
+      const limit = 5;
+      const lang = await this.utils.langs(ctx);
+      const now = new Date();
+      const base = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      const callback_data: string = 'bookingFilter-' + stadionId;
+      const callback: string = 'bookingFilter_' + action + '_' + stadionId;
+
+      await this.utils.clearSessionMessages(ctx);
+      if (['7days', '30days', 'active', 'allFilter'].includes(action)) {
+        const where: Prisma.BookingWhereInput = {
+          stadion_id: stadionId,
+        };
+        const orderBy: Prisma.BookingOrderByWithRelationInput = {
+          date: 'asc',
+        };
+        if (action === '7days') {
+          const sevenDaysAgo = new Date(base);
+          sevenDaysAgo.setUTCDate(base.getUTCDate() - 7);
+          where.date = {
+            gte: sevenDaysAgo,
+            lt: base,
+          };
+        }
+        if (action === '30days') {
+          const sritinDayAgo = new Date(base);
+          sritinDayAgo.setUTCDate(base.getUTCDate() - 30);
+          where.date = {
+            gte: sritinDayAgo,
+            lt: base,
+          };
+        }
+        if (action === 'active') {
+          where.date = {
+            gte: base,
+          };
+        }
+
+        const [bookings, total] = await Promise.all([
+          this.prisma.booking.findMany({
+            where,
+            orderBy,
+            skip: (page - 1) * limit,
+            take: limit,
+            include: {
+              stadion: {
+                include: {
+                  region: true,
+                  region_items: true,
+                  owner: true,
+                },
+              },
+              user: true,
+            },
+          }),
+          this.prisma.booking.count({ where }),
+        ]);
+        if (!bookings.length) {
+          await ctx.answerCbQuery(
+            this.i18n.translate(`owner_booking.not_found_${action}`, { lang }),
+            { show_alert: true },
+          );
+          return;
+        }
+        await ctx.answerCbQuery(
+          this.i18n.translate('loading.loading', { lang }),
+        );
+        await Promise.all(
+          bookings.map((booking) =>
+            this.ownerService.sendBookingMessage(
+              ctx,
+              booking,
+              page,
+              lang,
+              action,
+              callback_data,
+            ),
+          ),
+        );
+        await this.utils.sendPagination(
+          ctx,
+          page,
+          total,
+          limit,
+          lang,
+          callback,
         );
       }
     } catch (error) {
@@ -1190,14 +1492,9 @@ export class BotUpdate {
       const [_, __, start_time, end_time, day, monthNumber, stadionId, years] =
         ctx.callbackQuery.data.split('_');
       const data = new Date(
-        Number(years),
-        Number(monthNumber) - 1,
-        Number(day),
-        5,
-        0,
-        0,
-        0,
+        Date.UTC(Number(years), Number(monthNumber) - 1, Number(day)),
       );
+      console.log('bookingTimeEnd', data);
 
       return this.userService.bookingScheduleFinish(
         ctx,
@@ -1262,14 +1559,9 @@ export class BotUpdate {
         const [_, __, start_time, end_time, id, year, month, day] =
           ctx.callbackQuery.data.split('_');
         const data = new Date(
-          Number(year),
-          Number(month) - 1,
-          Number(day),
-          5,
-          0,
-          0,
-          0,
+          Date.UTC(Number(year), Number(month) - 1, Number(day)),
         );
+        console.log('booking_specialEnd', data);
 
         return this.userService.bookingScheduleFinish(
           ctx,
@@ -2099,6 +2391,8 @@ export class BotUpdate {
       data = JSON.parse(ctx.callbackQuery.data);
     } catch (error) {
       this.utils.errorFunction(ctx);
+      console.log(error);
+
       return;
     }
     switch (data.type) {
@@ -3571,6 +3865,9 @@ export class BotUpdate {
       if (ctx.session.user_registor.phone === 'phone') {
         return this.userService.userUpdate_phone(ctx, lang, text);
       }
+      if (ctx.session.ownerBrons === 'dataFilter') {
+        return this.ownerService.handleDataFilter(ctx, text, lang);
+      }
 
       if (
         ctx.session.step &&
@@ -3603,7 +3900,6 @@ export class BotUpdate {
       ctx.reply(this.i18n.translate('error.else', { lang, args: { text } }));
     } catch (error) {
       this.utils.errorFunction(ctx);
-      console.log(error);
     }
   }
 }

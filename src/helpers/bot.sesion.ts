@@ -17,6 +17,8 @@ export interface ISession {
   bookingBrones?: number[];
   booking_step: string | null;
   ownerActiveBooking?: number[];
+  ownerBrons: string  | null
+  ownerDataFilter: string | null
 }
 export interface Stadion {
   step: number;
@@ -58,4 +60,5 @@ export interface registorUser {
 
 export interface MyContext extends Context {
   session: ISession;
+  match?: RegExpMatchArray;
 }

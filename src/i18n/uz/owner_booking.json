@@ -19,7 +19,7 @@
   },
 
   "check_in": "✅ <b>Mijoz kelgan</b>",
-  "not_check_in": "⏳ <b>Mijoz hali kelmagan</b>",
+  "not_check_in": "⏳ <b>Mijoz kelmagan</b>",
 
   "buttons": {
     "detail": "📄 Batafsil",
@@ -35,9 +35,15 @@
   "no_tomorrow": "📭 Ertangi kun uchun bronlar topilmadi.\n\n💡 Hozircha hech qanday bron yo‘q.",
   "no_upcoming": "📭 Yaqin vaqtlar uchun bronlar topilmadi.\n\n💡 Keyingi 5 soat ichida hech qanday bron yo‘q",
   "no_now": "📭 Hozir o‘ynalayotgan bronlar yo‘q.\n\n💡 Ayni paytda hech qanday o‘yin faol emas.",
-  "no_all": "📭 Bronlar topilmadi.\n\n💡 Hozircha hech qanday bron mavjud emas.",
   "no_cancelled": "📭 Bekor qilingan bronlar topilmadi.\n\n💡 Hozircha hech qanday bekor qilingan bron yo‘q.",
-  "no_stats": "📭 Statistika uchun yetarli ma’lumot yo‘q.\n\n💡 Hali bronlar yetarli emas.",
+
+  "no_PENDING": "📭 Kutilayotgan bronlar yo‘q.\n\n💡 Yangi so‘rovlar paydo bo‘lganda shu yerda chiqadi.",
+  "no_CONFIRMED": "📭 Tasdiqlangan bronlar topilmadi.\n\n💡 Tasdiqlangan bronlar shu yerda ko‘rinadi.",
+  "no_PAID": "📭 To‘langan bronlar topilmadi.\n\n💡 To‘lov qilingan bronlar shu yerda chiqadi.",
+  "no_COMPLETED": "📭 Yakunlangan bronlar topilmadi.\n\n💡 Tugallangan bronlar shu yerda ko‘rinadi.",
+  "no_CANCELED": "📭 Bekor qilingan bronlar topilmadi.\n\n💡 Bekor qilingan bronlar shu yerda chiqadi.",
+  "no_NOSHOW": "📭 Kelmagan bronlar topilmadi.\n\n💡 Mijoz kelmagan bronlar shu yerda ko‘rinadi.",
+  "no_REFUNDED": "📭 Pul qaytarilgan bronlar topilmadi.\n\n💡 Qaytarilgan to‘lovlar shu yerda chiqadi.",
 
   "booking": {
     "confirm_check_in": "❗️Haqiqatan ham mijoz stadionga kelganini tasdiqlaysizmi?\n\n⚠️ Bu amalni bekor qilib bo‘lmaydi.",
@@ -52,12 +58,39 @@
 
   "full_details": "<b>📄 Bron haqida ma’lumot</b>\n\n🆔 <b>ID:</b> {id}\n\n🏟 <b>Stadion:</b> {stadium}\n\n📍 <b>Hudud:</b> {region}\n\n📅 <b>Sana:</b> {date}\n\n🕒 <b>Vaqt:</b> {time}\n\n⏱ <b>Holat:</b> {time_left}\n\n👤 <b>Mijoz:</b> {user}\n\n📞 <b>Telefon:</b> {phone}\n\n{username}\n\n💰 <b>Narx:</b> {price} so‘m\n\n💳 <b>To‘lov:</b> {payment}\n\n📌 <b>Status:</b> {status}\n\n🕓 <b>Yaratilgan:</b> {created_at}\n\n{check_in}",
 
-  "time_finished": "Boshlangan yoki tugagan",
-
   "by_stadion": {
     "title": "📊 Bronlarni filtrlash uchun quyidagi variantlardan birini tanlang:",
     "date": " 📅 Sana bo‘yicha",
     "status": "📊 Status bo‘yicha",
     "stadium": "🏟 Stadion bo‘yicha"
-  }
+  },
+  "filter_by_status": "📊 Statusni tanlang:",
+
+  "filterData": "📅 Sanani kiriting\n\n📝 To‘g‘ri format: 16.05.2026",
+
+  "invalid_format": "⚠️ Sana noto‘g‘ri kiritildi.\n\n📌 To‘g‘ri format: 15.05.2026",
+  "invalid_date": "⚠️ Bunday sana mavjud emas.",
+  "out_of_range": "⚠️ Sana 2026–2060 oralig‘ida bo‘lishi kerak.",
+  "no_bookings": "📭 Bu sana uchun bronlar topilmadi.",
+
+  "stadion": {
+    "select": "🏟 Stadionlardan birini tanlang"
+  },
+
+  "booking_filter": {
+    "title": "📊 Bronlarni filterlang",
+    "seven_days": "📅 7 kunlik",
+    "thirty_days": "📆 30 kunlik",
+    "active": "🟢 Faol bronlar",
+    "all": "📋 Barchasi"
+  },
+
+  "not_found_7days": "📭 Oxirgi 7 kun ichida bronlar topilmadi.",
+  "not_found_30days": "📭 Oxirgi 30 kun ichida bronlar topilmadi.",
+  "not_found_active": "📭 Hozircha faol bronlar mavjud emas.",
+  "not_found_allFilter": "📭 Hozircha bronlar mavjud emas.",
+
+  "not_found_stadium_bookings": "📭 Ushbu stadion uchun hali bronlar mavjud emas."
+
+
 }

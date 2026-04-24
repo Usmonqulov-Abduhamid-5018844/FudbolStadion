@@ -189,6 +189,8 @@ export class UtilisService implements OnModuleInit {
         ],
       },
     });
+    console.log('Error occurred');
+    
   }
 
   roundUpToNextHour(date: Date) {
@@ -398,10 +400,12 @@ export class UtilisService implements OnModuleInit {
     page: number,
     lang: string,
     type: string,
+    callback_data: string,
   ) {
+
     const button: InlineKeyboardButton[][] = [];
     const makeCb = (action: string) =>
-  `bookingChild_${action}_${booking.id}_${page}_${type}`;
+      `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
 
     const { totalMinutes } = this.bookingTimeCalculate(
       booking.date,
@@ -461,7 +465,7 @@ export class UtilisService implements OnModuleInit {
         break;
 
       case 'COMPLETED':
-      case 'NO_SHOW':
+      case 'NOSHOW':
       case 'CANCELED':
       case 'REFUNDED':
         button.push([detailBtn]);
@@ -492,8 +496,8 @@ export class UtilisService implements OnModuleInit {
     page: number,
     total: number,
     limit: number,
-    callback: string,
     lang: string,
+    callback: string,
   ) {
     const totalPages = Math.ceil(total / limit);
     if (page === 1 && totalPages === 1) return;

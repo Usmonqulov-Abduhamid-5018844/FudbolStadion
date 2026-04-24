@@ -53,6 +53,7 @@ model Stadion {
   payments_type           Payments                   @default(GIBRID)
   is_premium              Boolean                    @default(false)
   parent_id               Int?
+  @@index([owner_id])
   parent                  Stadion?                   @relation("StadionToChild", fields: [parent_id], references: [id])
   children                Stadion[]                  @relation("StadionToChild")
   createdAt               DateTime                   @default(now())
@@ -144,6 +145,7 @@ model Booking {
   expires_at       DateTime?
   @@index([status, startAt, status_pay_later])
   @@index([status, endAt, check_in])
+  @@index([stadion_id, date])
   status_pay_later Boolean        @default(false)
   stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
   user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
@@ -197,7 +199,7 @@ enum Booking_status {
   PAID
   COMPLETED
   CANCELED
-  NO_SHOW
+  NOSHOW
   REFUNDED
 }
 
