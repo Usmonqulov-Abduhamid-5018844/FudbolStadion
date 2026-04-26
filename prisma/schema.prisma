@@ -18,6 +18,7 @@ model Owners {
   updatedAt DateTime    @updatedAt
   ownerCard Owner_card?
   stadions  Stadion[]
+  notification Json?
 }
 
 model Users {

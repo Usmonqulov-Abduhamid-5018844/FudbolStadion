@@ -34,7 +34,13 @@ import { QrModule } from './qr/qr.module';
       token: String(process.env.BOT_TOKEN),
       middlewares: [
         session({
-          defaultSession: () => INITIAL_SESSION,
+          defaultSession: () => ({
+            ...structuredClone(INITIAL_SESSION),
+            stadion: {
+              ...structuredClone(INITIAL_SESSION.stadion),
+              special: new Date(),
+            },
+          }),
         }),
       ],
     }),

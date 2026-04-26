@@ -405,18 +405,12 @@ export class BotService {
             }),
           },
         ]);
-        try {
+   
           await this.utils.safeEditOrReply(
             ctx,
             this.i18n.translate('schedule.schedules.week', { lang }),
             { inline_keyboard: inlineKeyboard },
           );
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('schedule.schedules.week', { lang }),
-            { reply_markup: { inline_keyboard: inlineKeyboard } },
-          );
-        }
       } else {
         return this.renderScheduleMenu(ctx, stadion_id);
       }

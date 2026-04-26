@@ -496,7 +496,7 @@ ${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(
 
 ${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status,this.i18n, lang)}
+${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
 
 ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
 `;
@@ -649,7 +649,7 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                 );
                 return;
               }
-               try {
+              try {
                 await ctx.answerCbQuery(
                   this.i18n.translate('loading.loading', { lang }),
                 );
@@ -754,27 +754,19 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
               }),
             ]);
             if (!favorites.length) {
-              await this.utils.safeEditOrReply(
-                ctx,
+              await ctx.answerCbQuery(
                 this.i18n.translate('booking.stadion.noFavorites', { lang }),
                 {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_3',
-                      },
-                    ],
-                  ],
+                  show_alert: true,
                 },
               );
               return;
             }
-             try {
-                await ctx.answerCbQuery(
-                  this.i18n.translate('loading.loading', { lang }),
-                );
-              } catch (error) {}
+            try {
+              await ctx.answerCbQuery(
+                this.i18n.translate('loading.loading', { lang }),
+              );
+            } catch (error) {}
             for (const favorite of favorites) {
               await this.stadionFavorite(ctx, lang, favorite.stadion);
             }
@@ -1551,14 +1543,14 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
       const data = await this.prisma.myFavoriteStadium.findUnique({ where });
       if (data) {
         await this.prisma.myFavoriteStadium.delete({ where });
-        await ctx.reply(
+        await ctx.answerCbQuery(
           this.i18n.translate('booking.stadion.removedFromFavorites', { lang }),
         );
       } else {
         await this.prisma.myFavoriteStadium.create({
           data: { stadion_id: stadionId, chat_id: String(ctx.from?.id) },
         });
-        await ctx.reply(
+        await ctx.answerCbQuery(
           this.i18n.translate('booking.stadion.addedToFavorites', { lang }),
         );
       }
@@ -2464,9 +2456,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       const startAt = new Date(
         `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
       );
-      const endAt = new Date(
-        `${format(date, 'yyyy-MM-dd')}T${end_time}:00`,
-      );
+      const endAt = new Date(`${format(date, 'yyyy-MM-dd')}T${end_time}:00`);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -2943,12 +2933,10 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         await this.utils.errorFunction(ctx);
         return;
       }
-         const startAt = new Date(
+      const startAt = new Date(
         `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
       );
-      const endAt = new Date(
-        `${format(date, 'yyyy-MM-dd')}T${end_time}:00`,
-      );
+      const endAt = new Date(`${format(date, 'yyyy-MM-dd')}T${end_time}:00`);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -3189,7 +3177,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         return;
       }
       try {
-        await ctx.answerCbQuery();
         await ctx.deleteMessage();
         if (ctx.session.stadionMessages?.length) {
           await ctx.deleteMessages(ctx.session.stadionMessages);
@@ -3224,6 +3211,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       });
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    } finally {
+      await ctx.answerCbQuery().catch(() => {});
     }
   }
 }

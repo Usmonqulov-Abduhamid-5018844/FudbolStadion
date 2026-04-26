@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Booking_status, Pay_method, Payments } from '@prisma/client';
 import { InlineKeyboardMarkup } from '@telegraf/types';
+import { subDays } from 'date-fns';
 import { format, toZonedTime } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
@@ -190,7 +191,6 @@ export class UtilisService implements OnModuleInit {
       },
     });
     console.log('Error occurred');
-    
   }
 
   roundUpToNextHour(date: Date) {
@@ -402,7 +402,6 @@ export class UtilisService implements OnModuleInit {
     type: string,
     callback_data: string,
   ) {
-
     const button: InlineKeyboardButton[][] = [];
     const makeCb = (action: string) =>
       `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
@@ -533,4 +532,154 @@ export class UtilisService implements OnModuleInit {
     ctx.session.ownerActiveBooking ??= [];
     ctx.session.ownerActiveBooking.push(send.message_id);
   }
+
+  async growthBooking(ctx: MyContext, ownerId: number, lang: string) {
+    try {
+      const now = new Date();
+      const base = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
+      const current = await this.prisma.booking.count({
+        where: {
+          status: 'COMPLETED',
+          stadion: { owner_id: ownerId },
+          date: {
+            gte: subDays(base, 7),
+            lt: base,
+          },
+        },
+      });
+      const previous = await this.prisma.booking.count({
+        where: {
+          status: 'COMPLETED',
+          stadion: { owner_id: ownerId },
+          date: {
+            gte: subDays(base, 14),
+            lt: subDays(base, 7),
+          },
+        },
+      });
+      let growth = 0;
+
+      if (previous === 0) {
+        growth = current > 0 ? 100 : 0;
+      } else {
+        growth = ((current - previous) / previous) * 100;
+      }
+      const text =
+        growth > 0
+          ? this.i18n.translate('owner_booking.growth_increase', {
+              args: { value: growth.toFixed(1) },
+              lang,
+            })
+          : growth < 0
+            ? this.i18n.translate('owner_booking.growth_decrease', {
+                args: { value: growth.toFixed(1) },
+                lang,
+              })
+            : this.i18n.translate('owner_booking.growth_no_change', { lang });
+
+      return text;
+    } catch (error) {
+      await this.errorFunction(ctx);
+    }
+  }
+
+  groupByDay(bookings: { date: Date }[], lang: string) {
+    const locale = lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-US' : 'uz-UZ';
+    const map: Record<string, number> = {};
+
+    bookings.forEach((b) => {
+      const day = b.date.toLocaleDateString(locale, {
+        day: '2-digit',
+        month: 'long',
+      });
+
+      map[day] = (map[day] || 0) + 1;
+    });
+
+    return Object.entries(map).map(([label, value]) => ({
+      label,
+      value,
+    }));
+  }
+
+  fillLast7Days(data: { label: string; value: number }[], lang: string) {
+    const locale = lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-US' : 'uz-UZ';
+    const days: string[] = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+
+      const label = d.toLocaleDateString(locale, {
+        day: '2-digit',
+        month: 'long',
+      });
+
+      days.push(label);
+    }
+
+    const map = Object.fromEntries(data.map((d) => [d.label, d.value]));
+
+    return days.map((day) => ({
+      label: day,
+      value: map[day] || 0,
+    }));
+  }
+
+  progressChart(data: { label: string; value: number }[], lang: string) {
+    const max = Math.max(...data.map((d) => d.value));
+
+    const unit = this.i18n.translate('owner_booking.unit_count', { lang });
+
+    return data
+      .map((d) => {
+        const percent = Math.round((d.value / max) * 100);
+        const len = Math.round(percent / 10);
+        return `${d.label} [ ${'▰'.repeat(len)}${'▱'.repeat(10 - len)} ] ${d.value} ${d.value > 0 ? unit : ''}`;
+      })
+      .join('\n');
+  }
+
+
+detectSearchType(input?: string) {
+  if (!input) {
+    return {
+      type: 'invalid',
+      value: '',
+      error: 'EMPTY_INPUT',
+    };
+  }
+
+  const value = input.trim();
+
+  if (!value) {
+    return {
+      type: 'invalid',
+      value: '',
+      error: 'EMPTY_INPUT',
+    };
+  }
+
+  const digits = value.replace(/\D/g, '');
+
+  let phone: string | null = null;
+
+  if (digits.length === 9) {
+    phone = '+998' + digits;
+  } else if (digits.length === 12 && digits.startsWith('998')) {
+    phone = '+' + digits;
+  }
+
+  if (phone) {
+    return { type: 'phone', value: phone };
+  }
+
+  if (/^\d{1,15}$/.test(value)) {
+    return { type: 'id', value: Number(value) };
+  }
+
+  return { type: 'name', value };
+}
 }

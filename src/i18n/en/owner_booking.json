@@ -91,6 +91,22 @@
   "not_found_active": "📭 No active bookings at the moment.",
   "not_found_allFilter": "📭 No bookings available yet.",
 
-  "not_found_stadium_bookings": "📭 There are no bookings for this stadium yet."
+  "not_found_stadium_bookings": "📭 There are no bookings for this stadium yet.",
+
+  "owner_stats.message": "📊 <b>Overall statistics</b>\n\n🏟 <b>Stadiums:</b> {stadionCount}\n📦 <b>Total bookings:</b> {totalCount}\n\n🟢 <b>Active:</b> {activeBookings}\n🔴 <b>Completed:</b> {endedBookings}\n❌ <b>Cancelled:</b> {cancelBookings}\n\n💰 <b>Revenue:</b> {revenue} UZS\n{growth}\n\n📈 <b>Last 7 days:</b>\n{chart}",
+
+  "growth_increase": "📈 +{value}% increase",
+  "growth_decrease": "📉 {value}% decrease",
+  "growth_no_change": "➖ No change",
+
+  "stats_not_enough_data": "📊 There isn’t enough data to show statistics yet. Please wait a bit 😊",
+
+  "unit_count": "items",
+
+  "search_by_user": "🔍 Booking search section\n\nHere you can easily find bookings by client name, phone number, or booking ID 📋\n\n👉 Please enter the booking details you are looking for 😊",
+
+  "no_results": "❌ No bookings found\n\n🔍 Please check and enter a correct name, phone number, or booking ID",
+
+  "search_empty_input": "⚠️ No input provided. Please enter a name, phone number, or booking ID"
 
 }

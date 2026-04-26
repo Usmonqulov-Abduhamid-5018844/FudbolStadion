@@ -71,5 +71,12 @@
   "update_time": "🔄 Stadioningizning yangi ish boshlanish va tugash vaqtini kiriting. Format: (HH:MM-HH:MM)",
   "specile_days": "📅 Mahsus kunlar",
   "today": "Bugun",
-  "tomorrow": "Ertaga"
+  "tomorrow": "Ertaga",
+
+   "schedule_delete_warning": "⚠️ Diqqat!\n\nBu kun uchun allaqachon bronlar mavjud.\n\nAgar siz ushbu kunni o‘chirsangiz:\n• ❌ Yangi bronlar qabul qilinmaydi\n• ✅ Mavjud bronlar saqlanib qoladi va o‘yinlar baribir o‘tkaziladi\n\nShunga qaramay davom etasizmi?",
+  "schedule_deleted": "🗑 Schedule muvaffaqiyatli o‘chirildi",
+
+  "delete_yes": "✅ Ha"
+
+
 }

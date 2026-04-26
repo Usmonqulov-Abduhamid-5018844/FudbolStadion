@@ -44,6 +44,7 @@ export interface IStadion {
   stadionSpecialSchedules?: stadion_special_schedule[];
   ownerActiveBooking?: number[];
 }
+
 export interface IBooking {
   id: number;
   user_id: number;
@@ -79,6 +80,13 @@ export enum EStadion_type {
   BIG = 'big',
   SMOL = 'smol',
 }
+
+export type NotificationSettings =  {
+  newBooking?: boolean;
+  cancel?: boolean;
+  payment?: boolean;
+  reminder?: boolean;
+};
 
 export const INITIAL_SESSION: ISession = {
   name: null,

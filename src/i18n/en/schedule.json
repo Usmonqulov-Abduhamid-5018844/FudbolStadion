@@ -71,5 +71,13 @@
   "update_time": "🔄 Enter the new opening and closing time of your stadium. Format: (HH:MM-HH:MM)",
   "specile_days": "📅 Special Days",
   "today": "Today",
-  "tomorrow": "Tomorrow"
+  "tomorrow": "Tomorrow",
+
+  "schedule_delete_warning": "⚠️ Attention!\n\nThere are already bookings for this day.\n\nIf you delete this day:\n• ❌ New bookings will not be accepted\n• ✅ Existing bookings will remain and matches will still be played\n\nDo you still want to continue?",
+
+  "schedule_deleted": "🗑 Schedule successfully deleted",
+
+  "delete_yes": "✅ Yes"
+
+
 }

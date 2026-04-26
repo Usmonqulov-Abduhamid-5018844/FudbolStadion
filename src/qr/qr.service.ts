@@ -7,7 +7,7 @@ export class QrService {
   private secret = process.env.SECRET_KEY || "SUPPER_SECRET_KEY"
 
   async generateQr(bookingId: number) {
-    const token = jwt.sign({ bookingId }, this.secret, { expiresIn: "30m" });
+    const token = jwt.sign({ bookingId }, this.secret, { expiresIn: "5m" });
 
     const url = `checkin_ADMIN_${token}`;
 

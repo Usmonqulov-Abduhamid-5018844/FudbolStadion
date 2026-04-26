@@ -90,7 +90,22 @@
   "not_found_active": "📭 Hozircha faol bronlar mavjud emas.",
   "not_found_allFilter": "📭 Hozircha bronlar mavjud emas.",
 
-  "not_found_stadium_bookings": "📭 Ushbu stadion uchun hali bronlar mavjud emas."
+  "not_found_stadium_bookings": "📭 Ushbu stadion uchun hali bronlar mavjud emas.",
 
+  "owner_stats.message": "📊 <b>Umumiy statistika</b>\n\n🏟 <b>Stadionlar:</b> {stadionCount}\n📦 <b>Jami bronlar:</b> {totalCount}\n\n🟢 <b>Faol:</b> {activeBookings}\n🔴 <b>Tugagan:</b> {endedBookings}\n❌ <b>Bekor:</b> {cancelBookings}\n\n💰 <b>Daromad:</b> {revenue} so‘m\n{growth}\n\n📈 <b>Oxirgi 7 kun:</b>\n{chart}",
+
+  "growth_increase": "📈 +{value}% o‘sish",
+  "growth_decrease": "📉 {value}% kamayish",
+  "growth_no_change": "➖ O‘zgarish yo‘q",
+
+  "stats_not_enough_data": "📊 Statistikani ko‘rsatish uchun hali ma’lumot yetarli emas. Biroz kuting 😊",
+
+  "unit_count": "ta",
+
+  "search_by_user": "🔍 Bronlarni qidirish bo‘limi\n\nBu yerda siz mijozning ismi, telefon raqami yoki bron ID orqali bronlarni osongina topishingiz mumkin 📋\n\n👉 Iltimos, qidirilayotgan bron ma’lumotlarini kiriting 😊",
+
+  "no_results": "❌ Hech qanday bron topilmadi\n\n🔍 Iltimos, ism, telefon raqami yoki bron ID ni to‘g‘ri kiriting",
+
+  "search_empty_input": "⚠️ Qidiruv uchun ma’lumot kiritilmadi. Iltimos, ism, telefon yoki bron ID kiriting"
 
 }

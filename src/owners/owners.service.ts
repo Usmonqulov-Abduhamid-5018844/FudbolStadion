@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Payments } from '@prisma/client';
+import { Payments, Prisma } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
@@ -560,6 +560,8 @@ export class OwnersService {
       date.getMonth() + 1 === month &&
       date.getDate() === day;
 
+      console.log("Off days");
+      
     if (!isRealDate) {
       await ctx.reply(
         this.i18n.translate('schedule.off_day.not_fount_day', { lang }),
@@ -1574,14 +1576,14 @@ export class OwnersService {
                   'owner_booking.booking_menu.buttons.stats',
                   { lang },
                 ),
-                callback_data: `ownerBooking_stats_${ownerData.id}_1`,
+                callback_data: `BookingOwner_statistica_stats_${ownerData.id}`,
               },
               {
                 text: this.i18n.translate(
                   'owner_booking.booking_menu.buttons.search',
                   { lang },
                 ),
-                callback_data: `ownerBooking_search_${ownerData.id}_1`,
+                callback_data: `bookingAllData_search_${ownerData.id}_1`,
               },
             ],
             [
@@ -1643,6 +1645,7 @@ export class OwnersService {
       ctx.session.ownerActiveBooking.push(send.message_id);
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
 
@@ -1655,8 +1658,10 @@ export class OwnersService {
     callback_data: string,
   ) {
     try {
-     const isFilterType = ["7days","30days","active","allFilter"].includes(type);
-     callback_data = isFilterType ? "bookingFilter": callback_data;
+      const isFilterType = ['7days', '30days', 'active', 'allFilter'].includes(
+        type,
+      );
+      callback_data = isFilterType ? 'bookingFilter' : callback_data;
 
       const booking = await this.prisma.booking.findUnique({
         where: { id: bookingId },
@@ -1686,7 +1691,7 @@ export class OwnersService {
         lang,
       );
 
-      await this.utils.clearSessionMessages(ctx).catch(()=>{});
+      await this.utils.clearSessionMessages(ctx).catch(() => {});
 
       const message = this.i18n.translate('owner_booking.full_details', {
         lang,
@@ -1702,8 +1707,12 @@ export class OwnersService {
               : this.i18n.translate('bookingHistory.time_expired', { lang }),
           user: booking.user.full_name,
           phone: booking.user.phone,
-          username: booking.user.username ? `🔗 @${booking.user.username}` : '_',
-          price: new Intl.NumberFormat('uz-UZ').format(Number(booking.total_price)),
+          username: booking.user.username
+            ? `🔗 @${booking.user.username}`
+            : '_',
+          price: new Intl.NumberFormat('uz-UZ').format(
+            Number(booking.total_price),
+          ),
           payment: getPaymentText(
             booking.payment_method,
             this.i18n.translate('peyments', { lang }),
@@ -1791,16 +1800,18 @@ export class OwnersService {
     text: string,
     lang: string,
     owner_Id?: number,
-    page:number = 1
+    page: number = 1,
   ) {
     try {
       const input = text.trim();
       let sent: any;
-      const limit = 5
+      const limit = 5;
       ctx.session.ownerActiveBooking ??= [];
       const regex = /^\d{2}\.\d{2}\.\d{4}$/;
       if (!regex.test(input)) {
-        sent = await ctx.reply(this.i18n.translate("owner_booking.invalid_format",{lang}));
+        sent = await ctx.reply(
+          this.i18n.translate('owner_booking.invalid_format', { lang }),
+        );
         ctx.session.ownerActiveBooking.push(sent.message_id);
         return;
       }
@@ -1813,13 +1824,17 @@ export class OwnersService {
         selectedDate.getUTCMonth() !== month - 1 ||
         selectedDate.getUTCDate() !== day
       ) {
-        sent = await ctx.reply(this.i18n.translate("owner_booking.invalid_date",{lang}));
+        sent = await ctx.reply(
+          this.i18n.translate('owner_booking.invalid_date', { lang }),
+        );
         ctx.session.ownerActiveBooking.push(sent.message_id);
         return;
       }
 
       if (year < 2026 || year > 2060) {
-        sent = await ctx.reply(this.i18n.translate("owner_booking.out_of_range",{lang}));
+        sent = await ctx.reply(
+          this.i18n.translate('owner_booking.out_of_range', { lang }),
+        );
         ctx.session.ownerActiveBooking.push(sent.message_id);
         return;
       }
@@ -1827,45 +1842,48 @@ export class OwnersService {
         ? owner_Id
         : Number(ctx.session.owner_registor.id);
 
-        const [bookings, total]= await Promise.all([
-          this.prisma.booking.findMany({
-            where:{
-              stadion:{owner_id:ownerId},
-              date:selectedDate
-            },
-            skip:(page -1) * limit,
-            take: limit,
-            orderBy:{
-              date:'asc',
-            },
-            include:{
-              stadion:{
-                include:{
-                  region:true,
-                  region_items:true,
-                  owner:true
-                }
-              },
-              user:true
-            }
-          }),
-          this.prisma.booking.count({
-            where:{stadion:{owner_id:ownerId},date:selectedDate}
-          })
-        ])
-      if (!bookings.length) {
-        sent = await ctx.reply(this.i18n.translate('owner_booking.no_bookings', { lang }), {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: `bookingAllData_all_${ownerId}_1`,
-                },
-              ],
-            ],
+      const [bookings, total] = await Promise.all([
+        this.prisma.booking.findMany({
+          where: {
+            stadion: { owner_id: ownerId },
+            date: selectedDate,
           },
-        });
+          skip: (page - 1) * limit,
+          take: limit,
+          orderBy: {
+            date: 'asc',
+          },
+          include: {
+            stadion: {
+              include: {
+                region: true,
+                region_items: true,
+                owner: true,
+              },
+            },
+            user: true,
+          },
+        }),
+        this.prisma.booking.count({
+          where: { stadion: { owner_id: ownerId }, date: selectedDate },
+        }),
+      ]);
+      if (!bookings.length) {
+        sent = await ctx.reply(
+          this.i18n.translate('owner_booking.no_bookings', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `back_owner_7`,
+                  },
+                ],
+              ],
+            },
+          },
+        );
         ctx.session.ownerActiveBooking.push(sent.message_id);
         if (ctx.updateType === 'message') {
           await ctx.deleteMessage().catch(() => {});
@@ -1890,11 +1908,107 @@ export class OwnersService {
       );
       ctx.session.owner_registor.id = null;
       ctx.session.ownerBrons = null;
-      const callback_data = `bookingAllData_all_${ownerId}`
-      await this.utils.sendPagination(ctx,page,total,limit,lang,callback_data)
+      const callback_data = `bookingAllData_all_${ownerId}`;
+      await this.utils.sendPagination(
+        ctx,
+        page,
+        total,
+        limit,
+        lang,
+        callback_data,
+      );
       return;
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async searchBooking(
+    ctx: MyContext,
+    input: { type: string; value: string | number },
+    lang: string,
+    page: number = 1,
+  ) {
+    try {
+      const ownerId = Number(ctx.session.owner_registor.id);
+
+      const callback_data: string = 'bookingAllData';
+
+      const limit = 10;
+      const where: Prisma.BookingWhereInput = {
+        stadion: { owner_id: ownerId },
+      };
+      if (input.type === 'phone') {
+        where.user = { phone: String(input.value) };
+      }
+      if (input.type === 'id') {
+        where.id = Number(input.value);
+      }
+      if (input.value === 'name') {
+        where.user = {
+          full_name: { contains: String(input.value), mode: 'insensitive' },
+        };
+      }
+
+      const bookings = await this.prisma.booking.findMany({
+        where,
+        orderBy: {
+          startAt: 'asc',
+        },
+        take: limit,
+        include: {
+          stadion: {
+            include: {
+              region: true,
+              region_items: true,
+              owner: true,
+            },
+          },
+          user: true,
+        },
+      });
+
+      if (!bookings.length) {
+        const sent = await ctx.reply(
+          this.i18n.translate('owner_booking.no_results', { lang }),
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_owner_7',
+                  },
+                ],
+              ],
+            },
+          },
+        );
+        ctx.deleteMessage().catch(() => {});
+        await this.utils.clearSessionMessages(ctx);
+        ctx.session.ownerActiveBooking ??= [];
+        ctx.session.ownerActiveBooking.push(sent.message_id);
+        return;
+      }
+
+      ctx.deleteMessage().catch(() => {});
+      await Promise.all(
+        bookings.map((booking: IBooking) =>
+          this.sendBookingMessage(
+            ctx,
+            booking,
+            page,
+            lang,
+            'searchBack',
+            callback_data,
+          ),
+        ),
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+      console.log(error);
+    } finally {
+      ctx.session.owner_registor.id = null;
     }
   }
 }
