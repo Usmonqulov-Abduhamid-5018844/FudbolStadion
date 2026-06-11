@@ -118,5 +118,10 @@
     "off": "⛔ Stadion o‘chirildi",
     "ownerCard": "⚠️ Ushbu stadionda to‘lov faqat karta orqali amalga oshiriladi.\n\nStadionni yoqish uchun avval to‘lov kartangizni qo‘shishingiz shart."
   },
-  "deleteAlert": "⚠️ Bu stadionni o‘chirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling."
+  "deleteAlert": "⚠️ Bu stadionni o‘chirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling.",
+
+  "admin_checked": {
+    "true": "✅ Admin tomonidan tasdiqlangan",
+    "false": "🔺 Admin tomonidan tasdiqlanmagan"
+  }
 }

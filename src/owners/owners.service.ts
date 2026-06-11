@@ -6,11 +6,16 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { MyContext } from 'src/helpers/bot.sesion';
-import { IBooking } from 'src/helpers/interface';
+import { IBooking, PLAN_LABELS, Premium_price } from 'src/helpers/interface';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getPaymentText } from 'src/helpers/peyments_type';
-import { getPaymentUrl } from 'src/helpers/url';
+import { getPaymentCardUrl } from 'src/helpers/url';
 import { PrismaService } from 'src/prisma/prisma.service';
+import {
+  DefaultNotificationSettings,
+  NotificationLabels,
+  NotificationSettings_type,
+} from 'src/types/notifikation';
 import { UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 
@@ -162,31 +167,30 @@ export class OwnersService {
         where: { id: owner_id },
       });
       if (owner) {
-        ctx.reply(
+        await this.utils.safeEditOrReply(
+          ctx,
           `${this.i18n.translate('success.your_phone', { lang })} ${owner.phone}`,
           {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('success.edit', { lang }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'phone_update',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'phone_back',
-                    }),
-                  },
-                ],
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('success.edit', { lang }),
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'phone_update',
+                  }),
+                },
               ],
-            },
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'phone_back',
+                  }),
+                },
+              ],
+            ],
           },
         );
       }
@@ -309,10 +313,21 @@ export class OwnersService {
             ],
             [
               {
-                text: this.i18n.translate('settings.account', { lang }),
+                text: this.i18n.translate('premium.advertising.button', {
+                  lang,
+                }),
                 callback_data: JSON.stringify({
                   id: owner.id,
-                  type: 'account',
+                  type: 'advertising',
+                }),
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('premium.premium', { lang }),
+                callback_data: JSON.stringify({
+                  id: owner.id,
+                  type: 'ownerPremium',
                 }),
               },
             ],
@@ -560,8 +575,8 @@ export class OwnersService {
       date.getMonth() + 1 === month &&
       date.getDate() === day;
 
-      console.log("Off days");
-      
+    console.log('Off days');
+
     if (!isRealDate) {
       await ctx.reply(
         this.i18n.translate('schedule.off_day.not_fount_day', { lang }),
@@ -1764,7 +1779,7 @@ export class OwnersService {
               [
                 {
                   text: this.i18n.translate('peyments.cards', { lang }),
-                  url: getPaymentUrl(0, { id: 2 }),
+                  url: getPaymentCardUrl(owner.id),
                 },
               ],
               [
@@ -2010,5 +2025,265 @@ export class OwnersService {
     } finally {
       ctx.session.owner_registor.id = null;
     }
+  }
+
+  async premium(ctx: MyContext, ownerId: number, lang: string) {
+    try {
+      const now = new Date();
+      const subscription = await this.prisma.subscription.findFirst({
+        where: {
+          ownerId,
+          isActive: true,
+          endDate: {
+            gt: now,
+          },
+        },
+      });
+      if (!subscription) {
+        const message = this.i18n.translate('premium.premium_message.text', {
+          lang,
+          args: {
+            month1_label: PLAN_LABELS[lang]['MONTH_1'],
+            month3_label: PLAN_LABELS[lang]['MONTH_3'],
+            year1_label: PLAN_LABELS[lang]['YEAR_1'],
+
+            month1_price: this.utils.formatPrice('MONTH_1', lang),
+            month3_price: this.utils.formatPrice('MONTH_3', lang),
+            year1_price: this.utils.formatPrice('YEAR_1', lang),
+          },
+        });
+        await this.utils.safeEditOrReply(ctx, message, {
+          inline_keyboard: [
+            [
+              {
+                text: `${PLAN_LABELS[lang]['MONTH_1']} — ${Premium_price.MONTH_1}`,
+                callback_data: JSON.stringify({
+                  type: 'premium_buy',
+                  plan: 'MONTH_1',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `${PLAN_LABELS[lang]['MONTH_3']} — ${Premium_price.MONTH_3}`,
+                callback_data: JSON.stringify({
+                  type: 'premium_buy',
+                  plan: 'MONTH_3',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `${PLAN_LABELS[lang]['YEAR_1']} — ${Premium_price.YEAR_1}`,
+                callback_data: JSON.stringify({
+                  type: 'premium_buy',
+                  plan: 'YEAR_1',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  id: ownerId,
+                  type: 'phone_back',
+                }),
+              },
+            ],
+          ],
+        });
+        return;
+      }
+      ctx.reply('Sizda premium obuna mavjud');
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async renderNotification(ctx: MyContext, ownerId: number, lang: string) {
+    try {
+      const [count_unread, count_read, count_all] = await Promise.all([
+        this.prisma.notification.count({
+          where: {
+            ownerId,
+            isRead: false,
+          },
+        }),
+        this.prisma.notification.count({
+          where: {
+            ownerId,
+            isRead: true,
+          },
+        }),
+        this.prisma.notification.count({
+          where: {
+            ownerId,
+          },
+        }),
+      ]);
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('notification.title', { lang }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: `🟢 ${this.i18n.translate('notification.unread', { lang })}  ${count_unread} ${this.i18n.translate('notification.count', { lang })}`,
+                callback_data: JSON.stringify({
+                  type: 'notification_unread',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `✅ ${this.i18n.translate('notification.read', { lang })}  ${count_read} ${this.i18n.translate('notification.count', { lang })}`,
+                callback_data: JSON.stringify({
+                  type: 'notification_read',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `📋 ${this.i18n.translate('notification.all', { lang })}  ${count_all} ${this.i18n.translate('notification.count', { lang })}`,
+                callback_data: JSON.stringify({
+                  type: 'notification_all',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `⚙️ ${this.i18n.translate('notification.settings', { lang })}`,
+                callback_data: JSON.stringify({
+                  type: 'notification_settings',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: `🗑 ${this.i18n.translate('notification.clear', { lang })}`,
+                callback_data: JSON.stringify({
+                  type: 'notification_clear',
+                  id: ownerId,
+                }),
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'phone_back',
+                  id: ownerId,
+                }),
+              },
+            ],
+          ],
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async notificationSettings(ctx: MyContext, ownerId: number, lang: string) {
+    try {
+      const now = new Date();
+
+      const ownerPremium = await this.prisma.subscription.findFirst({
+        where: {
+          ownerId,
+          isActive: true,
+          endDate: {
+            gt: now,
+          },
+        },
+      });
+
+      if (!ownerPremium) {
+        await ctx.answerCbQuery(
+          this.i18n.translate('premium.premium_notification.only', {
+            lang,
+          }),
+          { show_alert: true },
+        );
+        return;
+      }
+
+      const owner = await this.prisma.owners.findUnique({
+        where: {
+          id: ownerId,
+        },
+        select: {
+          notificationSettings: true,
+        },
+      });
+
+      const settings =
+        (owner?.notificationSettings as NotificationSettings_type) ??
+        DefaultNotificationSettings;
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        `⚙️ ${this.i18n.translate('notification.settings', { lang })}`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: `${settings.BOOKING_CONFIRMED ? '🟢' : '🔴'} ${NotificationLabels.BOOKING_CONFIRMED[lang]}`,
+                callback_data: `toggleNotification|BOOKING_CONFIRMED|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: `${settings.PAYMENT_RECEIVED ? '🟢' : '🔴'} ${NotificationLabels.PAYMENT_RECEIVED[lang]}`,
+                callback_data: `toggleNotification|PAYMENT_RECEIVED|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: `${settings.CANCELLED_BOOKINGS ? '🟢' : '🔴'} ${NotificationLabels.CANCELLED_BOOKINGS[lang]}`,
+                callback_data: `toggleNotification|CANCELLED_BOOKINGS|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: `${settings.DAILY_REPORT ? '🟢' : '🔴'} ${NotificationLabels.DAILY_REPORT[lang]}`,
+                callback_data: `toggleNotification|DAILY_REPORT|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: `${settings.WEEKLY_STATS ? '🟢' : '🔴'} ${NotificationLabels.WEEKLY_STATS[lang]}`,
+                callback_data: `toggleNotification|WEEKLY_STATS|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: `${settings.PREMIUM_EXPIRY ? '🟢' : '🔴'} ${NotificationLabels.PREMIUM_EXPIRY[lang]}`,
+                callback_data: `toggleNotification|PREMIUM_EXPIRY|${ownerId}`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', {
+                  lang,
+                }),
+                callback_data: JSON.stringify({
+                  type: 'notification_back',
+                  id: ownerId,
+                }),
+              },
+            ],
+          ],
+        },
+      );
+    } catch (error) {}
   }
 }

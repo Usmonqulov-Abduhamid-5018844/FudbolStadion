@@ -1,0 +1,21 @@
+{
+  "premium": "💎 Premium subscription",
+  "button": "💳 Pay",
+
+  "premium_notification": {
+    "only": "💎 This feature is available only for Premium subscribers.\nUnlock more features with Premium 🚀"
+  },
+
+  "premium_payment": {
+    "message": "💳 <b>Premium subscription payment</b>\n\n📦 Plan: <b>{label}</b>\n\n💰 Amount: <b>{amount} {currency}</b>\n\n⚡ After successful payment, premium will be activated automatically.\n\n👇 Click the button below to proceed with payment:"
+  },
+
+  "premium_message": {
+    "text": "💎 Premium subscription\n\nYou are currently using the free plan.\n\nPremium helps you manage your stadium more efficiently and attract more customers 🚀\n\n━━━━━━━━━━━━━━\n\n✨ Premium features\n\n📊 Detailed statistics (bookings, revenue, activity)\n\n🏟 Your stadium ranks higher in search\n\n🔔 Automatic booking notifications\n\n📅 Customer reminders\n\n📈 Revenue analytics reports\n\n⭐ Premium badge (builds trust)\n\n━━━━━━━━━━━━━━\n\n💰 Plans\n\n<b>{month1_label}</b> — {month1_price}\n\n🟢 Good for starting\n\n──────────────\n\n<b>{month3_label}</b> — {month3_price}\n\n⭐ Most popular\n\n──────────────\n\n<b>{year1_label}</b> — {year1_price}\n\n💎 Best value\n\n━━━━━━━━━━━━━━\n\n👇 Choose the plan that suits you"
+  },
+
+  "advertising": {
+    "button": "📢 Advertising service",
+    "required": "📢 Advertising service is available only for Premium subscribers.\n🚀 Promote your stadium and reach more customers!"
+  }
+}

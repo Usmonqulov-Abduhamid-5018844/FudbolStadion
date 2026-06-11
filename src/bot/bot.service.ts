@@ -791,14 +791,13 @@ export class BotService {
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
-${stadion.admin_checked ? "✅ Admin tomonidan tasqiqlangan" : "🔺Admin tomonidan tasqiqlanmagan"}
+${stadion.admin_checked ? this.i18n.translate("stadions.admin_checked.true",{lang}) : this.i18n.translate("stadions.admin_checked.false",{lang})}
 ${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
 ${this.i18n.translate('view.creted', { lang })} ${createdAt}
 ${this.i18n.translate('view.update', { lang })} ${updatedAt}

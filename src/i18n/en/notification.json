@@ -1,0 +1,18 @@
+{
+  "title": "🔔 Notifications",
+  "unread": "Unread",
+  "read": "Read",
+  "all": "All",
+  "count": "items",
+  "settings": "Settings",
+  "clear": "Clear",
+  "no_messages_to_delete": "📭 No messages to delete.",
+  "all_read_deleted": "🗑️ All read messages have been deleted.",
+  "confirm_delete": "⚠️ Are you sure you want to delete all read messages?",
+  "no_new_messages": "You have no new messages",
+  "notification_not_found": "🔔 Notification not found",
+  "no_read_messages": "✅ You have no read notifications",
+  "no_notifications": "🔔 You don't have any notifications yet",
+  "enabled": "🟢 Activated!\n\n📢 You will now receive real-time notifications about {label}.",
+  "disabled": "🔕 Disabled!\n\n📴 You will no longer receive notifications about {label}."
+}

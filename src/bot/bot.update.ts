@@ -17,15 +17,18 @@ import { format, subDays } from 'date-fns';
 import { QrService } from 'src/qr/qr.service';
 import { startWith } from 'rxjs';
 import {
+  CURRENCY_LABELS,
   EStadion_type,
   IBooking,
   INITIAL_SESSION,
-  NotificationSettings,
+  PLAN_LABELS,
+  PREMIUM_PLANS,
+  PremiumPlan,
 } from 'src/helpers/interface';
 import { getRelatedStadionIds, getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
-import { addDays } from 'date-fns';
-import { log } from 'console';
+import { getPremiumPaymentClickUrl } from 'src/helpers/url';
+import { DefaultNotificationSettings, NotificationLabels, NotificationNames, NotificationSettings_type } from 'src/types/notifikation';
 
 @Update()
 export class BotUpdate {
@@ -121,10 +124,21 @@ export class BotUpdate {
               ],
               [
                 {
-                  text: this.i18n.translate('settings.account', { lang }),
+                  text: this.i18n.translate('premium.advertising.button', {
+                    lang,
+                  }),
                   callback_data: JSON.stringify({
                     id: owner.id,
-                    type: 'account',
+                    type: 'advertising',
+                  }),
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('premium.premium', { lang }),
+                  callback_data: JSON.stringify({
+                    id: owner.id,
+                    type: 'ownerPremium',
                   }),
                 },
               ],
@@ -1622,7 +1636,6 @@ export class BotUpdate {
       const data = new Date(
         Date.UTC(Number(years), Number(monthNumber) - 1, Number(day)),
       );
-      console.log('bookingTimeEnd', data);
 
       return this.userService.bookingScheduleFinish(
         ctx,
@@ -1801,7 +1814,7 @@ export class BotUpdate {
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const [_, type, id] = ctx.callbackQuery.data.split('_');
       if (type === 'region') {
-          await ctx.answerCbQuery().catch(() => {});
+        await ctx.answerCbQuery().catch(() => {});
         return this.userService.userbookingRegion(ctx, lang, Number(id));
       } else if (type === 'regionItem') {
         await ctx.answerCbQuery().catch(() => {});
@@ -2150,6 +2163,62 @@ export class BotUpdate {
       this.utils.errorFunction(ctx);
     }
   }
+  
+@Action(/toggleNotification\|(.+)\|(\d+)/)
+async toggleNotification(@Ctx() ctx: MyContext) {
+  const lang = await this.utils.langs(ctx);
+
+  if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+
+  try {
+    const data = ctx.callbackQuery.data;
+
+    const [_, type, id] = data.split('|');
+
+    const notificationType = type as keyof NotificationSettings_type;
+
+    const owner = await this.prisma.owners.findUnique({
+      where: { id: Number(id) },
+    });
+
+    if (!owner) return;
+
+    const settings =
+      (owner.notificationSettings as NotificationSettings_type) ??
+      DefaultNotificationSettings;
+
+    settings[notificationType] = !settings[notificationType];
+
+    await this.prisma.owners.update({
+      where: { id: Number(id) },
+      data: {
+        notificationSettings: settings,
+      },
+    });
+
+const label = NotificationNames[notificationType][lang];
+const isEnabled = settings[notificationType];
+
+const key = isEnabled
+  ? 'notification.enabled'
+  : 'notification.disabled';
+
+const text = this.i18n.translate(key, {
+  lang,
+  args: {
+    label,
+  },
+});
+
+await ctx.answerCbQuery(text, {
+  show_alert: true,
+});
+  return this.ownerService.notificationSettings(ctx,owner.id,lang)
+
+  } catch (e) {
+    await this.utils.errorFunction(ctx);
+  }
+}
   @Action(/owner_(.+)_(\d+)/)
   async onOwner(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -2506,11 +2575,13 @@ export class BotUpdate {
       stadion_off: number;
       special_id: number;
       back: string;
+      plan: string;
+      setting: NotificationSettings_type;
     };
     const lang = await this.utils.langs(ctx);
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-      data = JSON.parse(ctx.callbackQuery.data)
+      data = JSON.parse(ctx.callbackQuery.data);
     } catch (error) {
       this.utils.errorFunction(ctx);
       console.log(error);
@@ -3217,10 +3288,77 @@ export class BotUpdate {
         case 'week_schedule': {
           return this.botService.renderScheduleMenu(ctx, data.id);
         }
-        case "notification":{
-          ctx.reply("Tez kunda...")
-        }break
+        case 'notification': {
+          return this.ownerService.renderNotification(ctx, data.id, lang);
+        }
+        case 'ownerPremium': {
+          return this.ownerService.premium(ctx, data.id, lang);
+        }
+        case 'premium_buy':
+          {
+            const plan = data.plan as PremiumPlan;
 
+            const amount = PREMIUM_PLANS[plan].price;
+            const label = PLAN_LABELS[lang][plan];
+            const owner = await this.prisma.owners.findUnique({
+              where: { id: Number(data.id) },
+              select: { full_name: true },
+            });
+            if (!owner) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            const premiumTranzaction =
+              await this.prisma.premiumTransaction.create({
+                data: {
+                  owner_id: Number(data.id),
+                  amount,
+                  plan,
+                  provider: 'Click',
+                },
+              });
+
+            const paymentUrl = getPremiumPaymentClickUrl(
+              amount,
+              premiumTranzaction.id,
+              plan,
+              owner.full_name,
+              lang,
+            );
+
+            const message = this.i18n.translate(
+              'premium.premium_payment.message',
+              {
+                lang,
+                args: {
+                  label,
+                  amount: amount.toLocaleString(),
+                  currency: CURRENCY_LABELS[lang],
+                },
+              },
+            );
+            await this.utils.safeEditOrReply(ctx, message, {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('premium.button', { lang }),
+                    url: paymentUrl,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: JSON.stringify({
+                      id: data.id,
+                      type: 'ownerPremium',
+                    }),
+                  },
+                ],
+              ],
+            });
+          }
+          break;
         case 'add_schedule_day':
           {
             ctx.session.stadion.schedule_day = data.day;
@@ -3255,59 +3393,78 @@ export class BotUpdate {
                 },
               },
             });
-            if(!schedule){
+            if (!schedule) {
               await this.utils.errorFunction(ctx);
               return;
-
             }
             const stadionIds = getStadionIds(schedule.stadion);
 
             const hasBooking = await this.prisma.booking.findMany({
               where: {
-                stadion_id: {in:stadionIds},
-                status:{in:['CONFIRMED','PENDING','PAID']},
+                stadion_id: { in: stadionIds },
+                status: { in: ['CONFIRMED', 'PENDING', 'PAID'] },
               },
             });
 
             const conflict =
-              hasBooking && hasBooking.some((b) => new Date(b.date).getDay() === schedule?.day_of_week);
-            
+              hasBooking &&
+              hasBooking.some(
+                (b) => new Date(b.date).getDay() === schedule?.day_of_week,
+              );
+
             if (conflict) {
               await this.utils.safeEditOrReply(
                 ctx,
-                this.i18n.translate("schedule.schedule_delete_warning",{lang}),
+                this.i18n.translate('schedule.schedule_delete_warning', {
+                  lang,
+                }),
                 {
-                    inline_keyboard: [
-                      [
-                        { text: this.i18n.translate('schedule.delete_yes', { lang }), callback_data: JSON.stringify({
-                          type:"confirm_Schedule_delete",
-                          id:data.id,
-                          schedule_id: data.schedule_id
-                        }) },
-                        { text: this.i18n.translate('schedule.back', { lang }), callback_data: JSON.stringify({
-                          type:"view_schedule",
-                          id:data.id
-                        }) }
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.delete_yes', {
+                          lang,
+                        }),
+                        callback_data: JSON.stringify({
+                          type: 'confirm_Schedule_delete',
+                          id: data.id,
+                          schedule_id: data.schedule_id,
+                        }),
+                      },
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: JSON.stringify({
+                          type: 'view_schedule',
+                          id: data.id,
+                        }),
+                      },
                     ],
-                    ],
-                  
+                  ],
                 },
               );
+            } else {
+              await this.prisma.stadion_chedule.delete({
+                where: { id: data.schedule_id },
+              });
+              this.botService.viewSchedule(ctx, data.id);
             }
-            else{
-              await this.prisma.stadion_chedule.delete({where:{id:data.schedule_id}})
-              this.botService.viewSchedule(ctx,data.id)
-            }
-          }break;
+          }
+          break;
 
-        case "confirm_Schedule_delete":{
-          await this.prisma.stadion_chedule.delete({where:{id:data.schedule_id}})
-          ctx.answerCbQuery(this.i18n.translate("schedule.schedule_deleted",{lang}))
+        case 'confirm_Schedule_delete':
+          {
+            await this.prisma.stadion_chedule.delete({
+              where: { id: data.schedule_id },
+            });
+            ctx.answerCbQuery(
+              this.i18n.translate('schedule.schedule_deleted', { lang }),
+            );
             ctx.session.step = null;
-             ctx.session.stadion.id = null;
-             ctx.session.stadion.schedule_id = null;
-           this.botService.viewSchedule(ctx,data.id)
-        }break;
+            ctx.session.stadion.id = null;
+            ctx.session.stadion.schedule_id = null;
+            this.botService.viewSchedule(ctx, data.id);
+          }
+          break;
         case 'edit_schedule':
           {
             ctx.session.stadion.schedule_day = data.day;
@@ -3438,8 +3595,10 @@ export class BotUpdate {
         }
         case 'language':
           {
-            ctx.reply(this.i18n.translate('common.START', { lang }), {
-              reply_markup: {
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('common.START', { lang }),
+              {
                 inline_keyboard: [
                   [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
                   [{ text: '🇷🇺 Русский', callback_data: 'lang_ru' }],
@@ -3455,7 +3614,7 @@ export class BotUpdate {
                   ],
                 ],
               },
-            });
+            );
             ctx.session.step = 'language';
           }
           break;
@@ -3503,10 +3662,22 @@ export class BotUpdate {
                     ],
                     [
                       {
-                        text: this.i18n.translate('settings.account', { lang }),
+                        text: this.i18n.translate(
+                          'premium.advertising.button',
+                          { lang },
+                        ),
                         callback_data: JSON.stringify({
                           id: data.id,
-                          type: 'account',
+                          type: 'advertising',
+                        }),
+                      },
+                    ],
+                    [
+                      {
+                        text: this.i18n.translate('premium.premium', { lang }),
+                        callback_data: JSON.stringify({
+                          id: data.id,
+                          type: 'ownerPremium',
                         }),
                       },
                     ],
@@ -3521,6 +3692,25 @@ export class BotUpdate {
               );
             } catch (error) {
               this.utils.errorFunction(ctx);
+            }
+          }
+          break;
+        case 'advertising':
+          {
+            const now = new Date();
+            const ownerPremium = await this.prisma.subscription.findFirst({
+              where: {
+                ownerId: Number(data.id),
+                isActive: true,
+                endDate: { gt: now },
+              },
+            });
+            if (!ownerPremium) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('premium.advertising.required', { lang }),
+                { show_alert: true },
+              );
+              return;
             }
           }
           break;
@@ -3540,12 +3730,333 @@ export class BotUpdate {
             ctx.reply(this.i18n.translate('registor.phone', { lang }));
           }
           break;
+        case 'notification_unread':
+          {
+            const notifications = await this.prisma.notification.findMany({
+              where: {
+                ownerId: data.id,
+                isRead: false,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30,
+            });
+
+            if (!notifications.length) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.no_new_messages', { lang }),
+              );
+              return;
+            }
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              `🟢 ${this.i18n.translate('notification.unread', { lang })}`,
+              {
+                inline_keyboard: [
+                  ...notifications.map((item) => [
+                    {
+                      text:
+                        NotificationNames[item.type]?.[lang] ||
+                        NotificationNames[item.type]?.uz,
+                      callback_data: JSON.stringify({
+                        type: 'notification_view',
+                        id: item.id,
+                      }),
+                    },
+                  ]),
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
+                      callback_data: JSON.stringify({
+                        type: 'notification_back',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'notification_view':
+          {
+            const notification = await this.prisma.notification.findUnique({
+              where: { id: data.id },
+            });
+
+            if (!notification) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.notification_not_found', {
+                  lang,
+                }),
+              );
+              return;
+            }
+
+            const tr = notification.translations as any;
+
+            if (!notification.isRead) {
+              await this.prisma.notification.update({
+                where: { id: notification.id },
+                data: { isRead: true },
+              });
+            }
+            const count = await this.prisma.notification.count({
+              where: { ownerId: notification.ownerId, isRead: false },
+            });
+
+            const title = tr[lang]?.title || tr.uz.title;
+            const message = tr[lang]?.message || tr.uz.message;
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              `${title}
+
+━━━━━━━━━━━━━━
+📝 ${message}
+
+🕒 ${new Date(notification.createdAt).toLocaleString()}
+
+━━━━━━━━━━━━━━`,
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
+                      callback_data: JSON.stringify({
+                        type:
+                          count > 0
+                            ? 'notification_unread'
+                            : 'notification_back',
+                        id: notification.ownerId,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'notification_back': {
+          return this.ownerService.renderNotification(ctx, data.id, lang);
+        }
+        case 'notification_read':
+          {
+            const notifications = await this.prisma.notification.findMany({
+              where: {
+                ownerId: data.id,
+                isRead: true,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30,
+            });
+
+            if (!notifications.length) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.no_read_messages', { lang }),
+              );
+              return;
+            }
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              `✅ ${this.i18n.translate('notification.read', { lang })}`,
+              {
+                inline_keyboard: [
+                  ...notifications.map((item) => [
+                    {
+                      text:
+                        NotificationNames[item.type]?.[lang] ??
+                        NotificationNames[item.type]?.uz,
+                      callback_data: JSON.stringify({
+                        type: 'notification_read_view',
+                        id: item.id,
+                      }),
+                    },
+                  ]),
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: JSON.stringify({
+                        type: 'notification_back',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'notification_read_view':
+          {
+            const notification = await this.prisma.notification.findUnique({
+              where: { id: data.id },
+            });
+
+            if (!notification) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.notification_not_found', {
+                  lang,
+                }),
+              );
+              return;
+            }
+
+            const tr = notification.translations as any;
+
+            const title = tr[lang]?.title || tr.uz.title;
+            const message = tr[lang]?.message || tr.uz.message;
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              `${title}
+
+━━━━━━━━━━━━━━
+📝 ${message}
+
+🕒 ${new Date(notification.createdAt).toLocaleString()}
+
+━━━━━━━━━━━━━━`,
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: `${this.i18n.translate('schedule.back', { lang })}`,
+                      callback_data: JSON.stringify({
+                        type: 'notification_read',
+                        id: notification.ownerId,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+
+        case 'notification_all':
+          {
+            const notifications = await this.prisma.notification.findMany({
+              where: {
+                ownerId: data.id,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              take: 30,
+            });
+
+            if (!notifications.length) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.no_notifications', { lang }),
+              );
+              return;
+            }
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              `📋 ${this.i18n.translate('notification.all', { lang })}`,
+              {
+                inline_keyboard: [
+                  ...notifications.map((item) => [
+                    {
+                      text: `${item.isRead ? '✅' : '🟢'} ${
+                        NotificationNames[item.type]?.[lang] ??
+                        NotificationNames[item.type]?.uz
+                      }`,
+                      callback_data: JSON.stringify({
+                        type: item.isRead
+                          ? 'notification_read_view'
+                          : 'notification_view',
+                        id: item.id,
+                      }),
+                    },
+                  ]),
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: JSON.stringify({
+                        type: 'notification_back',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'notification_settings':
+          {
+            return this.ownerService.notificationSettings(ctx, Number(data.id), lang);
+          }
+        case 'notification_clear':
+          {
+            const count = await this.prisma.notification.count({
+              where: {
+                ownerId: data.id,
+                isRead: true,
+              },
+            });
+
+            if (count === 0) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('notification.no_messages_to_delete', {
+                  lang,
+                }),
+              );
+              return;
+            }
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('notification.confirm_delete', { lang }),
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.schedules.delet', {
+                        lang,
+                      }),
+                      callback_data: JSON.stringify({
+                        type: 'notificationClear_yes',
+                        id: data.id,
+                      }),
+                    },
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: JSON.stringify({
+                        type: 'notification_back',
+                        id: data.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'notificationClear_yes': {
+          await this.prisma.notification.deleteMany({
+            where: { ownerId: data.id, isRead: true },
+          });
+          await ctx.answerCbQuery(
+            this.i18n.translate('notification.all_read_deleted', { lang }),
+          );
+          return this.ownerService.renderNotification(ctx, data.id, lang);
+        }
         default: {
           return;
         }
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     } finally {
       ctx.answerCbQuery().catch(() => {});
     }
@@ -4107,3 +4618,4 @@ export class BotUpdate {
     }
   }
 }
+4;

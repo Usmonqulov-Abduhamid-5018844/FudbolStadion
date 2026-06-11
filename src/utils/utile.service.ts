@@ -12,8 +12,8 @@ import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
 } from 'src/helpers/Inline_keybort';
-import { IBooking } from 'src/helpers/interface';
-import { getPaymentUrl } from 'src/helpers/url';
+import { CURRENCY_LABELS, IBooking, PREMIUM_PLANS } from 'src/helpers/interface';
+import { getPaymentClickUrl } from 'src/helpers/url';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
@@ -283,6 +283,51 @@ export class UtilisService implements OnModuleInit {
 
     return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
+  premium_End_time(end_time: Date, lang: string = 'ru') {
+    const entTime = new Date(end_time);
+
+    const now = new Date();
+    const diffMs = entTime.getTime() - now.getTime();
+
+    const totalMinutes = Math.floor(diffMs / 60000);
+
+    const daysLeft = Math.floor(totalMinutes / 1440);
+    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
+    const minutesLeft = totalMinutes % 60;
+
+    let timeLeftText = '';
+
+    if (daysLeft > 0) {
+      timeLeftText = this.i18n.translate(
+        'booking.time_left.days_hours_minutes',
+        {
+          lang,
+          args: {
+            days: daysLeft,
+            hours: hoursLeft,
+            minutes: minutesLeft,
+          },
+        },
+      );
+    } else if (hoursLeft > 0) {
+      timeLeftText = this.i18n.translate('booking.time_left.hours_minutes', {
+        lang,
+        args: {
+          hours: hoursLeft,
+          minutes: minutesLeft,
+        },
+      });
+    } else {
+      timeLeftText = this.i18n.translate('booking.time_left.minutes_only', {
+        lang,
+        args: {
+          minutes: minutesLeft,
+        },
+      });
+    }
+
+    return { timeLeftText };
+  }
 
   booking_status_handler(
     status: Booking_status,
@@ -342,7 +387,7 @@ export class UtilisService implements OnModuleInit {
     const payBtn = transaction_id
       ? {
           text: this.i18n.translate('booking.pay_by_card', { lang }),
-          url: getPaymentUrl(price, { id: Number(transaction_id) }),
+          url: getPaymentClickUrl(price, Number(transaction_id)),
         }
       : null;
 
@@ -642,44 +687,63 @@ export class UtilisService implements OnModuleInit {
       .join('\n');
   }
 
+  detectSearchType(input?: string) {
+    if (!input) {
+      return {
+        type: 'invalid',
+        value: '',
+        error: 'EMPTY_INPUT',
+      };
+    }
 
-detectSearchType(input?: string) {
-  if (!input) {
-    return {
-      type: 'invalid',
-      value: '',
-      error: 'EMPTY_INPUT',
-    };
+    const value = input.trim();
+
+    if (!value) {
+      return {
+        type: 'invalid',
+        value: '',
+        error: 'EMPTY_INPUT',
+      };
+    }
+
+    const digits = value.replace(/\D/g, '');
+
+    let phone: string | null = null;
+
+    if (digits.length === 9) {
+      phone = '+998' + digits;
+    } else if (digits.length === 12 && digits.startsWith('998')) {
+      phone = '+' + digits;
+    }
+
+    if (phone) {
+      return { type: 'phone', value: phone };
+    }
+
+    if (/^\d{1,15}$/.test(value)) {
+      return { type: 'id', value: Number(value) };
+    }
+
+    return { type: 'name', value };
   }
 
-  const value = input.trim();
+  addDays(plan: string) {
+    const date = new Date();
 
-  if (!value) {
-    return {
-      type: 'invalid',
-      value: '',
-      error: 'EMPTY_INPUT',
-    };
+    if (plan === 'MONTH_1') date.setDate(date.getDate() + 30);
+    if (plan === 'MONTH_3') date.setDate(date.getDate() + 90);
+    if (plan === 'YEAR_1') date.setDate(date.getDate() + 365);
+
+    return date;
   }
 
-  const digits = value.replace(/\D/g, '');
+  formatPrice = (plan: keyof typeof PREMIUM_PLANS, lang: string) => {
+    const p = PREMIUM_PLANS[plan];
+    const currency = CURRENCY_LABELS[lang];
+    if (p.discount) {
+      return `${p.price.toLocaleString()} ${currency}\n\n❌ <s>${p.discount.toLocaleString()} ${currency}</s>`;
+    }
 
-  let phone: string | null = null;
-
-  if (digits.length === 9) {
-    phone = '+998' + digits;
-  } else if (digits.length === 12 && digits.startsWith('998')) {
-    phone = '+' + digits;
-  }
-
-  if (phone) {
-    return { type: 'phone', value: phone };
-  }
-
-  if (/^\d{1,15}$/.test(value)) {
-    return { type: 'id', value: Number(value) };
-  }
-
-  return { type: 'name', value };
-}
+    return `${p.price.toLocaleString()} ${currency}`;
+  };
 }

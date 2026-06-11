@@ -8,17 +8,20 @@ datasource db {
 }
 
 model Owners {
-  id        Int         @id @default(autoincrement())
-  full_name String
-  username  String?
-  chatID    String      @unique
-  phone     String
-  email     String      @unique
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-  ownerCard Owner_card?
-  stadions  Stadion[]
-  notification Json?
+  id                  Int                  @id @default(autoincrement())
+  full_name           String
+  username            String?
+  chatID              String               @unique
+  phone               String
+  email               String               @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  notificationSettings Json?
+  ownerCard           Owner_card?
+  stadions            Stadion[]
+  notification        Notification[]
+  subscriptions       Subscription[]
+  premiumTransactions PremiumTransaction[]
 }
 
 model Users {
@@ -32,6 +35,8 @@ model Users {
   bookings           Booking[]
   myFavoriteStadiums MyFavoriteStadium[]
   tranzaktions       Tranzaktion[]
+
+  @@index([phone])
 }
 
 model Stadion {
@@ -52,9 +57,7 @@ model Stadion {
   length                  Int
   width                   Int
   payments_type           Payments                   @default(GIBRID)
-  is_premium              Boolean                    @default(false)
   parent_id               Int?
-  @@index([owner_id])
   parent                  Stadion?                   @relation("StadionToChild", fields: [parent_id], references: [id])
   children                Stadion[]                  @relation("StadionToChild")
   createdAt               DateTime                   @default(now())
@@ -67,6 +70,8 @@ model Stadion {
   stadionChedules         Stadion_chedule[]
   stadionOffDays          stadion_off_days[]
   stadionSpecialSchedules stadion_special_schedule[]
+
+  @@index([owner_id])
 }
 
 model Stadion_chedule {
@@ -144,13 +149,15 @@ model Booking {
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   expires_at       DateTime?
-  @@index([status, startAt, status_pay_later])
-  @@index([status, endAt, check_in])
-  @@index([stadion_id, date])
   status_pay_later Boolean        @default(false)
   stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
   user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
   tranzaktions     Tranzaktion?
+  notifications    Notification[]
+
+  @@index([status, startAt, status_pay_later])
+  @@index([status, endAt, check_in])
+  @@index([stadion_id, date])
 }
 
 model Tranzaktion {
@@ -158,11 +165,11 @@ model Tranzaktion {
   user_id                Int
   booking_id             Int                @unique
   systeam_fee            Int
-  owner_amount           Int
+  owner_amount           Decimal
   provider               String
-  provider_transactionId String
+  provider_transactionId String?
   status                 Tranzaktion_status @default(PENDING)
-  amount_received        Int
+  amount_received        Decimal
   createdAt              DateTime           @default(now())
   owner_card_id          Int
   booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade)
@@ -170,6 +177,43 @@ model Tranzaktion {
   user                   Users              @relation(fields: [user_id], references: [id])
 }
 
+model Subscription {
+  id      Int    @id @default(autoincrement())
+  ownerId Int
+  owner   Owners @relation(fields: [ownerId], references: [id])
+
+  plan      PremiumPlan
+  startDate DateTime
+  endDate   DateTime
+
+  isActive Boolean @default(true)
+
+  createdAt           DateTime             @default(now())
+  premiumTransactions PremiumTransaction[]
+
+  @@index([ownerId, isActive, endDate])
+}
+
+model PremiumTransaction {
+  id Int @id @default(autoincrement())
+
+  owner_id Int
+  owner    Owners @relation(fields: [owner_id], references: [id])
+
+  subscription_id Int?
+  subscription    Subscription? @relation(fields: [subscription_id], references: [id])
+
+  plan PremiumPlan
+
+  amount Int
+
+  provider               String
+  provider_transactionId String?
+
+  status TransactionStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+}
 model sesion {
   id      Int     @id @default(autoincrement())
   lang    String?
@@ -186,6 +230,24 @@ model MyFavoriteStadium {
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
 
   @@unique([chat_id, stadion_id])
+}
+
+model Notification {
+  id               Int              @id @default(autoincrement())
+  ownerId          Int
+  type             NotificationType
+  isRead           Boolean          @default(false)
+  relatedBookingId Int?
+  data            Json?
+  sentAt           DateTime?
+  createdAt        DateTime         @default(now())
+
+  translations Json
+
+  owner   Owners   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  booking Booking? @relation(fields: [relatedBookingId], references: [id], onDelete: SetNull)
+@@index([ownerId, isRead, sentAt])
+@@index([createdAt])
 }
 
 enum Payments {
@@ -213,4 +275,26 @@ enum Tranzaktion_status {
   PENDING
   PAID
   FAILED
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum PremiumPlan {
+  MONTH_1
+  MONTH_3
+  YEAR_1
+}
+
+enum NotificationType {
+  DAILY_REPORT // Kunlik hisobot
+  WEEKLY_STATS // Haftalik statistika
+  CANCELLED_BOOKINGS // Bekor qilingan bronlar
+  PAYMENT_RECEIVED // To'lov qabul qilindi
+  BOOKING_CONFIRMED // Bron tasdiqlandi
+  PREMIUM_EXPIRY // Premium tugash sanasi yaqin
 }

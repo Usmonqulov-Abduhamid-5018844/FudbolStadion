@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { log } from 'console';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 
@@ -12,6 +13,7 @@ export class CronService {
   private isNoShowRunning = false;
   private isCompletedRunning = false;
   private isPayLaterCancelRunning = false;
+  private isDeleteTransactionRunning = false;
 
   @Cron(CronExpression.EVERY_5_MINUTES)
   async cancelExpiredBookings() {
@@ -108,10 +110,33 @@ export class CronService {
 
       console.log(`Pay-later canceled: ${result.count}`);
     } catch (error) {
-      console.log('Cron error:', error.message);
+      console.log('Pay-later cancel cron error:', error.message);
+      
     }
     finally{
       this.isPayLaterCancelRunning = false;
+    }
+  }
+
+  @Cron(CronExpression.EVERY_30_MINUTES)
+  async deleteTransaction(){
+    const now = new Date();
+    if(this.isDeleteTransactionRunning) return;
+    this.isDeleteTransactionRunning = true; 
+    try {
+      await this.prisma.premiumTransaction.deleteMany({where:{
+        status:"PENDING",
+        createdAt:{
+          lt: new Date(now.getTime() - 10 * 60 * 1000)
+        }
+      }})
+      console.log(`Old pending transactions deleted`);
+      
+    } catch (error) {
+      console.log('Delete transaction cron error:', error.message);
+    }
+    finally{
+      this.isDeleteTransactionRunning = false;
     }
   }
 }

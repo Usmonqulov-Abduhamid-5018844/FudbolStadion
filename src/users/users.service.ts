@@ -13,7 +13,7 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { QrService } from 'src/qr/qr.service';
-import { getLocation, getPaymentUrl } from 'src/helpers/url';
+import { getLocation, getPaymentClickUrl } from 'src/helpers/url';
 import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
 @Injectable()
@@ -1433,7 +1433,6 @@ ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${
 ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${this.i18n.translate('view.premium', { lang })} <b>${stadion.is_premium ? this.i18n.translate('view.yes', { lang }) : this.i18n.translate('view.no', { lang })}</b>
 ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
 ${this.i18n.translate('view.creted', { lang })} <b>${createdAt}</b>
 ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
@@ -1682,7 +1681,6 @@ ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${sta
 ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${this.i18n.translate('view.premium', { lang })} ${stadion.is_premium ? `${this.i18n.translate('view.yes', { lang })}` : `${this.i18n.translate('view.no', { lang })}`}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
 ${this.i18n.translate('view.creted', { lang })} ${createdAt}
 ${this.i18n.translate('view.update', { lang })} ${updatedAt}
@@ -2529,7 +2527,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             systeam_fee: 0,
             owner_amount: total,
             provider: 'Click',
-            provider_transactionId: '',
             owner_card_id: cardId,
             amount_received: 0,
           },
@@ -2542,7 +2539,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         };
         const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
 
-        const clickUrl = getPaymentUrl(total, transaction);
+        const clickUrl = getPaymentClickUrl(total, transaction.id);
 
         const message = this.i18n.translate('booking.message_template', {
           lang,
@@ -2690,7 +2687,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               systeam_fee: 0,
               owner_amount: total,
               provider: 'Click',
-              provider_transactionId: '',
               status: 'PENDING',
               owner_card_id: cardId,
               amount_received: 0,
@@ -2698,7 +2694,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           });
           const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
 
-          const clickUrl = getPaymentUrl(total, transaction);
+          const clickUrl = getPaymentClickUrl(total, transaction.id);
           const warning = this.i18n.translate('booking.warning', { lang });
 
           const message = this.i18n.translate('booking.message_template', {
@@ -2916,14 +2912,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         noshowCount,
       );
       const [year, month, day] = days.split('-');
+
       const date = new Date(
-        Number(year),
-        Number(month) - 1,
-        Number(day),
-        5,
-        0,
-        0,
-        0,
+        Date.UTC(Number(year), Number(month) - 1, Number(day)),
       );
       const dayss = format(date, 'dd.MM.yyyy');
       const user = await this.prisma.users.findUnique({
@@ -3050,7 +3041,6 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 systeam_fee: 0,
                 owner_amount: total,
                 provider: 'Click',
-                provider_transactionId: '',
                 owner_card_id: cardId,
                 amount_received: 0,
               },
@@ -3079,7 +3069,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               },
             });
 
-            const clickUrl = getPaymentUrl(total, transaction);
+            const clickUrl = getPaymentClickUrl(total, transaction.id);
 
             await ctx.editMessageText(message, {
               parse_mode: 'Markdown',

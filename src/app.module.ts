@@ -15,6 +15,7 @@ import { INITIAL_SESSION } from './helpers/interface';
 import { CronModule } from './cron/cron.module';
 import { ScheduleModule } from '@nestjs/schedule';
 import { QrModule } from './qr/qr.module';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   providers: [MailService],
@@ -51,6 +52,7 @@ import { QrModule } from './qr/qr.module';
     UsersModule,
     CronModule,
     QrModule,
+    PaymentModule,
   ],
 })
 export class AppModule {}

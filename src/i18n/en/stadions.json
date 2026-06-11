@@ -114,5 +114,10 @@
     "off": "⛔ Stadium is now inactive",
     "ownerCard": "⚠️ This stadium only supports card payments.\n\nYou must add a payment card before activating the stadium."
   },
-  "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first."
+  "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first.",
+
+  "admin_checked": {
+    "true": "✅ Approved by admin",
+    "false": "🔺 Not approved by admin"
+  }
 }

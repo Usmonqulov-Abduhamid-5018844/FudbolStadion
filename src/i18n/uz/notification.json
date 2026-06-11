@@ -1,0 +1,18 @@
+{
+  "title": "🔔 Bildirishnomalar",
+  "unread": "O'qilmagan",
+  "read": "O'qilgan",
+  "all": "Barchasi",
+  "count": "ta",
+  "settings": "Sozlamalar",
+  "clear": "Tozalash",
+  "no_messages_to_delete": "📭 O'chiriladigan xabarlar yo'q.",
+  "all_read_deleted": "🗑️ Barcha o'qilgan xabarlar o'chirildi.",
+  "confirm_delete": "⚠️ Haqiqatdan ham barcha o'qilgan xabarlarni o'chirmoqchimisiz?",
+  "no_new_messages": "Sizda yangi xabarlar yo'q",
+  "notification_not_found": "🔔 Bildirishnoma topilmadi",
+  "no_read_messages": "✅ Sizda o'qilgan bildirishnomalar mavjud emas",
+  "no_notifications": "🔔 Sizda hali bildirishnomalar mavjud emas",
+  "enabled": "🟢 Faollashtirildi!\n\n📢 Endi siz {label} haqida real vaqt bildirishnoma olasiz.",
+  "disabled": "🔕 O‘chirildi!\n\n📴 Endi {label} bo‘yicha bildirishnomalar kelmaydi."
+}

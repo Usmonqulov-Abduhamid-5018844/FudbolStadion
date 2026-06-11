@@ -29,7 +29,6 @@ export interface IStadion {
   length: number;
   width: number;
   payments_type: Payments;
-  is_premium: boolean;
   createdAt: Date;
   updatedAt: Date;
   region: Region;
@@ -81,7 +80,7 @@ export enum EStadion_type {
   SMOL = 'smol',
 }
 
-export type NotificationSettings =  {
+export type NotificationSettings = {
   newBooking?: boolean;
   cancel?: boolean;
   payment?: boolean;
@@ -133,3 +132,53 @@ export const INITIAL_SESSION: ISession = {
     off: null,
   },
 };
+
+export enum PremiumPlan {
+  MONTH_1 = 'MONTH_1',
+  MONTH_3 = 'MONTH_3',
+  YEAR_1 = 'YEAR_1',
+}
+
+export const PLAN_LABELS = {
+  uz: {
+    MONTH_1: '📅 1 OY',
+    MONTH_3: '🔥 3 OY',
+    YEAR_1: '🏆 1 YIL',
+  },
+  ru: {
+    MONTH_1: '📅 1 МЕСЯЦ',
+    MONTH_3: '🔥 3 МЕСЯЦА',
+    YEAR_1: '🏆 1 ГОД',
+  },
+  en: {
+    MONTH_1: '📅 1 MONTH',
+    MONTH_3: '🔥 3 MONTHS',
+    YEAR_1: '🏆 1 YEAR',
+  },
+} as const;
+
+export enum Premium_price {
+  MONTH_1 = '39k',
+  MONTH_3 = '99k',
+  YEAR_1 = '299k',
+}
+export const PREMIUM_PLANS = {
+  MONTH_1: {
+    price: 39000,
+    discount: null,
+  },
+  MONTH_3: {
+    price: 99000,
+    discount: 117000,
+  },
+  YEAR_1: {
+    price: 299000,
+    discount: 468000,
+  },
+} as const;
+
+export const CURRENCY_LABELS = {
+  uz: "so'm",
+  ru: "сум",
+  en: "UZS",
+} as const;

@@ -28,20 +28,3 @@ export const getRelatedStadionIds = (stadion: any): number[] => {
 
   return Array.from(ids);
 };
-
-// export const getTodayStart = (timeZone = 'Asia/Tashkent') => {
-//   const now = new Date();
-
-//   const parts = new Intl.DateTimeFormat('en-CA', {
-//     timeZone,
-//     year: 'numeric',
-//     month: '2-digit',
-//     day: '2-digit',
-//   }).formatToParts(now);
-
-//   const year = parts.find(p => p.type === 'year')?.value;
-//   const month = parts.find(p => p.type === 'month')?.value;
-//   const day = parts.find(p => p.type === 'day')?.value;
-
-//   return new Date(`${year}-${month}-${day}T00:00:00`);
-// };
