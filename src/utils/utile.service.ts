@@ -13,7 +13,7 @@ import {
   helpMenuKeyboard_Users,
 } from 'src/helpers/Inline_keybort';
 import { CURRENCY_LABELS, IBooking, PREMIUM_PLANS } from 'src/helpers/interface';
-import { getPaymentClickUrl } from 'src/helpers/url';
+import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';

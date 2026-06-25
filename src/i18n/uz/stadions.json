@@ -120,8 +120,9 @@
   },
   "deleteAlert": "⚠️ Bu stadionni o‘chirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling.",
 
-  "admin_checked": {
-    "true": "✅ Admin tomonidan tasdiqlangan",
-    "false": "🔺 Admin tomonidan tasdiqlanmagan"
+  "stadium_status": {
+    "approved": "✅ Admin tomonidan tasdiqlangan",
+    "pending": "🔺 Tasdiqlanmagan",
+    "rejected": "❌ Rad etilgan"
   }
 }

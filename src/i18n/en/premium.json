@@ -17,5 +17,16 @@
   "advertising": {
     "button": "📢 Advertising service",
     "required": "📢 Advertising service is available only for Premium subscribers.\n🚀 Promote your stadium and reach more customers!"
+  },
+  "payment": {
+    "choose_provider": "💳 Choose a payment provider",
+    "providers": {
+      "click": "Click",
+      "payme": "Payme",
+      "paynet": "Paynet",
+      "uzum": "Uzum Bank"
+    },
+    "button": "💳 Pay",
+    "pay_now": "💳 Click the button below to complete the payment"
   }
 }

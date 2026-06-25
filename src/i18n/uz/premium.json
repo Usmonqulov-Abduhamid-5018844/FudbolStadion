@@ -17,6 +17,18 @@
   "advertising": {
     "button": "📢 Reklama xizmati",
     "required": "📢 Reklama xizmati faqat Premium obuna egalari uchun mavjud.\n🚀 Premium orqali stadioningizni ko‘proq foydalanuvchilarga ko‘rsating!"
-  }
+  },
+  
+  "payment": {
+    "choose_provider": "💳 To'lov tizimini tanlang",
+    "providers": {
+      "click": "Click",
+      "payme": "Payme",
+      "paynet": "Paynet",
+      "uzum": "Uzum Bank"
+    },
+     "button": "💳 To'lash",
+      "pay_now": "💳 To'lovni yakunlash uchun quyidagi tugmani bosing"
+}
 
 }

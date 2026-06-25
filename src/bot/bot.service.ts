@@ -9,15 +9,19 @@ import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { UtilisService } from 'src/utils/utile.service';
 import { EStadion_type } from 'src/helpers/interface';
-import { getLocation } from 'src/helpers/url';
+import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
+import { AdminService } from 'src/admin/admin.service';
 
 @Injectable()
 export class BotService {
+     private readonly AdminChatid =
+  process.env.ADMIN_CHAT_ID?.split(',').map(Number) || []
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
     private readonly utils: UtilisService,
+    private readonly adminService: AdminService
   ) {}
 
   async start(ctx: MyContext) {
@@ -43,6 +47,13 @@ export class BotService {
         where: { chatID: String(ctx.from?.id) },
       });
       if (!users) {
+
+        if (ctx.from && this.AdminChatid.includes(ctx.from.id)){
+         const send = await ctx.reply('🛠 Admin Panel',Markup.removeKeyboard());
+         ctx.session.admin_messageId = send.message_id
+          return this.adminService.admin_paneli(ctx,lang)
+        }
+
         ctx.session.step = 'registor';
         ctx.reply(
           this.i18n.translate('registor.title', { lang }),
@@ -778,6 +789,13 @@ export class BotService {
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
 
+
+              const keyMap = {
+  APPROVED: "approved",
+  PENDING: "pending",
+  REJECTED: "rejected",
+};
+
       let locationText = this.i18n.translate('view.not_available', { lang });
       if (stadion.latitude && stadion.longitude) {
         locationText = getLocation(
@@ -787,11 +805,12 @@ export class BotService {
           stadion.region_items.name,
         );
       }
+      
 
       const message = `
 🏟 <b>${stadion.name}</b>\n
 ${this.i18n.translate('view.locate', { lang })} ${locationText}
-${stadion.admin_checked ? this.i18n.translate("stadions.admin_checked.true",{lang}) : this.i18n.translate("stadions.admin_checked.false",{lang})}
+${this.i18n.translate(`stadions.stadium_status.${keyMap[stadion.admin_status]}`, { lang })}
 ${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
 ${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
 ${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
@@ -864,6 +883,9 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    }
+    finally{
+      await ctx.answerCbQuery();
     }
   }
 }

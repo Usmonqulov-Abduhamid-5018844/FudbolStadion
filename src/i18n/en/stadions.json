@@ -116,8 +116,9 @@
   },
   "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first.",
 
-  "admin_checked": {
-    "true": "✅ Approved by admin",
-    "false": "🔺 Not approved by admin"
+  "stadium_status": {
+    "approved": "✅ Approved by admin",
+    "pending": "🔺 Not approved",
+    "rejected": "❌ Rejected"
   }
 }

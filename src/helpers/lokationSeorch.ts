@@ -35,3 +35,12 @@ export const stadionTypeLabel = (
 
   return `${label} <b>${typeText}</b>`;
 };
+
+export const getLocation = (
+  latitude: number,
+  longitude: number,
+  regionName: string,
+  regionItemName: string,
+) => {
+  return `<a href="https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}">${regionName}, ${regionItemName}</a>`;
+};

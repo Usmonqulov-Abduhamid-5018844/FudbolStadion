@@ -9,7 +9,7 @@ import { MyContext } from 'src/helpers/bot.sesion';
 import { IBooking, PLAN_LABELS, Premium_price } from 'src/helpers/interface';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getPaymentText } from 'src/helpers/peyments_type';
-import { getPaymentCardUrl } from 'src/helpers/url';
+import { getPaymentCardUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   DefaultNotificationSettings,
@@ -1121,7 +1121,7 @@ export class OwnersService {
             working_status: true,
             latitude: parent.latitude,
             longitude: parent.longitude,
-            admin_checked: parent.admin_checked,
+            admin_status: parent.admin_status,
             mini: parent.mini,
           },
         });
@@ -1210,6 +1210,8 @@ export class OwnersService {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    } finally {
+      await ctx.answerCbQuery();
     }
   }
   async miniStadionlar(ctx: MyContext, stadionId: number, lang: string) {
@@ -1425,6 +1427,8 @@ export class OwnersService {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    } finally {
+      await ctx.answerCbQuery();
     }
   }
   async stadionPayments(ctx: MyContext, stadionId: number, lang: string) {
@@ -2225,9 +2229,19 @@ export class OwnersService {
         },
       });
 
-      const settings =
-        (owner?.notificationSettings as NotificationSettings_type) ??
-        DefaultNotificationSettings;
+      let settings =
+        owner?.notificationSettings as NotificationSettings_type | null;
+
+      if (!settings) {
+        settings = { ...DefaultNotificationSettings };
+
+        await this.prisma.owners.update({
+          where: { id: ownerId },
+          data: {
+            notificationSettings: settings,
+          },
+        });
+      }
 
       await this.utils.safeEditOrReply(
         ctx,

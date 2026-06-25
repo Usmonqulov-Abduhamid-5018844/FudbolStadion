@@ -1,4 +1,4 @@
-
+import * as crypto from 'crypto';
 
 export const getPaymentClickUrl = (
   total: number,
@@ -19,30 +19,33 @@ export const getPaymentClickUrl = (
   );
 };
 
+
 export const getPremiumPaymentClickUrl = (
   amount: number,
   transactionId: number,
   plan: string,
-  ownerName: string,
-  lang:string
-) => {
-  const merchantId = process.env.CLICK_MERCHANT_ID;
+  fullName: string,
+  lang: string,
+): string => {
+  const baseUrl = 'https://my.click.uz/services/pay';
 
-  const callbackUrl =
-    `${process.env.BACKEND_URL}/payment/click-premium-webhook`;
+  const serviceId = process.env.CLICK_SERVICE_ID!;
+  const merchantId = process.env.CLICK_MERCHANT_ID!;
+  const secretKey = process.env.CLICK_SECRET_KEY!;
 
-  const description = encodeURIComponent(
-    `Premium obuna (${plan}) - ${ownerName}`,
-  );
+  const signString = `${serviceId}${merchantId}${transactionId}${amount}${secretKey}`;
+  const sign = crypto.createHash('md5').update(signString).digest('hex');
 
-  return (
-    `https://my.click.uz/pay` +
-    `?merchant_id=${merchantId}` +
-    `&amount=${amount}` +
-    `&transaction_id=${transactionId}` +
-    `&description=${description}` +
-    `&callback_url=${encodeURIComponent(callbackUrl)}`
-  );
+  const params = new URLSearchParams({
+    service_id: serviceId,
+    merchant_id: merchantId,
+    amount: String(amount),
+    transaction_param: String(transactionId),
+    return_url: process.env.CLICK_RETURN_URL || '',
+    sign,
+  });
+
+  return `${baseUrl}?${params.toString()}`;
 };
 
 
@@ -58,13 +61,4 @@ export const getPaymentCardUrl = (
       `${process.env.BACKEND_URL}/payment/addCard-webhook`
     )}`
   );
-};
-
-export const getLocation = (
-  latitude: number,
-  longitude: number,
-  regionName: string,
-  regionItemName: string,
-) => {
-  return `<a href="https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}">${regionName}, ${regionItemName}</a>`;
 };

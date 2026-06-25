@@ -91,6 +91,7 @@ export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
+  admin_messageId:null,
   maxCount: null,
   booking_step: null,
   stadion_step: null,

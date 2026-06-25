@@ -8,20 +8,21 @@ datasource db {
 }
 
 model Owners {
-  id                  Int                  @id @default(autoincrement())
-  full_name           String
-  username            String?
-  chatID              String               @unique
-  phone               String
-  email               String               @unique
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  id                   Int                  @id @default(autoincrement())
+  full_name            String
+  username             String?
+  chatID               String               @unique
+  phone                String
+  status               Admin_S              @default(ACTIVE)
+  email                String               @unique
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
   notificationSettings Json?
-  ownerCard           Owner_card?
-  stadions            Stadion[]
-  notification        Notification[]
-  subscriptions       Subscription[]
-  premiumTransactions PremiumTransaction[]
+  ownerCard            Owner_card?
+  stadions             Stadion[]
+  notification         Notification[]
+  subscriptions        Subscription[]
+  premiumTransactions  PremiumTransaction[]
 }
 
 model Users {
@@ -52,7 +53,7 @@ model Stadion {
   mini                    Boolean                    @default(false)
   stadion_mini            Boolean                    @default(false)
   owner_id                Int
-  admin_checked           Boolean                    @default(false)
+  admin_status            AdminStatus                @default(PENDING)
   working_status          Boolean                    @default(true)
   length                  Int
   width                   Int
@@ -214,6 +215,7 @@ model PremiumTransaction {
 
   createdAt DateTime @default(now())
 }
+
 model sesion {
   id      Int     @id @default(autoincrement())
   lang    String?
@@ -238,7 +240,7 @@ model Notification {
   type             NotificationType
   isRead           Boolean          @default(false)
   relatedBookingId Int?
-  data            Json?
+  data             Json?
   sentAt           DateTime?
   createdAt        DateTime         @default(now())
 
@@ -246,8 +248,9 @@ model Notification {
 
   owner   Owners   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   booking Booking? @relation(fields: [relatedBookingId], references: [id], onDelete: SetNull)
-@@index([ownerId, isRead, sentAt])
-@@index([createdAt])
+
+  @@index([ownerId, isRead, sentAt])
+  @@index([createdAt])
 }
 
 enum Payments {
@@ -291,10 +294,21 @@ enum PremiumPlan {
 }
 
 enum NotificationType {
-  DAILY_REPORT // Kunlik hisobot
-  WEEKLY_STATS // Haftalik statistika
-  CANCELLED_BOOKINGS // Bekor qilingan bronlar
-  PAYMENT_RECEIVED // To'lov qabul qilindi
-  BOOKING_CONFIRMED // Bron tasdiqlandi
-  PREMIUM_EXPIRY // Premium tugash sanasi yaqin
+  DAILY_REPORT
+  WEEKLY_STATS
+  CANCELLED_BOOKINGS
+  PAYMENT_RECEIVED
+  BOOKING_CONFIRMED
+  PREMIUM_EXPIRY
+}
+
+enum AdminStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Admin_S {
+  ACTIVE
+  BLOCKED
 }

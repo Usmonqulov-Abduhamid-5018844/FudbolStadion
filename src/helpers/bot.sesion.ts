@@ -5,6 +5,7 @@ export interface ISession {
   name: string | null;
   lang: string | null;
   step: string | null;
+  admin_messageId: number | null;
   stadion_step: string | null;
   owner_registor: registerOwner;
   user_registor: registorUser;

@@ -27,11 +27,24 @@ import {
 } from 'src/helpers/interface';
 import { getRelatedStadionIds, getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
-import { getPremiumPaymentClickUrl } from 'src/helpers/url';
-import { DefaultNotificationSettings, NotificationLabels, NotificationNames, NotificationSettings_type } from 'src/types/notifikation';
+import {
+  DefaultNotificationSettings,
+  NotificationNames,
+  NotificationSettings_type,
+} from 'src/types/notifikation';
+import { PAYMENT_PROVIDERS } from 'src/helpers/provider';
+import {
+  PAYMENT_URL_GENERATORS,
+  PaymentProvider,
+} from 'src/helpers/url_wrapper';
+import { AdminService } from 'src/admin/admin.service';
+import { getLocation } from 'src/helpers/lokationSeorch';
 
 @Update()
 export class BotUpdate {
+  private readonly AdminChatid =
+    process.env.ADMIN_CHAT_ID?.split(',').map(Number) || [];
+
   constructor(
     private readonly botService: BotService,
     private readonly i18n: I18nService,
@@ -40,6 +53,7 @@ export class BotUpdate {
     private readonly userService: UsersService,
     private readonly utils: UtilisService,
     private readonly qrservice: QrService,
+    private readonly adminPaneli: AdminService,
   ) {}
 
   @Start()
@@ -2163,62 +2177,140 @@ export class BotUpdate {
       this.utils.errorFunction(ctx);
     }
   }
-  
-@Action(/toggleNotification\|(.+)\|(\d+)/)
-async toggleNotification(@Ctx() ctx: MyContext) {
-  const lang = await this.utils.langs(ctx);
 
-  if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+  @Action(/toggleNotification\|(.+)\|(\d+)/)
+  async toggleNotification(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
 
-  try {
-    const data = ctx.callbackQuery.data;
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
 
-    const [_, type, id] = data.split('|');
+    try {
+      const data = ctx.callbackQuery.data;
 
-    const notificationType = type as keyof NotificationSettings_type;
+      const [_, type, id] = data.split('|');
 
-    const owner = await this.prisma.owners.findUnique({
-      where: { id: Number(id) },
-    });
+      const notificationType = type as keyof NotificationSettings_type;
 
-    if (!owner) return;
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: Number(id) },
+      });
 
-    const settings =
-      (owner.notificationSettings as NotificationSettings_type) ??
-      DefaultNotificationSettings;
+      if (!owner) return;
 
-    settings[notificationType] = !settings[notificationType];
+      const settings: NotificationSettings_type = {
+        ...DefaultNotificationSettings,
+        ...(owner.notificationSettings as Partial<NotificationSettings_type>),
+      };
 
-    await this.prisma.owners.update({
-      where: { id: Number(id) },
-      data: {
-        notificationSettings: settings,
-      },
-    });
+      settings[notificationType] = !settings[notificationType];
 
-const label = NotificationNames[notificationType][lang];
-const isEnabled = settings[notificationType];
+      await this.prisma.owners.update({
+        where: { id: owner.id },
+        data: {
+          notificationSettings: settings,
+        },
+      });
 
-const key = isEnabled
-  ? 'notification.enabled'
-  : 'notification.disabled';
+      const label = NotificationNames[notificationType][lang];
+      const isEnabled = settings[notificationType];
 
-const text = this.i18n.translate(key, {
-  lang,
-  args: {
-    label,
-  },
-});
+      const key = isEnabled ? 'notification.enabled' : 'notification.disabled';
 
-await ctx.answerCbQuery(text, {
-  show_alert: true,
-});
-  return this.ownerService.notificationSettings(ctx,owner.id,lang)
+      const text = this.i18n.translate(key, {
+        lang,
+        args: {
+          label,
+        },
+      });
 
-  } catch (e) {
-    await this.utils.errorFunction(ctx);
+      await ctx.answerCbQuery(text, {
+        show_alert: true,
+      });
+      return this.ownerService.notificationSettings(ctx, owner.id, lang);
+    } catch (e) {
+      await this.utils.errorFunction(ctx);
+    }
   }
-}
+  @Action(/premiumProvider\|(.+)\|(.+)\|(\d+)/)
+  async premiumProvider(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      const [_, providerKey, premiumPlan, id] =
+        ctx.callbackQuery.data.split('|');
+      const plan = premiumPlan as PremiumPlan;
+
+      const amount = PREMIUM_PLANS[plan].price;
+
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: Number(id) },
+        select: { full_name: true, id: true },
+      });
+      if (!owner) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      const premiumTranzaction = await this.prisma.premiumTransaction.create({
+        data: {
+          owner_id: owner.id,
+          amount,
+          plan,
+          provider: providerKey,
+        },
+      });
+      const provider = providerKey as PaymentProvider;
+
+      if (!(provider in PAYMENT_URL_GENERATORS)) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      const paymentUrl = PAYMENT_URL_GENERATORS[provider](
+        amount,
+        premiumTranzaction.id,
+        plan,
+        owner.full_name,
+        lang,
+      );
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('premium.payment.pay_now', {
+          lang,
+          args: {
+            amount: amount.toLocaleString(),
+          },
+        }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('premium.payment.button', {
+                  lang,
+                }),
+                url: paymentUrl,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', {
+                  lang,
+                }),
+                callback_data: JSON.stringify({
+                  type: 'premium_provider',
+                  plan: premiumPlan,
+                  id: owner.id,
+                }),
+              },
+            ],
+          ],
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
   @Action(/owner_(.+)_(\d+)/)
   async onOwner(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -2546,7 +2638,6 @@ await ctx.answerCbQuery(text, {
         return this.ownerService.stadionPayments(ctx, stadion.id, lang);
       } catch (error) {
         console.log(error);
-
         await this.utils.errorFunction(ctx);
       }
     } else {
@@ -2565,12 +2656,55 @@ await ctx.answerCbQuery(text, {
     }
   }
 
+  /////////////////////////////////////////⬇️⬇️⬇️⬇️⬇️  ADMIN PANELi  ⬇️⬇️⬇️⬇️⬇️//////////////////////////////////////////////
+
+  @Action(/admins_(.+)/)
+  async stadiumMenu(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const type = ctx.callbackQuery.data.split('_')[1];
+    return this.adminPaneli.admins_stadiums(ctx,type)
+  }
+  @Action(/stadium_(.+)_(\d+)_(\d+)/)
+  async status(@Ctx() ctx: MyContext) {
+     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      const [_, status, Id, page] = ctx.callbackQuery.data.split('_');
+     return this.adminPaneli.stadium_status(ctx, status, Number(Id), page);
+  }
+@Action(/stadiumChecking_(approved|rejected)_(\d+)_(\d+)/)
+  async stadiumChecking(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, status, stadionId, currentPage] = ctx.callbackQuery.data.split("_");
+    return this.adminPaneli.status_Checking(ctx,status,Number(stadionId),Number(currentPage))
+
+  }
+  @Action(/stadiumConfirm_(rejected|approved)_(\d+)_(\d+)/)
+  async stadiumConfirm(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, status, stadionId, currentPage] = ctx.callbackQuery.data.split("_");
+    return this.adminPaneli.stadiumConfirm(ctx, status, Number(stadionId), Number(currentPage));
+  }
+
+  @Action(/admin_back_(\d+)/)
+  async adminBack(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const [_, __, step] = ctx.callbackQuery.data.split('_');
+    switch (step) {
+      case '1': {
+        return this.adminPaneli.admin_paneli(ctx, lang);
+      }
+    }
+  }
+
+  /////////////////////////////////////////⬆️⬆️⬆️⬆️⬆️  ADMIN PANELi  ⬆️⬆️⬆️⬆️⬆️//////////////////////////////////////////////
+
   @Action(/.+/)
   async parseAction(@Ctx() ctx: MyContext) {
     let data: {
       type: string;
       id: number;
       day: number;
+      provider: string;
       schedule_id: number;
       stadion_off: number;
       special_id: number;
@@ -2780,8 +2914,7 @@ await ctx.answerCbQuery(text, {
                             id: stadion.id,
                           }),
                         },
-                      ],
-                      [
+
                         {
                           text: this.i18n.translate('schedule.back', { lang }),
                           callback_data: `owner_miniStadion_${stadion.id}`,
@@ -2848,33 +2981,35 @@ await ctx.answerCbQuery(text, {
               const stadion = await this.prisma.stadion.findFirstOrThrow({
                 where: { id: data.id, stadion_mini: true },
               });
-              ctx.reply(
+              await this.utils.safeEditOrReply(
+                ctx,
+
                 this.i18n.translate('stadions.max_players', {
                   lang,
                   args: { count: stadion.max_count },
                 }),
                 {
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('success.edit', { lang }),
-                          callback_data: JSON.stringify({
-                            type: 'edit_miniStadion',
-                            id: stadion.id,
-                          }),
-                        },
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: `owner_miniStadion_${stadion.id}`,
-                        },
-                      ],
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('success.edit', { lang }),
+                        callback_data: JSON.stringify({
+                          type: 'edit_miniStadion',
+                          id: stadion.id,
+                        }),
+                      },
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: `owner_miniStadion_${stadion.id}`,
+                      },
                     ],
-                  },
+                  ],
                 },
               );
             } catch (error) {
               await this.utils.errorFunction(ctx);
+            } finally {
+              await ctx.answerCbQuery();
             }
           }
           break;
@@ -3300,32 +3435,6 @@ await ctx.answerCbQuery(text, {
 
             const amount = PREMIUM_PLANS[plan].price;
             const label = PLAN_LABELS[lang][plan];
-            const owner = await this.prisma.owners.findUnique({
-              where: { id: Number(data.id) },
-              select: { full_name: true },
-            });
-            if (!owner) {
-              await this.utils.errorFunction(ctx);
-              return;
-            }
-
-            const premiumTranzaction =
-              await this.prisma.premiumTransaction.create({
-                data: {
-                  owner_id: Number(data.id),
-                  amount,
-                  plan,
-                  provider: 'Click',
-                },
-              });
-
-            const paymentUrl = getPremiumPaymentClickUrl(
-              amount,
-              premiumTranzaction.id,
-              plan,
-              owner.full_name,
-              lang,
-            );
 
             const message = this.i18n.translate(
               'premium.premium_payment.message',
@@ -3343,7 +3452,11 @@ await ctx.answerCbQuery(text, {
                 [
                   {
                     text: this.i18n.translate('premium.button', { lang }),
-                    url: paymentUrl,
+                    callback_data: JSON.stringify({
+                      type: 'premium_provider',
+                      plan: data.plan,
+                      id: data.id,
+                    }),
                   },
                 ],
                 [
@@ -3359,6 +3472,43 @@ await ctx.answerCbQuery(text, {
             });
           }
           break;
+        case 'premium_provider':
+          {
+            const keyboard = PAYMENT_PROVIDERS.map((provider) => [
+              {
+                text: `${provider.icon} ${this.i18n.translate(
+                  provider.translationKey,
+                  { lang },
+                )}`,
+                callback_data: `premiumProvider|${provider.key}|${data.plan}|${data.id}`,
+              },
+            ]);
+
+            keyboard.push([
+              {
+                text: this.i18n.translate('schedule.back', {
+                  lang,
+                }),
+                callback_data: JSON.stringify({
+                  type: 'premium_buy',
+                  id: data.id,
+                  plan: data.plan,
+                }),
+              },
+            ]);
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('premium.payment.choose_provider', {
+                lang,
+              }),
+              {
+                inline_keyboard: keyboard,
+              },
+            );
+          }
+          break;
+
         case 'add_schedule_day':
           {
             ctx.session.stadion.schedule_day = data.day;
@@ -3991,10 +4141,13 @@ await ctx.answerCbQuery(text, {
             );
           }
           break;
-        case 'notification_settings':
-          {
-            return this.ownerService.notificationSettings(ctx, Number(data.id), lang);
-          }
+        case 'notification_settings': {
+          return this.ownerService.notificationSettings(
+            ctx,
+            Number(data.id),
+            lang,
+          );
+        }
         case 'notification_clear':
           {
             const count = await this.prisma.notification.count({
@@ -4051,14 +4204,14 @@ await ctx.answerCbQuery(text, {
           return this.ownerService.renderNotification(ctx, data.id, lang);
         }
         default: {
+          await ctx.answerCbQuery();
           return;
         }
       }
     } catch (error) {
+      await ctx.answerCbQuery();
       await this.utils.errorFunction(ctx);
       console.log(error);
-    } finally {
-      ctx.answerCbQuery().catch(() => {});
     }
   }
 
@@ -4618,4 +4771,3 @@ await ctx.answerCbQuery(text, {
     }
   }
 }
-4;

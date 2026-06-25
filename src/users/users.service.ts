@@ -4,7 +4,7 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { IStadion } from 'src/helpers/interface';
-import { getDistance, stadionTypeLabel } from 'src/helpers/lokationSeorch';
+import { getDistance, getLocation, stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
@@ -13,9 +13,10 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { QrService } from 'src/qr/qr.service';
-import { getLocation, getPaymentClickUrl } from 'src/helpers/url';
+import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
+import { PaymentProvider } from 'src/helpers/url_wrapper';
 @Injectable()
 export class UsersService {
   constructor(
@@ -2526,7 +2527,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             booking_id: booking.id,
             systeam_fee: 0,
             owner_amount: total,
-            provider: 'Click',
+            provider: PaymentProvider.CLICK,
             owner_card_id: cardId,
             amount_received: 0,
           },
@@ -2686,7 +2687,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               booking_id: booking.id,
               systeam_fee: 0,
               owner_amount: total,
-              provider: 'Click',
+              provider: PaymentProvider.CLICK,
               status: 'PENDING',
               owner_card_id: cardId,
               amount_received: 0,
@@ -3040,7 +3041,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
                 booking_id: booking.id,
                 systeam_fee: 0,
                 owner_amount: total,
-                provider: 'Click',
+                provider: PaymentProvider.CLICK,
                 owner_card_id: cardId,
                 amount_received: 0,
               },
@@ -3126,18 +3127,84 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     page: number = 1,
   ) {
     try {
+      const searchDate = new Date(date);
+
+      const dayOfWeek = searchDate.getDay() === 0 ? 7 : searchDate.getDay();
+
       const limit = 4;
-      const [stadion, total] = await Promise.all([
-        this.prisma.stadion.findMany({
-          where: {
-            bookings: {
-              none: {
-                date: new Date(date),
-                start_time: start_time,
-                end_time: end_time,
+
+      const whereCondition = {
+        working_status: true,
+        stadionOffDays: {
+          none: {
+            date: searchDate,
+          },
+        },
+
+        OR: [
+          {
+            stadionSpecialSchedules: {
+              some: {
+                date: searchDate,
+                start_time: {
+                  lte: start_time,
+                },
+                end_time: {
+                  gte: end_time,
+                },
               },
             },
           },
+
+          {
+            AND: [
+              {
+                stadionSpecialSchedules: {
+                  none: {
+                    date: searchDate,
+                  },
+                },
+              },
+              {
+                stadionChedules: {
+                  some: {
+                    day_of_week: dayOfWeek,
+                    start_time: {
+                      lte: start_time,
+                    },
+                    end_time: {
+                      gte: end_time,
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+
+        bookings: {
+          none: {
+            date: searchDate,
+
+            AND: [
+              {
+                start_time: {
+                  lt: end_time,
+                },
+              },
+              {
+                end_time: {
+                  gt: start_time,
+                },
+              },
+            ],
+          },
+        },
+      };
+
+      const [stadions, total] = await Promise.all([
+        this.prisma.stadion.findMany({
+          where: whereCondition,
           skip: (page - 1) * limit,
           take: limit,
           include: {
@@ -3145,61 +3212,78 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             region_items: true,
           },
         }),
+
         this.prisma.stadion.count({
-          where: {
-            bookings: {
-              none: {
-                date: new Date(date),
-                start_time: start_time,
-                end_time: end_time,
-              },
-            },
-          },
+          where: whereCondition,
         }),
       ]);
-      if (!stadion.length) {
+
+      if (!stadions.length) {
         try {
           await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            { show_alert: true },
+            this.i18n.translate('booking.no_free_slots', {
+              lang,
+            }),
+            {
+              show_alert: true,
+            },
           );
-        } catch (error) {}
+        } catch {}
+
         return;
       }
+
       try {
         await ctx.deleteMessage();
+
         if (ctx.session.stadionMessages?.length) {
           await ctx.deleteMessages(ctx.session.stadionMessages);
         }
-      } catch (error) {}
-      for (let s of stadion) {
-        await this.stadionAll_data(ctx, lang, s, '', true);
+      } catch {}
+
+      for (const stadion of stadions) {
+        await this.stadionAll_data(ctx, lang, stadion, '', true);
       }
+
       const totalPages = Math.ceil(total / limit);
-      if (totalPages == 1) {
+
+      if (totalPages <= 1) {
         return;
       }
+
       const paginationButtons: InlineKeyboardButton[] = [];
+
       if (page > 1) {
         paginationButtons.push({
           text: this.i18n.translate('stadions.Previous', { lang }),
           callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page - 1}`,
         });
       }
+
       paginationButtons.push({
         text: `${page} / ${totalPages}`,
         callback_data: 'ignore',
       });
+
       if (page < totalPages) {
         paginationButtons.push({
           text: this.i18n.translate('stadions.Next', { lang }),
           callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page + 1}`,
         });
       }
-      ctx.reply(this.i18n.translate('booking.Select', { lang }), {
-        reply_markup: { inline_keyboard: [paginationButtons] },
-      });
+
+      await ctx.reply(
+        this.i18n.translate('booking.Select', {
+          lang,
+        }),
+        {
+          reply_markup: {
+            inline_keyboard: [paginationButtons],
+          },
+        },
+      );
     } catch (error) {
+      console.log(error);
       await this.utils.errorFunction(ctx);
     } finally {
       await ctx.answerCbQuery().catch(() => {});

@@ -11,7 +11,7 @@ export const DefaultNotificationSettings: NotificationSettings_type = {
   PAYMENT_RECEIVED: false,
   CANCELLED_BOOKINGS: false,
   DAILY_REPORT: false,
-  WEEKLY_STATS: true,
+  WEEKLY_STATS: false,
   PREMIUM_EXPIRY: true,
 };
 
