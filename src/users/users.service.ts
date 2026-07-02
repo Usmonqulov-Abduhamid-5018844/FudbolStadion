@@ -4,7 +4,11 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { IStadion } from 'src/helpers/interface';
-import { getDistance, getLocation, stadionTypeLabel } from 'src/helpers/lokationSeorch';
+import {
+  getDistance,
+  getLocation,
+  stadionTypeLabel,
+} from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
@@ -17,6 +21,7 @@ import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { PaymentProvider } from 'src/helpers/url_wrapper';
+import { Admin_S, AdminStatus } from '@prisma/client';
 @Injectable()
 export class UsersService {
   constructor(
@@ -244,6 +249,10 @@ export class UsersService {
               ctx.session.stadionMessages = [];
             }
           }
+          await ctx
+            .answerCbQuery()
+            .then(() => {})
+            .catch();
           return await this.userSwitch(ctx, 'stadionSearch', lang);
         }
         case 'help': {
@@ -735,7 +744,16 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
             const limit = 4;
             const [favorites, total] = await Promise.all([
               this.prisma.myFavoriteStadium.findMany({
-                where: { chat_id: String(ctx.from?.id) },
+                where: {
+                  chat_id: String(ctx.from?.id),
+                  stadion: {
+                    working_status: true,
+                    admin_status: AdminStatus.APPROVED,
+                    owner: {
+                      status: Admin_S.ACTIVE,
+                    },
+                  },
+                },
                 orderBy: {
                   createdAt: 'desc',
                 },
@@ -992,6 +1010,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
                 this.prisma.stadion.findMany({
                   where: {
                     working_status: true,
+                    admin_status: AdminStatus.APPROVED,
+                    owner: {
+                      status: Admin_S.ACTIVE,
+                    },
                     price: {
                       lte: max_price,
                     },
@@ -1019,6 +1041,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
                 this.prisma.stadion.count({
                   where: {
                     working_status: true,
+                    admin_status: AdminStatus.APPROVED,
+                    owner: {
+                      status: Admin_S.ACTIVE,
+                    },
                     price: { lte: max_price },
                     OR: [
                       {
@@ -1154,6 +1180,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
           stadions: {
             where: {
               working_status: true,
+              admin_status: AdminStatus.APPROVED,
+              owner: {
+                status: Admin_S.ACTIVE,
+              },
               OR: [
                 {
                   stadionChedules: { some: {} },
@@ -1209,6 +1239,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
           where: {
             region_item_id: itemId,
             working_status: true,
+            admin_status: AdminStatus.APPROVED,
+            owner: {
+              status: Admin_S.ACTIVE,
+            },
             OR: [
               {
                 stadionChedules: { some: {} },
@@ -1231,6 +1265,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
           where: {
             region_item_id: itemId,
             working_status: true,
+            admin_status: AdminStatus.APPROVED,
+            owner: {
+              status: Admin_S.ACTIVE,
+            },
             OR: [
               {
                 stadionChedules: { some: {} },
@@ -1293,6 +1331,10 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       const stadions = await this.prisma.stadion.findMany({
         where: {
           working_status: true,
+          admin_status: AdminStatus.APPROVED,
+          owner: {
+            status: Admin_S.ACTIVE,
+          },
           OR: [
             {
               stadionChedules: { some: {} },
@@ -1576,6 +1618,11 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
       const stadiums = await this.prisma.stadion.findMany({
         where: {
           working_status: true,
+          admin_status: AdminStatus.APPROVED,
+          owner: {
+            status: Admin_S.ACTIVE,
+          },
+
           OR: [
             {
               stadionChedules: { some: {} },
@@ -1587,6 +1634,7 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
             },
           ],
         },
+        take: 5,
         include: {
           region: true,
           region_items: true,
@@ -1896,7 +1944,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
         { inline_keyboard: buttons },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx);
     }
   }
   async special(
@@ -3135,14 +3183,36 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
 
       const whereCondition = {
         working_status: true,
-        stadionOffDays: {
+        admin_status: AdminStatus.APPROVED,
+        owner: {
+          status: Admin_S.ACTIVE,
+        },
+
+        bookings: {
           none: {
             date: searchDate,
+            AND: [
+              {
+                start_time: {
+                  lt: end_time,
+                },
+              },
+              {
+                end_time: {
+                  gt: start_time,
+                },
+              },
+            ],
           },
         },
 
         OR: [
           {
+            stadionOffDays: {
+              none: {
+                date: searchDate,
+              },
+            },
             stadionSpecialSchedules: {
               some: {
                 date: searchDate,
@@ -3157,9 +3227,37 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
           },
 
           {
+            parent: {
+              stadionOffDays: {
+                none: {
+                  date: searchDate,
+                },
+              },
+              stadionSpecialSchedules: {
+                some: {
+                  date: searchDate,
+                  start_time: {
+                    lte: start_time,
+                  },
+                  end_time: {
+                    gte: end_time,
+                  },
+                },
+              },
+            },
+          },
+
+          {
             AND: [
               {
                 stadionSpecialSchedules: {
+                  none: {
+                    date: searchDate,
+                  },
+                },
+              },
+              {
+                stadionOffDays: {
                   none: {
                     date: searchDate,
                   },
@@ -3180,26 +3278,41 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               },
             ],
           },
-        ],
 
-        bookings: {
-          none: {
-            date: searchDate,
-
-            AND: [
-              {
-                start_time: {
-                  lt: end_time,
+          {
+            parent: {
+              AND: [
+                {
+                  stadionSpecialSchedules: {
+                    none: {
+                      date: searchDate,
+                    },
+                  },
                 },
-              },
-              {
-                end_time: {
-                  gt: start_time,
+                {
+                  stadionOffDays: {
+                    none: {
+                      date: searchDate,
+                    },
+                  },
                 },
-              },
-            ],
+                {
+                  stadionChedules: {
+                    some: {
+                      day_of_week: dayOfWeek,
+                      start_time: {
+                        lte: start_time,
+                      },
+                      end_time: {
+                        gte: end_time,
+                      },
+                    },
+                  },
+                },
+              ],
+            },
           },
-        },
+        ],
       };
 
       const [stadions, total] = await Promise.all([

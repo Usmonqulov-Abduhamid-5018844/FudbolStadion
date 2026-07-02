@@ -135,25 +135,33 @@ export const INITIAL_SESSION: ISession = {
 };
 
 export enum PremiumPlan {
+  WEEK_1 = 'WEEK_1',
   MONTH_1 = 'MONTH_1',
   MONTH_3 = 'MONTH_3',
+  MONTH_6 = 'MONTH_6',
   YEAR_1 = 'YEAR_1',
 }
 
 export const PLAN_LABELS = {
   uz: {
+    WEEK_1: '🎁 7 KUN',
     MONTH_1: '📅 1 OY',
     MONTH_3: '🔥 3 OY',
+    MONTH_6: '💎 6 OY',
     YEAR_1: '🏆 1 YIL',
   },
   ru: {
+    WEEK_1: '🎁 7 ДНЕЙ',
     MONTH_1: '📅 1 МЕСЯЦ',
     MONTH_3: '🔥 3 МЕСЯЦА',
+    MONTH_6: '💎 6 МЕСЯЦЕВ',
     YEAR_1: '🏆 1 ГОД',
   },
   en: {
+    WEEK_1: '🎁 7 DAYS',
     MONTH_1: '📅 1 MONTH',
     MONTH_3: '🔥 3 MONTHS',
+    MONTH_6: '💎 6 MONTHS',
     YEAR_1: '🏆 1 YEAR',
   },
 } as const;

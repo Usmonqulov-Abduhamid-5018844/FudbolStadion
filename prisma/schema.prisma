@@ -179,20 +179,27 @@ model Tranzaktion {
 }
 
 model Subscription {
-  id      Int    @id @default(autoincrement())
+  id Int @id @default(autoincrement())
+
   ownerId Int
   owner   Owners @relation(fields: [ownerId], references: [id])
 
-  plan      PremiumPlan
+  plan PremiumPlan
+
   startDate DateTime
-  endDate   DateTime
+
+  endDate DateTime
+
+  reason PremiumReason @default(PURCHASE)
 
   isActive Boolean @default(true)
 
-  createdAt           DateTime             @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   premiumTransactions PremiumTransaction[]
 
-  @@index([ownerId, isActive, endDate])
+  @@index([ownerId, isActive])
 }
 
 model PremiumTransaction {
@@ -204,16 +211,24 @@ model PremiumTransaction {
   subscription_id Int?
   subscription    Subscription? @relation(fields: [subscription_id], references: [id])
 
+  duration Int
+
   plan PremiumPlan
 
   amount Int
 
-  provider               String
+  reason PremiumReason @default(PURCHASE)
+
+  provider String
+
   provider_transactionId String?
 
   status TransactionStatus @default(PENDING)
 
   createdAt DateTime @default(now())
+
+  @@index([owner_id])
+  @@index([subscription_id])
 }
 
 model sesion {
@@ -288,8 +303,10 @@ enum TransactionStatus {
 }
 
 enum PremiumPlan {
+  WEEK_1
   MONTH_1
   MONTH_3
+  MONTH_6
   YEAR_1
 }
 
@@ -311,4 +328,11 @@ enum AdminStatus {
 enum Admin_S {
   ACTIVE
   BLOCKED
+}
+
+enum PremiumReason {
+  TRIAL // Birinchi bepul sinov
+  PURCHASE // Pul to'lab olgan
+  GIFT // Admin sovg'a qilgan
+  COMPENSATION // Kompensatsiya sifatida berilgan
 }

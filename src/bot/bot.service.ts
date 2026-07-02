@@ -615,6 +615,9 @@ export class BotService {
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
+    finally{
+       await ctx.answerCbQuery().then(()=> {}).catch();
+    }
   }
   async stadion_price(ctx: MyContext, stadion_id: number) {
     const lang = await this.utils.langs(ctx);
@@ -741,6 +744,9 @@ export class BotService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    }
+    finally{
+       await ctx.answerCbQuery().then(()=> {}).catch();
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {

@@ -7,7 +7,7 @@ import { OwnersService } from 'src/owners/owners.service';
 import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
-import { Booking_status, Payments, Prisma } from '@prisma/client';
+import { Admin_S, AdminStatus, Booking_status, Payments, Prisma } from '@prisma/client';
 import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
@@ -15,7 +15,6 @@ import {
 import { UtilisService } from 'src/utils/utile.service';
 import { format, subDays } from 'date-fns';
 import { QrService } from 'src/qr/qr.service';
-import { startWith } from 'rxjs';
 import {
   CURRENCY_LABELS,
   EStadion_type,
@@ -38,7 +37,6 @@ import {
   PaymentProvider,
 } from 'src/helpers/url_wrapper';
 import { AdminService } from 'src/admin/admin.service';
-import { getLocation } from 'src/helpers/lokationSeorch';
 
 @Update()
 export class BotUpdate {
@@ -1872,6 +1870,11 @@ export class BotUpdate {
         const data = new Date(date);
         const stadion = await this.prisma.stadion.findMany({
           where: {
+             working_status: true,
+                          admin_status: AdminStatus.APPROVED,
+                          owner: {
+                            status: Admin_S.ACTIVE,
+                          },
             OR: [
               {
                 stadionOffDays: { none: { date: data } },
@@ -1885,6 +1888,7 @@ export class BotUpdate {
               },
             ],
           },
+          take:10
         });
         if (!stadion.length) {
           await ctx.answerCbQuery(
@@ -2239,6 +2243,13 @@ export class BotUpdate {
       const [_, providerKey, premiumPlan, id] =
         ctx.callbackQuery.data.split('|');
       const plan = premiumPlan as PremiumPlan;
+      const durationMap: Record<PremiumPlan, number> = {
+        WEEK_1: 7,
+        MONTH_1: 30,
+        MONTH_3: 90,
+        MONTH_6: 180,
+        YEAR_1: 365,
+      };
 
       const amount = PREMIUM_PLANS[plan].price;
 
@@ -2255,6 +2266,7 @@ export class BotUpdate {
           owner_id: owner.id,
           amount,
           plan,
+          duration: durationMap[plan],
           provider: providerKey,
         },
       });
@@ -2371,7 +2383,7 @@ export class BotUpdate {
         );
       } else if (type === 'miniStadion') {
         return this.ownerService.miniStadion(ctx, Number(Id), lang);
-      } else if (startWith(type, 'Split')) {
+      } else if (type?.startsWith('Split')) {
         const [_, count] = type.split('-');
         return this.ownerService.stadionSplit(
           ctx,
@@ -2399,7 +2411,7 @@ export class BotUpdate {
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
       const [_, __, type] = ctx.callbackQuery.data.split('_');
 
-      if (type.startsWith('workingStatus-')) {
+      if (type?.startsWith('workingStatus-')) {
         const id = Number(type.split('-')[1]);
 
         try {
@@ -2662,26 +2674,82 @@ export class BotUpdate {
   async stadiumMenu(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const type = ctx.callbackQuery.data.split('_')[1];
-    return this.adminPaneli.admins_stadiums(ctx,type)
+    return this.adminPaneli.admins_stadiums(ctx, type);
   }
   @Action(/stadium_(.+)_(\d+)_(\d+)/)
   async status(@Ctx() ctx: MyContext) {
-     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-      const [_, status, Id, page] = ctx.callbackQuery.data.split('_');
-     return this.adminPaneli.stadium_status(ctx, status, Number(Id), page);
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, status, Id, page] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.stadium_status(ctx, status, Number(Id), page);
   }
-@Action(/stadiumChecking_(approved|rejected)_(\d+)_(\d+)/)
+  @Action(/stadiumChecking_(approved|rejected)_(\d+)_(\d+)/)
   async stadiumChecking(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, status, stadionId, currentPage] = ctx.callbackQuery.data.split("_");
-    return this.adminPaneli.status_Checking(ctx,status,Number(stadionId),Number(currentPage))
-
+    const [_, status, stadionId, currentPage] =
+      ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.status_Checking(
+      ctx,
+      status,
+      Number(stadionId),
+      Number(currentPage),
+    );
   }
   @Action(/stadiumConfirm_(rejected|approved)_(\d+)_(\d+)/)
   async stadiumConfirm(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, status, stadionId, currentPage] = ctx.callbackQuery.data.split("_");
-    return this.adminPaneli.stadiumConfirm(ctx, status, Number(stadionId), Number(currentPage));
+    const [_, status, stadionId, currentPage] =
+      ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.stadiumConfirm(
+      ctx,
+      status,
+      Number(stadionId),
+      Number(currentPage),
+    );
+  }
+  @Action(/AdminPaner_Owner_(\w+)_(\d+)_(\d+)/)
+  async AdminPaner_Owner(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, __, status, ownerId, page] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.AdminPaner_owner(
+      ctx,
+      status,
+      Number(ownerId),
+      Number(page),
+    );
+  }
+  @Action(/AdminOwner_(\w+)_(\d+)_(\d+)_(\d+)/)
+  async AdminOwner(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, status, ownerId, currentPage, historyPage] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.AdminOwner_premium(
+      ctx,
+      status,
+      Number(ownerId),
+      Number(currentPage),
+      Number(historyPage),
+    );
+  }
+  @Action(/ownerPremiumGift_(\d+)_(\d+)_(\d+)/)
+  async ownerPremiumGift(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, giftId, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.ownerPremiumGift(
+      ctx,
+      Number(giftId),
+      Number(ownerId),
+      Number(currentPage),
+    );
+  }
+  @Action(/AdminOwnerConfirmGift_(\d+)_(\d+)_(\d+)/)
+  async AdminOwnerConfirmGift(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, giftId, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.AdminOwnerConfirmGift(
+      ctx,
+      Number(giftId),
+      Number(ownerId),
+      Number(currentPage),
+    );
   }
 
   @Action(/admin_back_(\d+)/)
@@ -2735,6 +2803,7 @@ export class BotUpdate {
           return this.userService.userbookingRegionItems(ctx, lang, data.id);
         }
         case 'user_back_regionItems': {
+          await ctx.answerCbQuery().then(()=> {}).catch()
           return this.userService.userbookingRegion(ctx, lang, data.id);
         }
         case 'HELP_ABOUT':
@@ -3009,7 +3078,10 @@ export class BotUpdate {
             } catch (error) {
               await this.utils.errorFunction(ctx);
             } finally {
-              await ctx.answerCbQuery();
+              await ctx
+                .answerCbQuery()
+                .then(() => {})
+                .catch();
             }
           }
           break;
@@ -3068,6 +3140,10 @@ export class BotUpdate {
             );
             ctx.session.maxCount = 'maxCount';
             ctx.session.stadion.id = data.id;
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'back_1':
@@ -3525,6 +3601,11 @@ export class BotUpdate {
 
             ctx.session.step = 'enter_schedule_time';
             ctx.session.stadion.id = data.id;
+
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'add_schedule': {
@@ -3631,6 +3712,10 @@ export class BotUpdate {
             ctx.session.step = 'edit_schedule_time';
             ctx.session.stadion.id = data.id;
             ctx.session.stadion.schedule_id = data.schedule_id;
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'day_off': {
@@ -3643,6 +3728,10 @@ export class BotUpdate {
             await ctx.reply(
               this.i18n.translate('schedule.off_day.add_day', { lang }),
             );
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'week_edit':
@@ -3653,6 +3742,10 @@ export class BotUpdate {
             await ctx.reply(
               this.i18n.translate('schedule.off_day.add_day', { lang }),
             );
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'delete_week':
@@ -3665,6 +3758,10 @@ export class BotUpdate {
             } catch (error) {
               this.utils.errorFunction(ctx);
             }
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'special_table': {
@@ -3675,6 +3772,10 @@ export class BotUpdate {
             ctx.session.step = 'add_special';
             ctx.session.stadion.id = data.id;
             await ctx.reply(this.i18n.translate('schedule.specile', { lang }));
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'special_edit':
@@ -3683,6 +3784,10 @@ export class BotUpdate {
             ctx.session.stadion.id = data.id;
             ctx.session.stadion.schedule_id = data.special_id;
             await ctx.reply(this.i18n.translate('schedule.update', { lang }));
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
 
@@ -3719,6 +3824,10 @@ export class BotUpdate {
                 resize_keyboard: true,
               },
             });
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'price': {
@@ -3729,6 +3838,10 @@ export class BotUpdate {
             ctx.session.step = 'price';
             ctx.session.stadion.id = data.id;
             ctx.reply(this.i18n.translate('stadions.price', { lang }));
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'image': {
@@ -3738,6 +3851,10 @@ export class BotUpdate {
           {
             ((ctx.session.step = 'image'), (ctx.session.stadion.id = data.id));
             ctx.reply(this.i18n.translate('stadions.image', { lang }));
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'all_data': {
@@ -3862,6 +3979,10 @@ export class BotUpdate {
               );
               return;
             }
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'phone_update':
@@ -3878,6 +3999,10 @@ export class BotUpdate {
             ctx.session.owner_registor.phone = 'update_phone';
             ctx.session.owner_registor.id = data.id;
             ctx.reply(this.i18n.translate('registor.phone', { lang }));
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'notification_unread':
@@ -3928,6 +4053,10 @@ export class BotUpdate {
                 ],
               },
             );
+            await ctx
+              .answerCbQuery()
+              .then(() => {})
+              .catch();
           }
           break;
         case 'notification_view':
@@ -4501,6 +4630,10 @@ export class BotUpdate {
           const stadion = await this.prisma.stadion.findMany({
             where: {
               working_status: true,
+              admin_status:AdminStatus.APPROVED,
+              owner:{
+                status:Admin_S.ACTIVE
+              },
               name: { contains: searchName, mode: 'insensitive' },
               stadionChedules: { some: {} },
             },
