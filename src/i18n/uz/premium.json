@@ -1,24 +1,28 @@
 {
   "premium": "💎 Premium obuna",
 
-    "button": "💳 To‘lov qilish",
+  "button": "💳 To‘lov qilish",
 
   "premium_notification": {
     "only": "💎 Ushbu imkoniyat faqat Premium obuna egalari uchun mavjud.\nPremium orqali ko‘proq funksiyalarni ochishingiz mumkin 🚀"
   },
-  
+
   "premium_payment": {
     "message": "💳 <b>Premium obuna to‘lovi</b>\n\n📦 Tarif: <b>{label}</b>\n\n💰 Summa: <b>{amount} {currency}</b>\n\n⚡ To‘lov muvaffaqiyatli amalga oshirilgandan so‘ng premium avtomatik faollashadi.\n\n👇 To‘lovni davom ettirish uchun tugmani bosing:"
-},
+  },
   "premium_message": {
     "text": "💎 Premium obuna\n\nSiz hozirda bepul rejimdan foydalanayapsiz.\n\nPremium obuna orqali stadioningizni yanada samarali boshqarishingiz va ko‘proq mijoz jalb qilishingiz mumkin 🚀\n\n━━━━━━━━━━━━━━\n\n✨ Premium imkoniyatlar\n\n📊 Batafsil statistika (bronlar, daromad, faollik)\n\n🏟 Stadioningiz qidiruvda yuqoriroq chiqadi\n\n🔔 Bronlar haqida avtomatik bildirishnomalar\n\n📅 Mijozlar uchun eslatmalar\n\n📈 Daromad va tahlil hisobotlari\n\n⭐ Premium badge (ishonch oshiradi)\n\n━━━━━━━━━━━━━━\n\n💰 Tariflar\n\n<b>{month1_label}</b> — {month1_price}\n\n🟢 Boshlash uchun qulay\n\n──────────────\n\n<b>{month3_label}</b> — {month3_price}\n\n⭐ Eng ko‘p tanlanadi\n\n──────────────\n\n<b>{year1_label}</b> — {year1_price}\n\n💎 Eng foydali variant\n\n━━━━━━━━━━━━━━\n\n👇 O‘zingizga mos tarifni tanlang"
   },
   
+  "premium_extend": {
+    "text": "🔄 <b>Premium obunani uzaytirish</b>\n\n⭐ Premium obunangiz hozirda faol.\n\nObunangiz muddatini uzaytirish orqali Premium imkoniyatlaridan uzluksiz foydalanishda davom etasiz.\n\n━━━━━━━━━━━━━━\n\n💰 <b>Uzaytirish tariflari</b>\n\n<b>{month1_label}</b> — {month1_price}\n\n──────────────\n\n<b>{month3_label}</b> — {month3_price}\n\n⭐ Eng ko‘p tanlanadi\n\n──────────────\n\n<b>{year1_label}</b> — {year1_price}\n\n💎 Eng foydali variant\n\n━━━━━━━━━━━━━━\n\n📌 Tanlangan tarif joriy Premium obunangiz tugash muddatiga qo‘shiladi.\n\n👇 Uzaytirish uchun tarifni tanlang."
+},
+
   "advertising": {
     "button": "📢 Reklama xizmati",
     "required": "📢 Reklama xizmati faqat Premium obuna egalari uchun mavjud.\n🚀 Premium orqali stadioningizni ko‘proq foydalanuvchilarga ko‘rsating!"
   },
-  
+
   "payment": {
     "choose_provider": "💳 To'lov tizimini tanlang",
     "providers": {
@@ -27,8 +31,21 @@
       "paynet": "Paynet",
       "uzum": "Uzum Bank"
     },
-     "button": "💳 To'lash",
-      "pay_now": "💳 To'lovni yakunlash uchun quyidagi tugmani bosing"
-}
+    "button": "💳 To'lash",
+    "pay_now": "💳 To'lovni yakunlash uchun quyidagi tugmani bosing"
+  },
 
+  "premium_active": {
+    "active": {
+      "text": "⭐ <b>Premium obunangiz faol</b>\n\n\n📦 <b>Tarif:</b> {plan}\n\n🎁 <b>Obuna turi:</b> {reason}\n\n📅 <b>Boshlangan sana:</b> {start_date}\n\n⏳ <b>Tugash sanasi:</b> {end_date}\n\n{statistics}\n_______________________________________________\n\n🗓 <b>Qolgan muddat:</b> {days_left} kun."
+    },
+    "reason": {
+      "trial": "🎉 Bepul sinov obunasi",
+      "purchase": "💳 Sotib olingan premium",
+      "gift": "🎁 Admin tomonidan sovg‘a qilingan premium",
+      "compensation": "🤝 Kompensatsiya sifatida berilgan premium"
+    },
+    "extend": "🔄 Obunani uzaytirish",
+    "day": "kun"
+  }
 }

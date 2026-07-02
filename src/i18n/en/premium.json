@@ -14,6 +14,10 @@
     "text": "💎 Premium subscription\n\nYou are currently using the free plan.\n\nPremium helps you manage your stadium more efficiently and attract more customers 🚀\n\n━━━━━━━━━━━━━━\n\n✨ Premium features\n\n📊 Detailed statistics (bookings, revenue, activity)\n\n🏟 Your stadium ranks higher in search\n\n🔔 Automatic booking notifications\n\n📅 Customer reminders\n\n📈 Revenue analytics reports\n\n⭐ Premium badge (builds trust)\n\n━━━━━━━━━━━━━━\n\n💰 Plans\n\n<b>{month1_label}</b> — {month1_price}\n\n🟢 Good for starting\n\n──────────────\n\n<b>{month3_label}</b> — {month3_price}\n\n⭐ Most popular\n\n──────────────\n\n<b>{year1_label}</b> — {year1_price}\n\n💎 Best value\n\n━━━━━━━━━━━━━━\n\n👇 Choose the plan that suits you"
   },
 
+  "premium_extend": {
+    "text": "🔄 <b>Extend Premium Subscription</b>\n\n⭐ Your Premium subscription is currently active.\n\nExtend your subscription to continue enjoying all Premium features without interruption.\n\n━━━━━━━━━━━━━━\n\n💰 <b>Extension Plans</b>\n\n<b>{month1_label}</b> — {month1_price}\n\n──────────────\n\n<b>{month3_label}</b> — {month3_price}\n\n⭐ Most popular plan\n\n──────────────\n\n<b>{year1_label}</b> — {year1_price}\n\n💎 Best value option\n\n━━━━━━━━━━━━━━\n\n📌 The selected plan will be added to the remaining time of your current Premium subscription.\n\n👇 Choose a plan to extend your subscription."
+  },
+
   "advertising": {
     "button": "📢 Advertising service",
     "required": "📢 Advertising service is available only for Premium subscribers.\n🚀 Promote your stadium and reach more customers!"
@@ -28,5 +32,18 @@
     },
     "button": "💳 Pay",
     "pay_now": "💳 Click the button below to complete the payment"
+  },
+  "premium_active": {
+    "active": {
+      "text": "⭐ <b>Your Premium subscription is active</b>\n\n\n📦 <b>Plan:</b> {plan}\n\n🎁 <b>Subscription type:</b> {reason}\n\n📅 <b>Start date:</b> {start_date}\n\n⏳ <b>End date:</b> {end_date}\n\n{statistics}\n__________________________________________________________\n\n🗓 <b>Days remaining:</b> {days_left} days"
+    },
+    "reason": {
+      "trial": "🎉 Free trial subscription",
+      "purchase": "💳 Purchased Premium subscription",
+      "gift": "🎁 Premium subscription gifted by the administrator",
+      "compensation": "🤝 Premium subscription provided as compensation"
+    },
+    "extend": "🔄 Extend subscription",
+    "day": "days"
   }
 }

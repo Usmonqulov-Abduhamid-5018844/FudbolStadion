@@ -12,7 +12,11 @@ import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
 } from 'src/helpers/Inline_keybort';
-import { CURRENCY_LABELS, IBooking, PREMIUM_PLANS } from 'src/helpers/interface';
+import {
+  CURRENCY_LABELS,
+  IBooking,
+  PREMIUM_PLANS,
+} from 'src/helpers/interface';
 import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
@@ -178,7 +182,7 @@ export class UtilisService implements OnModuleInit {
 
   async errorFunction(ctx: MyContext) {
     const lang = await this.langs(ctx);
-    ctx.reply(this.i18n.translate('error.error', { lang }), {
+    await ctx.reply(this.i18n.translate('error.error', { lang }), {
       reply_markup: {
         inline_keyboard: [
           [
@@ -190,6 +194,11 @@ export class UtilisService implements OnModuleInit {
         ],
       },
     });
+    await ctx
+      .answerCbQuery()
+      .then(() => {})
+      .catch();
+
     console.log('Error occurred');
   }
 

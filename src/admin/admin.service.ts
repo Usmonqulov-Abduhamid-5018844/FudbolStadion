@@ -5,6 +5,7 @@ import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
 import { PLAN_LABELS, PremiumPlan } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
+import { getPremiumReasonText } from 'src/helpers/reason';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { InlineKeyboardButton } from 'telegraf/types';
@@ -942,8 +943,8 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
 
           await ctx.answerCbQuery(
             updatedOwner.status === 'ACTIVE'
-              ? '✅ Owner faollashtirildi'
-              : '🚫 Owner bloklandi',
+              ? `✅ ${owner.full_name} faollashtirildi`
+              : `🚫 ${owner.full_name} bloklandi`,
           );
           return this.AdminPaner_owner(
             ctx,
@@ -966,7 +967,7 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
     status: string,
     ownerId: number,
     currentPage: number,
-    historyPage:number,
+    historyPage: number,
   ) {
     try {
       const limit = 5;
@@ -992,20 +993,35 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
 
           const premium = owner.subscriptions[0];
 
-          const giftDays = premium
-            ? await this.prisma.premiumTransaction.aggregate({
+          const statistics = premium
+            ? await this.prisma.premiumTransaction.groupBy({
+                by: ['reason'],
                 where: {
                   owner_id: owner.id,
                   subscription_id: premium.id,
-                  reason: 'GIFT',
+                  status: 'SUCCESS',
                 },
                 _sum: {
                   duration: true,
                 },
               })
-            : null;
+            : [];
 
-          const bonusDays = giftDays?._sum.duration ?? 0;
+          const purchaseDays =
+            statistics.find((item) => item.reason === 'PURCHASE')?._sum
+              .duration ?? 0;
+
+          const giftDays =
+            statistics.find((item) => item.reason === 'GIFT')?._sum.duration ??
+            0;
+
+          const compensationDays =
+            statistics.find((item) => item.reason === 'COMPENSATION')?._sum
+              .duration ?? 0;
+
+          const trialDays =
+            statistics.find((item) => item.reason === 'TRIAL')?._sum.duration ??
+            0;
 
           const text = premium
             ? `
@@ -1022,9 +1038,19 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
 📅 <b>Faollashtirilgan:</b> ${formatDate(premium.startDate, lang)}
 
 ⏳ <b>Amal qilish muddati:</b> ${formatDate(premium.endDate, lang)}
-
-${bonusDays > 0 ? `🎁 <b>Sovg'a bonus:</b> +${bonusDays} kun\n` : ''}
-━━━━━━━━━━━━━━━
+_____________________________________________\n
+${purchaseDays > 0 ? `💳 <b>Sotib olingan:</b> ${purchaseDays} kun\n\n` : ''}${
+                giftDays > 0 ? `🎁 <b>Sovg'a:</b> +${giftDays} kun\n\n` : ''
+              }${
+                compensationDays > 0
+                  ? `🤝 <b>Kompensatsiya:</b> +${compensationDays} kun\n\n`
+                  : ''
+              }${
+                trialDays > 0
+                  ? `🎉 <b>Sinov muddati:</b> ${trialDays} kun\n`
+                  : ''
+              }
+____________________________________________
 
 Quyidagi amallardan birini tanlang 👇
 `.trim()
@@ -1068,7 +1094,6 @@ Quyidagi amallardan birini tanlang 👇
           break;
         }
         case 'history': {
-          
           const [history, total] = await Promise.all([
             this.prisma.subscription.findMany({
               where: {
@@ -1100,7 +1125,7 @@ Quyidagi amallardan birini tanlang 👇
               },
             }),
           ]);
-          
+
           if (!history.length) {
             await ctx.answerCbQuery('Premium tarixi mavjud emas', {
               show_alert: true,
@@ -1112,13 +1137,6 @@ Quyidagi amallardan birini tanlang 👇
 
           const historyText = history
             .map((item, index) => {
-              const reason = {
-                PURCHASE: '💳 Sotib olingan',
-                GIFT: "🎁 Admin sovg'asi",
-                COMPENSATION: '🤝 Kompensatsiya',
-                TRIAL: '🆓 Sinov Premium',
-              }[item.reason];
-
               const transaction = item.premiumTransactions[0];
 
               return `
@@ -1126,7 +1144,7 @@ Quyidagi amallardan birini tanlang 👇
 
 📦 <b>Tarif:</b> ${PLAN_LABELS[lang][item.plan]}
 
-🎯 <b>Sababi:</b> ${reason}
+🎯 <b>Sababi:</b> ${getPremiumReasonText(item.reason, this.i18n, lang)}
 
 📅 <b>Boshlangan:</b> ${formatDate(item.startDate, lang)}
 
@@ -1139,7 +1157,9 @@ Quyidagi amallardan birini tanlang 👇
               }
 
 💳 <b>To'lov:</b> ${
-                transaction.provider === "ADMIN_GIFT" ? 'Admin tomonidan berilgan' : transaction.provider
+                transaction.provider === 'ADMIN_GIFT'
+                  ? 'Admin tomonidan berilgan'
+                  : transaction.provider
               }
 `.trim();
             })
@@ -1236,7 +1256,6 @@ Quyidagi amallardan birini tanlang 👇
     } catch (error) {
       await this.utils.errorFunction(ctx);
       console.log(error);
-      
     }
   }
   async ownerPremiumGift(
@@ -1462,7 +1481,6 @@ ${
       return this.AdminOwner_premium(ctx, 'premium', owner.id, currentPage, 1);
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log(error);
     }
   }
 }

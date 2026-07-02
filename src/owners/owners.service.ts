@@ -6,9 +6,11 @@ import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { MyContext } from 'src/helpers/bot.sesion';
+import { formatDate } from 'src/helpers/dateFormat';
 import { IBooking, PLAN_LABELS, Premium_price } from 'src/helpers/interface';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getPaymentText } from 'src/helpers/peyments_type';
+import { getPremiumReasonText } from 'src/helpers/reason';
 import { getPaymentCardUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -1076,6 +1078,9 @@ export class OwnersService {
             } catch (error) {}
           }
           break;
+        case "9":{
+          return this.premium(ctx, Number(data), lang);
+        }
         default: {
           break;
         }
@@ -2039,7 +2044,7 @@ export class OwnersService {
           ownerId,
           isActive: true,
           endDate: {
-            gt: now,
+            gte: now,
           },
         },
       });
@@ -2101,7 +2106,87 @@ export class OwnersService {
         });
         return;
       }
-      ctx.reply('Sizda premium obuna mavjud');
+      const statistics = await this.prisma.premiumTransaction.groupBy({
+        by: ['reason'],
+        where: {
+          owner_id: subscription.ownerId,
+          subscription_id: subscription.id,
+          status: 'SUCCESS',
+        },
+        _sum: {
+          duration: true,
+        },
+      });
+      const purchaseDays =
+        statistics.find((item) => item.reason === 'PURCHASE')?._sum.duration ??
+        0;
+
+      const giftDays =
+        statistics.find((item) => item.reason === 'GIFT')?._sum.duration ?? 0;
+
+      const compensationDays =
+        statistics.find((item) => item.reason === 'COMPENSATION')?._sum
+          .duration ?? 0;
+
+      const trialDays =
+        statistics.find((item) => item.reason === 'TRIAL')?._sum.duration ?? 0;
+
+      const diffTime = subscription.endDate.getTime() - now.getTime();
+
+      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      const statistic = [
+        purchaseDays > 0
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.purchase', { lang })}:</b> ${purchaseDays} ${this.i18n.translate("premium.premium_active.day",{lang})}`
+          : null,
+
+        giftDays > 0 ? `<b>${this.i18n.translate('premium.premium_active.reason.gift', { lang })}:</b> +${giftDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+
+        compensationDays > 0
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.compensation', { lang })}:</b> +${compensationDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+
+        trialDays > 0 ? `<b>${this.i18n.translate('premium.premium_active.reason.trial', { lang })}:</b> ${trialDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
+
+      const text = this.i18n.translate('premium.premium_active.active.text', {
+        lang,
+        args: {
+          plan: PLAN_LABELS[lang][subscription.plan],
+          reason: getPremiumReasonText(subscription.reason, this.i18n, lang),
+          start_date: formatDate(subscription.startDate, lang),
+          end_date: formatDate(subscription.endDate, lang),
+          statistics: statistic,
+          days_left: daysLeft,
+
+        },
+      });
+
+      await this.utils.safeEditOrReply(ctx, text, {
+        inline_keyboard: [
+          [
+            {
+              text: this.i18n.translate('premium.premium_active.extend', {
+                lang,
+              }),
+              callback_data: `SelectOwnerPremium_extend_${subscription.ownerId}`,
+              
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('schedule.back', {
+                lang,
+              }),
+              callback_data: JSON.stringify({
+                type: 'phone_back',
+                id: ownerId,
+              }),
+            },
+          ],
+        ],
+      });
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

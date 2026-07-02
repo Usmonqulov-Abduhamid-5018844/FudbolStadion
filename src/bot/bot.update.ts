@@ -22,6 +22,7 @@ import {
   INITIAL_SESSION,
   PLAN_LABELS,
   PREMIUM_PLANS,
+  Premium_price,
   PremiumPlan,
 } from 'src/helpers/interface';
 import { getRelatedStadionIds, getStadionIds } from 'src/helpers/stadions';
@@ -2394,6 +2395,92 @@ export class BotUpdate {
       }
     } catch (error) {}
   }
+  @Action(/SelectOwnerPremium_(\w+)_(\d+)/)
+  async ownerPremium(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_,__, ownerId] = ctx.callbackQuery.data.split('_');
+    const lang = await this.utils.langs(ctx)
+      const owner = await this.prisma.owners.findUnique({
+    where: {
+      id: Number(ownerId),
+    },
+  });
+  
+
+  if (!owner) {
+    await this.utils.errorFunction(ctx);
+    return;
+  }
+
+  await this.utils.safeEditOrReply(
+    ctx,
+    this.i18n.translate('premium.premium_extend.text', {
+      lang,
+      args: {
+        month1_label: PLAN_LABELS[lang]['MONTH_1'],
+        month3_label: PLAN_LABELS[lang]['MONTH_3'],
+        year1_label: PLAN_LABELS[lang]['YEAR_1'],
+
+        month1_price: this.utils.formatPrice('MONTH_1', lang),
+        month3_price: this.utils.formatPrice('MONTH_3', lang),
+        year1_price: this.utils.formatPrice('YEAR_1', lang),
+      },
+    }),
+    {
+      inline_keyboard: [
+        [
+          {
+            text: `${PLAN_LABELS[lang]['MONTH_1']} — ${Premium_price.MONTH_1}`,
+            callback_data: JSON.stringify({
+              type: 'premium_buy',
+              plan: 'MONTH_1',
+              id: ownerId,
+            }),
+          },
+        ],
+        [
+          {
+            text: `${PLAN_LABELS[lang]['MONTH_3']} — ${Premium_price.MONTH_3}`,
+            callback_data: JSON.stringify({
+              type: 'premium_buy',
+              plan: 'MONTH_3',
+              id: ownerId,
+            }),
+          },
+        ],
+        [
+          {
+            text: `${PLAN_LABELS[lang]['YEAR_1']} — ${Premium_price.YEAR_1}`,
+            callback_data: JSON.stringify({
+              type: 'premium_buy',
+              plan: 'YEAR_1',
+              id: ownerId,
+            }),
+          },
+        ],
+        [
+          {
+            text: this.i18n.translate('schedule.back', {
+              lang,
+            }),
+            callback_data:`backOwner_premium_${ownerId}`,
+          },
+        ],
+      ],
+    },
+  );
+
+  }
+  @Action(/backOwner_premium_(\d+)/)
+  async backOwner(@Ctx() ctx: MyContext) {
+    const lang = await this.utils.langs(ctx);
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, type, id] = ctx.callbackQuery.data.split('_');
+    if(type === "premium"){
+      return this.ownerService.premium(ctx, Number(id), lang);
+    }
+  }
+
   @Action(/stadion_type_(.+)/)
   async stadion_type(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -3503,7 +3590,7 @@ export class BotUpdate {
           return this.ownerService.renderNotification(ctx, data.id, lang);
         }
         case 'ownerPremium': {
-          return this.ownerService.premium(ctx, data.id, lang);
+          return this.ownerService.premium(ctx, Number(data.id), lang);
         }
         case 'premium_buy':
           {

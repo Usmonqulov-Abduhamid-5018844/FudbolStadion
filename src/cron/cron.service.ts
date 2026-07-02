@@ -32,9 +32,7 @@ export class CronService {
         data: { status: 'CANCELED' },
       });
 
-      console.log(`Expired bookings canceled: ${result.count}`);
     } catch (error) {
-      console.log('Cancel cron error:', error.message);
     } finally {
       this.isCancelRunning = false;
     }
@@ -57,9 +55,7 @@ export class CronService {
         data: { status: 'NOSHOW' },
       });
 
-      console.log(`NO_SHOW updated: ${result.count}`);
     } catch (error) {
-      console.log('NoShow cron error:', error.message);
     } finally {
       this.isNoShowRunning = false;
     }
@@ -81,10 +77,7 @@ export class CronService {
         },
         data: { status: 'COMPLETED' },
       });
-
-      console.log(`Bookings completed: ${result.count}`);
     } catch (error) {
-      console.log('Completed cron error:', error.message);
     } finally {
       this.isCompletedRunning = false;
     }
@@ -107,10 +100,7 @@ export class CronService {
         },
         data: { status: 'CANCELED' },
       });
-
-      console.log(`Pay-later canceled: ${result.count}`);
     } catch (error) {
-      console.log('Pay-later cancel cron error:', error.message);
       
     }
     finally{
@@ -130,10 +120,7 @@ export class CronService {
           lt: new Date(now.getTime() - 10 * 60 * 1000)
         }
       }})
-      console.log(`Old pending transactions deleted`);
-      
     } catch (error) {
-      console.log('Delete transaction cron error:', error.message);
     }
     finally{
       this.isDeleteTransactionRunning = false;
