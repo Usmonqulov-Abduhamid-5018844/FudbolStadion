@@ -2684,24 +2684,44 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
             expires_at: new Date(Date.now() + 15 * 60 * 1000),
           },
         });
-
-        await ctx.editMessageText(message, {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('booking.confirm', { lang }),
-                  callback_data: `booking_confirm_yes_${booking.id}`,
-                },
-                {
-                  text: this.i18n.translate('booking.cancel', { lang }),
-                  callback_data: `booking_confirm_no_${booking.id}`,
-                },
+        try {
+          await ctx.editMessageText(message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.confirm', { lang }),
+                    callback_data: `booking_confirm_yes_${booking.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('booking.cancel', { lang }),
+                    callback_data: `booking_confirm_no_${booking.id}`,
+                  },
+                ],
               ],
-            ],
-          },
-        });
+            },
+          });
+          
+        } catch (error) {
+           await ctx.reply(message, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.confirm', { lang }),
+                    callback_data: `booking_confirm_yes_${booking.id}`,
+                  },
+                  {
+                    text: this.i18n.translate('booking.cancel', { lang }),
+                    callback_data: `booking_confirm_no_${booking.id}`,
+                  },
+                ],
+              ],
+            },
+          });
+        }
       } else if (stadion.payments_type === 'GIBRID') {
         const { price, penalty, hors, total } = this.utils.calculateTotalPrice(
           start_time,
@@ -2954,7 +2974,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     lang: string,
   ) {
     try {
-      const { total, penalty, price, hors } = this.utils.calculateTotalPrice(
+      const { total,hors } = this.utils.calculateTotalPrice(
         start_time,
         end_time,
         pricePerHur,

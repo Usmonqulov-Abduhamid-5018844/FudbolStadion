@@ -7,7 +7,13 @@ import { OwnersService } from 'src/owners/owners.service';
 import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { Markup } from 'telegraf';
-import { Admin_S, AdminStatus, Booking_status, Payments, Prisma } from '@prisma/client';
+import {
+  Admin_S,
+  AdminStatus,
+  Booking_status,
+  Payments,
+  Prisma,
+} from '@prisma/client';
 import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
@@ -38,6 +44,8 @@ import {
   PaymentProvider,
 } from 'src/helpers/url_wrapper';
 import { AdminService } from 'src/admin/admin.service';
+import { formatDate } from 'src/helpers/dateFormat';
+import { NotifikationService } from 'src/notifikation/notifikation.service';
 
 @Update()
 export class BotUpdate {
@@ -53,6 +61,7 @@ export class BotUpdate {
     private readonly utils: UtilisService,
     private readonly qrservice: QrService,
     private readonly adminPaneli: AdminService,
+    private readonly notifikationService:NotifikationService
   ) {}
 
   @Start()
@@ -1034,66 +1043,82 @@ export class BotUpdate {
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
         const [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
         switch (type) {
-          case 'yes':
-            {
-              if (ctx.callbackQuery) {
-                try {
-                  await ctx.answerCbQuery();
-                } catch (error) {}
-              }
-              const booking = await this.prisma.booking.findUnique({
-                where: { id: Number(bookingId) },
-                include: { stadion: true },
-              });
-              if (!booking) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-              await this.prisma.booking.update({
-                where: { id: Number(booking.id) },
-                data: { status: 'CONFIRMED' },
-              });
-              const days = format(booking.date, 'dd.MM.yyyy');
+          case 'yes': {
+            if (ctx.callbackQuery) {
+              try {
+                await ctx.answerCbQuery();
+              } catch (error) {}
+            }
+            const booking = await this.prisma.booking.findUnique({
+              where: { id: Number(bookingId) },
+              include: { stadion: { include: { owner: true } } },
+            });
+            if (!booking) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+            if(booking.status === "CONFIRMED"){
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.already_confirmed', { lang }),
+                { show_alert: true },
+              );
+              return;
+            }
+            await this.prisma.booking.update({
+              where: { id: Number(booking.id) },
+              data: { status: 'CONFIRMED' },
+            });
+            const days = format(booking.date, 'dd.MM.yyyy');
 
-              const paymentTextMap = {
-                CARD: this.i18n.translate('peyments.card', { lang }),
-                CASH: this.i18n.translate('peyments.cash', { lang }),
-              };
+            const paymentTextMap = {
+              CARD: this.i18n.translate('peyments.card', { lang }),
+              CASH: this.i18n.translate('peyments.cash', { lang }),
+            };
 
-              const paymentMethodText =
-                paymentTextMap[booking.payment_method] ||
-                booking.payment_method;
+            const paymentMethodText =
+              paymentTextMap[booking.payment_method] || booking.payment_method;
 
-              const message = this.i18n.translate('booking.booking_confirmed', {
-                lang,
-                args: {
-                  stadion_name: booking.stadion.name,
-                  date: days,
-                  start_time: booking.start_time,
-                  end_time: booking.end_time,
-                  payment_method: paymentMethodText,
-                  total: booking.total_price.toLocaleString(),
+            const message = this.i18n.translate('booking.booking_confirmed', {
+              lang,
+              args: {
+                stadion_name: booking.stadion.name,
+                date: days,
+                start_time: booking.start_time,
+                end_time: booking.end_time,
+                payment_method: paymentMethodText,
+                total: booking.total_price.toLocaleString(),
+              },
+            });
+            try {
+              await ctx.editMessageText(message, {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'errorBack_1',
+                      },
+                    ],
+                  ],
                 },
               });
-              try {
-                await ctx.editMessageText(message, {
-                  parse_mode: 'Markdown',
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'errorBack_1',
-                        },
-                      ],
-                    ],
-                  },
-                });
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
+            } catch (error) {
+              await this.utils.errorFunction(ctx);
+            }
+            const settings: NotificationSettings_type = {
+              ...DefaultNotificationSettings,
+              ...(booking.stadion.owner
+                .notificationSettings as Partial<NotificationSettings_type>),
+            };
+            if (settings.BOOKING_CONFIRMED) {
+              void this.notifikationService.bookingConfirmentNotifikation(
+                booking.id,
+                booking.stadion.owner.id
+              );
             }
             break;
+          }
           case 'no':
             {
               if (ctx.callbackQuery) {
@@ -1231,7 +1256,7 @@ export class BotUpdate {
                 }
                 const booking = await this.prisma.booking.findUnique({
                   where: { id: Number(bookingId) },
-                  include: { stadion: true },
+                  include: { stadion: { include: { owner: true } } },
                 });
                 if (!booking) {
                   await this.utils.errorFunction(ctx);
@@ -1283,6 +1308,18 @@ export class BotUpdate {
                   ctx.session.bookingBrones = [];
                 }
                 ctx.session.bookingBrones.push(send.message_id);
+
+              const settings: NotificationSettings_type = {
+              ...DefaultNotificationSettings,
+              ...(booking.stadion.owner
+                .notificationSettings as Partial<NotificationSettings_type>),
+            };
+            if (settings.BOOKING_CONFIRMED) {
+              void this.notifikationService.bookingConfirmentNotifikation(
+                booking.id,
+                booking.stadion.owner.id
+              );
+            }
               } catch (error) {
                 await this.utils.errorFunction(ctx);
               }
@@ -1290,22 +1327,36 @@ export class BotUpdate {
             break;
           case 'cancel':
             {
-              if (ctx.callbackQuery) {
-                try {
-                  await ctx.answerCbQuery();
-                } catch (error) {}
-              }
               const booking = await this.prisma.booking.findUnique({
                 where: { id: Number(bookingId) },
+                include: { stadion: { include: { owner: true } } },
               });
               if (!booking) {
                 await this.utils.errorFunction(ctx);
+                return;
+              }
+              if(booking.status === "CANCELED"){
+                await ctx.answerCbQuery(this.i18n.translate('booking.already_cancelled', { lang }), { show_alert: true });
                 return;
               }
               await this.prisma.booking.update({
                 where: { id: booking.id },
                 data: { status: 'CANCELED' },
               });
+              if(booking.status === "CONFIRMED" || booking.status === "PAID"){
+                const settings: NotificationSettings_type = {
+                  ...DefaultNotificationSettings,
+                  ...(booking.stadion.owner
+                    .notificationSettings as Partial<NotificationSettings_type>),
+                };
+                if (settings.CANCELLED_BOOKINGS) {
+                  void this.notifikationService.bookingCanceledNotifikation(
+                    booking.id,
+                    booking.stadion.owner.id
+                  );
+                }
+              }
+             
               const days = format(booking.date, 'dd.MM.yyyy');
 
               const send = await ctx.reply(
@@ -1335,8 +1386,13 @@ export class BotUpdate {
                 ctx.session.bookingBrones = [];
               }
               ctx.session.bookingBrones.push(send.message_id);
+              if (ctx.callbackQuery) {
+                try {
+                  await ctx.answerCbQuery();
+                } catch (error) {}
+              }
+              break;
             }
-            break;
           case 'selectPeyments':
             {
               try {
@@ -1871,11 +1927,11 @@ export class BotUpdate {
         const data = new Date(date);
         const stadion = await this.prisma.stadion.findMany({
           where: {
-             working_status: true,
-                          admin_status: AdminStatus.APPROVED,
-                          owner: {
-                            status: Admin_S.ACTIVE,
-                          },
+            working_status: true,
+            admin_status: AdminStatus.APPROVED,
+            owner: {
+              status: Admin_S.ACTIVE,
+            },
             OR: [
               {
                 stadionOffDays: { none: { date: data } },
@@ -1889,7 +1945,7 @@ export class BotUpdate {
               },
             ],
           },
-          take:10
+          take: 10,
         });
         if (!stadion.length) {
           await ctx.answerCbQuery(
@@ -2398,85 +2454,83 @@ export class BotUpdate {
   @Action(/SelectOwnerPremium_(\w+)_(\d+)/)
   async ownerPremium(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_,__, ownerId] = ctx.callbackQuery.data.split('_');
-    const lang = await this.utils.langs(ctx)
-      const owner = await this.prisma.owners.findUnique({
-    where: {
-      id: Number(ownerId),
-    },
-  });
-  
-
-  if (!owner) {
-    await this.utils.errorFunction(ctx);
-    return;
-  }
-
-  await this.utils.safeEditOrReply(
-    ctx,
-    this.i18n.translate('premium.premium_extend.text', {
-      lang,
-      args: {
-        month1_label: PLAN_LABELS[lang]['MONTH_1'],
-        month3_label: PLAN_LABELS[lang]['MONTH_3'],
-        year1_label: PLAN_LABELS[lang]['YEAR_1'],
-
-        month1_price: this.utils.formatPrice('MONTH_1', lang),
-        month3_price: this.utils.formatPrice('MONTH_3', lang),
-        year1_price: this.utils.formatPrice('YEAR_1', lang),
+    const [_, __, ownerId] = ctx.callbackQuery.data.split('_');
+    const lang = await this.utils.langs(ctx);
+    const owner = await this.prisma.owners.findUnique({
+      where: {
+        id: Number(ownerId),
       },
-    }),
-    {
-      inline_keyboard: [
-        [
-          {
-            text: `${PLAN_LABELS[lang]['MONTH_1']} — ${Premium_price.MONTH_1}`,
-            callback_data: JSON.stringify({
-              type: 'premium_buy',
-              plan: 'MONTH_1',
-              id: ownerId,
-            }),
-          },
-        ],
-        [
-          {
-            text: `${PLAN_LABELS[lang]['MONTH_3']} — ${Premium_price.MONTH_3}`,
-            callback_data: JSON.stringify({
-              type: 'premium_buy',
-              plan: 'MONTH_3',
-              id: ownerId,
-            }),
-          },
-        ],
-        [
-          {
-            text: `${PLAN_LABELS[lang]['YEAR_1']} — ${Premium_price.YEAR_1}`,
-            callback_data: JSON.stringify({
-              type: 'premium_buy',
-              plan: 'YEAR_1',
-              id: ownerId,
-            }),
-          },
-        ],
-        [
-          {
-            text: this.i18n.translate('schedule.back', {
-              lang,
-            }),
-            callback_data:`backOwner_premium_${ownerId}`,
-          },
-        ],
-      ],
-    },
-  );
+    });
 
+    if (!owner) {
+      await this.utils.errorFunction(ctx);
+      return;
+    }
+
+    await this.utils.safeEditOrReply(
+      ctx,
+      this.i18n.translate('premium.premium_extend.text', {
+        lang,
+        args: {
+          month1_label: PLAN_LABELS[lang]['MONTH_1'],
+          month3_label: PLAN_LABELS[lang]['MONTH_3'],
+          year1_label: PLAN_LABELS[lang]['YEAR_1'],
+
+          month1_price: this.utils.formatPrice('MONTH_1', lang),
+          month3_price: this.utils.formatPrice('MONTH_3', lang),
+          year1_price: this.utils.formatPrice('YEAR_1', lang),
+        },
+      }),
+      {
+        inline_keyboard: [
+          [
+            {
+              text: `${PLAN_LABELS[lang]['MONTH_1']} — ${Premium_price.MONTH_1}`,
+              callback_data: JSON.stringify({
+                type: 'premium_buy',
+                plan: 'MONTH_1',
+                id: ownerId,
+              }),
+            },
+          ],
+          [
+            {
+              text: `${PLAN_LABELS[lang]['MONTH_3']} — ${Premium_price.MONTH_3}`,
+              callback_data: JSON.stringify({
+                type: 'premium_buy',
+                plan: 'MONTH_3',
+                id: ownerId,
+              }),
+            },
+          ],
+          [
+            {
+              text: `${PLAN_LABELS[lang]['YEAR_1']} — ${Premium_price.YEAR_1}`,
+              callback_data: JSON.stringify({
+                type: 'premium_buy',
+                plan: 'YEAR_1',
+                id: ownerId,
+              }),
+            },
+          ],
+          [
+            {
+              text: this.i18n.translate('schedule.back', {
+                lang,
+              }),
+              callback_data: `backOwner_premium_${ownerId}`,
+            },
+          ],
+        ],
+      },
+    );
   }
   @Action(/backOwner_premium_(\d+)/)
   async backOwner(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const [_, type, id] = ctx.callbackQuery.data.split('_');
-    if(type === "premium"){
+    if (type === 'premium') {
       return this.ownerService.premium(ctx, Number(id), lang);
     }
   }
@@ -2807,7 +2861,8 @@ export class BotUpdate {
   @Action(/AdminOwner_(\w+)_(\d+)_(\d+)_(\d+)/)
   async AdminOwner(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, status, ownerId, currentPage, historyPage] = ctx.callbackQuery.data.split('_');
+    const [_, status, ownerId, currentPage, historyPage] =
+      ctx.callbackQuery.data.split('_');
     return this.adminPaneli.AdminOwner_premium(
       ctx,
       status,
@@ -2890,7 +2945,10 @@ export class BotUpdate {
           return this.userService.userbookingRegionItems(ctx, lang, data.id);
         }
         case 'user_back_regionItems': {
-          await ctx.answerCbQuery().then(()=> {}).catch()
+          await ctx
+            .answerCbQuery()
+            .then(() => {})
+            .catch();
           return this.userService.userbookingRegion(ctx, lang, data.id);
         }
         case 'HELP_ABOUT':
@@ -4183,7 +4241,7 @@ export class BotUpdate {
 ━━━━━━━━━━━━━━
 📝 ${message}
 
-🕒 ${new Date(notification.createdAt).toLocaleString()}
+🕒 Yuborilgan sana: ${formatDate(notification.sentAt ? notification.sentAt : notification.createdAt, lang)}
 
 ━━━━━━━━━━━━━━`,
               {
@@ -4285,7 +4343,7 @@ export class BotUpdate {
 ━━━━━━━━━━━━━━
 📝 ${message}
 
-🕒 ${new Date(notification.createdAt).toLocaleString()}
+🕒 Yuborilgan sana: ${formatDate(notification.sentAt ? notification.sentAt : notification.createdAt, lang)}
 
 ━━━━━━━━━━━━━━`,
               {
@@ -4717,9 +4775,9 @@ export class BotUpdate {
           const stadion = await this.prisma.stadion.findMany({
             where: {
               working_status: true,
-              admin_status:AdminStatus.APPROVED,
-              owner:{
-                status:Admin_S.ACTIVE
+              admin_status: AdminStatus.APPROVED,
+              owner: {
+                status: Admin_S.ACTIVE,
               },
               name: { contains: searchName, mode: 'insensitive' },
               stadionChedules: { some: {} },

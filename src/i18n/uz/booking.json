@@ -98,5 +98,9 @@
 
   "game_started": "⚽ O‘yin boshlangan",
   "working_time": "📅 O'zingizga qulay vaqtni tanlang:",
-  "not_available_stadiums": "❌ Bu sanada bo'sh stadionlar topilmadi"
+  "not_available_stadiums": "❌ Bu sanada bo'sh stadionlar topilmadi",
+
+  "already_cancelled": "❌ Ushbu bron allaqachon bekor qilingan. Bu bron uchun qayta amal bajarishning imkoni yo'q.",
+
+  "already_confirmed": "✅ Ushbu bron allaqachon tasdiqlangan. Uni qayta tasdiqlashning hojati yo'q."
 }

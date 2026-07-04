@@ -17,7 +17,7 @@ model Owners {
   email                String               @unique
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
-  notificationSettings Json?
+  notificationSettings Json
   ownerCard            Owner_card?
   stadions             Stadion[]
   notification         Notification[]
@@ -182,7 +182,7 @@ model Subscription {
   id Int @id @default(autoincrement())
 
   ownerId Int
-  owner   Owners @relation(fields: [ownerId], references: [id])
+  owner   Owners @relation(fields: [ownerId], references: [id],onDelete: Cascade)
 
   plan PremiumPlan
 
@@ -206,10 +206,10 @@ model PremiumTransaction {
   id Int @id @default(autoincrement())
 
   owner_id Int
-  owner    Owners @relation(fields: [owner_id], references: [id])
+  owner    Owners @relation(fields: [owner_id], references: [id], onDelete: Cascade)
 
   subscription_id Int?
-  subscription    Subscription? @relation(fields: [subscription_id], references: [id])
+  subscription    Subscription? @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
 
   duration Int
 
@@ -318,7 +318,6 @@ enum NotificationType {
   BOOKING_CONFIRMED
   PREMIUM_EXPIRY
 }
-
 enum AdminStatus {
   PENDING
   APPROVED
@@ -331,8 +330,8 @@ enum Admin_S {
 }
 
 enum PremiumReason {
-  TRIAL // Birinchi bepul sinov
-  PURCHASE // Pul to'lab olgan
-  GIFT // Admin sovg'a qilgan
-  COMPENSATION // Kompensatsiya sifatida berilgan
+  TRIAL
+  PURCHASE
+  GIFT
+  COMPENSATION
 }

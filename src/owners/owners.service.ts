@@ -136,6 +136,7 @@ export class OwnersService {
             phone: String(ctx.session.owner_registor.phone),
             email: String(ctx.session.owner_registor.email),
             chatID: String(ctx.from!.id),
+            notificationSettings: DefaultNotificationSettings
           };
           await this.prisma.owners.create({ data: { ...data } });
 
@@ -2315,18 +2316,7 @@ export class OwnersService {
       });
 
       let settings =
-        owner?.notificationSettings as NotificationSettings_type | null;
-
-      if (!settings) {
-        settings = { ...DefaultNotificationSettings };
-
-        await this.prisma.owners.update({
-          where: { id: ownerId },
-          data: {
-            notificationSettings: settings,
-          },
-        });
-      }
+        owner?.notificationSettings as NotificationSettings_type;
 
       await this.utils.safeEditOrReply(
         ctx,

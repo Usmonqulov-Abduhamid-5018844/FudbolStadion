@@ -5,7 +5,6 @@ import { UtilisService } from "./utile.service";
 @Global()
 @Module({
     providers: [UtilisService],
-    imports:[TelegrafModule],
     exports: [UtilisService]
 
 })

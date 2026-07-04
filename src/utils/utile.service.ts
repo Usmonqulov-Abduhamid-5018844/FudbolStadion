@@ -1,8 +1,10 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Booking_status, Pay_method, Payments } from '@prisma/client';
-import { InlineKeyboardMarkup } from '@telegraf/types';
+import {
+  Booking_status,
+  Pay_method,
+  Payments,
+} from '@prisma/client';
 import { subDays } from 'date-fns';
-import { format, toZonedTime } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';

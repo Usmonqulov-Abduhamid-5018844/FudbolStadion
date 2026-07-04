@@ -94,7 +94,9 @@
 
   "game_started": "⚽ The game has started",
   "working_time": "📅 Choose a time that suits you:",
+  "not_available_stadiums": "❌ No available stadiums found for this date",
 
-  "not_available_stadiums": "❌ No available stadiums found for this date"
+  "already_cancelled": "❌ This booking has already been cancelled. This action cannot be performed again.",
 
+  "already_confirmed": "✅ This booking has already been confirmed. No further confirmation is required."
 }

@@ -3,7 +3,7 @@ import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Markup } from 'telegraf';
+import { Markup, Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
@@ -15,13 +15,13 @@ import { AdminService } from 'src/admin/admin.service';
 
 @Injectable()
 export class BotService {
-     private readonly AdminChatid =
-  process.env.ADMIN_CHAT_ID?.split(',').map(Number) || []
+  private readonly AdminChatid =
+    process.env.ADMIN_CHAT_ID?.split(',').map(Number) || [];
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
     private readonly utils: UtilisService,
-    private readonly adminService: AdminService
+    private readonly adminService: AdminService,
   ) {}
 
   async start(ctx: MyContext) {
@@ -47,11 +47,13 @@ export class BotService {
         where: { chatID: String(ctx.from?.id) },
       });
       if (!users) {
-
-        if (ctx.from && this.AdminChatid.includes(ctx.from.id)){
-         const send = await ctx.reply('🛠 Admin Panel',Markup.removeKeyboard());
-         ctx.session.admin_messageId = send.message_id
-          return this.adminService.admin_paneli(ctx,lang)
+        if (ctx.from && this.AdminChatid.includes(ctx.from.id)) {
+          const send = await ctx.reply(
+            '🛠 Admin Panel',
+            Markup.removeKeyboard(),
+          );
+          ctx.session.admin_messageId = send.message_id;
+          return this.adminService.admin_paneli(ctx, lang);
         }
 
         ctx.session.step = 'registor';
@@ -416,12 +418,12 @@ export class BotService {
             }),
           },
         ]);
-   
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('schedule.schedules.week', { lang }),
-            { inline_keyboard: inlineKeyboard },
-          );
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('schedule.schedules.week', { lang }),
+          { inline_keyboard: inlineKeyboard },
+        );
       } else {
         return this.renderScheduleMenu(ctx, stadion_id);
       }
@@ -614,9 +616,11 @@ export class BotService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-    }
-    finally{
-       await ctx.answerCbQuery().then(()=> {}).catch();
+    } finally {
+      await ctx
+        .answerCbQuery()
+        .then(() => {})
+        .catch();
     }
   }
   async stadion_price(ctx: MyContext, stadion_id: number) {
@@ -744,9 +748,11 @@ export class BotService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-    }
-    finally{
-       await ctx.answerCbQuery().then(()=> {}).catch();
+    } finally {
+      await ctx
+        .answerCbQuery()
+        .then(() => {})
+        .catch();
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {
@@ -796,11 +802,11 @@ export class BotService {
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
 
 
-              const keyMap = {
-  APPROVED: "approved",
-  PENDING: "pending",
-  REJECTED: "rejected",
-};
+      const keyMap = {
+        APPROVED: 'approved',
+        PENDING: 'pending',
+        REJECTED: 'rejected',
+      };
 
       let locationText = this.i18n.translate('view.not_available', { lang });
       if (stadion.latitude && stadion.longitude) {
@@ -811,7 +817,7 @@ export class BotService {
           stadion.region_items.name,
         );
       }
-      
+
 
       const message = `
 🏟 <b>${stadion.name}</b>\n
@@ -889,8 +895,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-    }
-    finally{
+    } finally {
       await ctx.answerCbQuery();
     }
   }

@@ -17,6 +17,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { QrModule } from './qr/qr.module';
 import { PaymentModule } from './payment/payment.module';
 import { AdminModule } from './admin/admin.module';
+import { NotifikationModule } from './notifikation/notifikation.module';
 
 @Module({
   providers: [MailService],
@@ -55,6 +56,7 @@ import { AdminModule } from './admin/admin.module';
     QrModule,
     PaymentModule,
     AdminModule,
+    NotifikationModule,
   ],
 })
 export class AppModule {}
