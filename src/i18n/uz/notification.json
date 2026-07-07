@@ -14,5 +14,13 @@
   "no_read_messages": "✅ Sizda o'qilgan bildirishnomalar mavjud emas",
   "no_notifications": "🔔 Sizda hali bildirishnomalar mavjud emas",
   "enabled": "🟢 Faollashtirildi!\n\n📢 Endi siz {label} haqida real vaqt bildirishnoma olasiz.",
-  "disabled": "🔕 O‘chirildi!\n\n📴 Endi {label} bo‘yicha bildirishnomalar kelmaydi."
+  "disabled": "🔕 O‘chirildi!\n\n📴 Endi {label} bo‘yicha bildirishnomalar kelmaydi.",
+  
+  "notification": {
+    "detail": "<b>{title}</b>\n\n━━━━━━━━━━━━━━\n📝 {message}\n\n🕒 Yuborilgan sana: {date}\n\n━━━━━━━━━━━━━━",
+    "premium_expiry": {
+      "title": "⭐ Premium obunangiz tugashiga {daysLeft} kun qoldi.",
+      "message": "Premium xizmatlaridan uzluksiz foydalanishni davom ettirish uchun obunangizni muddatidan oldin yangilashingizni tavsiya qilamiz.\n\n📅 Tugash sanasi: {endDate}"
+    }
+  }
 }

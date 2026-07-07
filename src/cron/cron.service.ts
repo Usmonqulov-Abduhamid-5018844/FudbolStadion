@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { NotificationType } from '@prisma/client';
-import { BotService } from 'src/bot/bot.service';
+import { I18nService } from 'nestjs-i18n';
 import { formatDate } from 'src/helpers/dateFormat';
+import { MailService } from 'src/mail/mail.service';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -14,7 +15,9 @@ import {
 export class CronService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly notifikationService:NotifikationService
+    private readonly notifikationService: NotifikationService,
+    private readonly i18n: I18nService,
+    private readonly mail: MailService,
   ) {}
   private isCancelRunning = false;
   private isNoShowRunning = false;
@@ -66,7 +69,7 @@ export class CronService {
     }
   }
 
-  @Cron(CronExpression.EVERY_10_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async bookingCompleted() {
     if (this.isCompletedRunning) return;
     this.isCompletedRunning = true;
@@ -130,6 +133,7 @@ export class CronService {
       this.isDeleteTransactionRunning = false;
     }
   }
+
   @Cron(CronExpression.EVERY_HOUR)
   async deactivateExpiredSubscriptions() {
     const now = new Date();
@@ -145,6 +149,7 @@ export class CronService {
       },
     });
   }
+
   @Cron(CronExpression.EVERY_DAY_AT_9AM)
   async premiumExpiryReminder() {
     try {
@@ -209,24 +214,66 @@ export class CronService {
             type: NotificationType.PREMIUM_EXPIRY,
             translations: {
               uz: {
-                title: `⭐ Premium obunangiz tugashiga ${daysLeft} kun qoldi.`,
-                message: `Premium xizmatlaridan uzluksiz foydalanishni davom ettirish uchun obunangizni muddatidan oldin yangilashingizni tavsiya qilamiz.
-
-📅 Tugash sanasi: ${formatDate(subscription.endDate, 'uz')}`,
+                title: this.i18n.translate(
+                  'notification.notification.premium_expiry.title',
+                  {
+                    lang: 'uz',
+                    args: {
+                      daysLeft,
+                    },
+                  },
+                ),
+                message: this.i18n.translate(
+                  'notification.notification.premium_expiry.message',
+                  {
+                    lang: 'uz',
+                    args: {
+                      endDate: formatDate(subscription.endDate, 'uz'),
+                    },
+                  },
+                ),
               },
 
               ru: {
-                title: `⭐ До окончания вашей Premium-подписки осталось ${daysLeft} дня.`,
-                message: `Чтобы продолжить пользоваться всеми преимуществами Premium без перерыва, рекомендуем заранее продлить подписку.
-
-📅 Дата окончания: ${formatDate(subscription.endDate, 'ru')}`,
+                title: this.i18n.translate(
+                  'notification.notification.premium_expiry.title',
+                  {
+                    lang: 'ru',
+                    args: {
+                      daysLeft,
+                    },
+                  },
+                ),
+                message: this.i18n.translate(
+                  'notification.notification.premium_expiry.message',
+                  {
+                    lang: 'ru',
+                    args: {
+                      endDate: formatDate(subscription.endDate, 'ru'),
+                    },
+                  },
+                ),
               },
 
               en: {
-                title: `⭐ Your Premium subscription will expire in ${daysLeft} days.`,
-                message: `To continue enjoying all Premium features without interruption, we recommend renewing your subscription before it expires.
-
-📅 Expiration date: ${formatDate(subscription.endDate, 'en')}`,
+                title: this.i18n.translate(
+                  'notification.notification.premium_expiry.title',
+                  {
+                    lang: 'en',
+                    args: {
+                      daysLeft,
+                    },
+                  },
+                ),
+                message: this.i18n.translate(
+                  'notification.notification.premium_expiry.message',
+                  {
+                    lang: 'en',
+                    args: {
+                      endDate: formatDate(subscription.endDate, 'en'),
+                    },
+                  },
+                ),
               },
             },
             data: {
@@ -244,4 +291,9 @@ export class CronService {
       console.error(error);
     }
   }
+
+  @Cron('59 23 * * 6', {
+    timeZone: 'Asia/Tashkent',
+  })
+  async sendWeeklyOwnerReports() {}
 }

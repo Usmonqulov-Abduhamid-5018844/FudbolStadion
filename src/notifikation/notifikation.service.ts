@@ -101,6 +101,7 @@ Please be ready to welcome the customer at the scheduled time.`,
       console.error('bookingConfirmentNotifikation:', error);
     }
   }
+  
   async bookingCanceledNotifikation(bookingId: number, ownerId: number) {
     try {
       const owner = await this.prisma.owners.findUnique({

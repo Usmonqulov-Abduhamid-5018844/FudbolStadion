@@ -61,7 +61,7 @@ export class BotUpdate {
     private readonly utils: UtilisService,
     private readonly qrservice: QrService,
     private readonly adminPaneli: AdminService,
-    private readonly notifikationService:NotifikationService
+    private readonly notifikationService: NotifikationService,
   ) {}
 
   @Start()
@@ -1057,7 +1057,7 @@ export class BotUpdate {
               await this.utils.errorFunction(ctx);
               return;
             }
-            if(booking.status === "CONFIRMED"){
+            if (booking.status === 'CONFIRMED') {
               await ctx.answerCbQuery(
                 this.i18n.translate('booking.already_confirmed', { lang }),
                 { show_alert: true },
@@ -1114,7 +1114,7 @@ export class BotUpdate {
             if (settings.BOOKING_CONFIRMED) {
               void this.notifikationService.bookingConfirmentNotifikation(
                 booking.id,
-                booking.stadion.owner.id
+                booking.stadion.owner_id,
               );
             }
             break;
@@ -1309,90 +1309,92 @@ export class BotUpdate {
                 }
                 ctx.session.bookingBrones.push(send.message_id);
 
-              const settings: NotificationSettings_type = {
-              ...DefaultNotificationSettings,
-              ...(booking.stadion.owner
-                .notificationSettings as Partial<NotificationSettings_type>),
-            };
-            if (settings.BOOKING_CONFIRMED) {
-              void this.notifikationService.bookingConfirmentNotifikation(
-                booking.id,
-                booking.stadion.owner.id
-              );
-            }
-              } catch (error) {
-                await this.utils.errorFunction(ctx);
-              }
-            }
-            break;
-          case 'cancel':
-            {
-              const booking = await this.prisma.booking.findUnique({
-                where: { id: Number(bookingId) },
-                include: { stadion: { include: { owner: true } } },
-              });
-              if (!booking) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-              if(booking.status === "CANCELED"){
-                await ctx.answerCbQuery(this.i18n.translate('booking.already_cancelled', { lang }), { show_alert: true });
-                return;
-              }
-              await this.prisma.booking.update({
-                where: { id: booking.id },
-                data: { status: 'CANCELED' },
-              });
-              if(booking.status === "CONFIRMED" || booking.status === "PAID"){
                 const settings: NotificationSettings_type = {
                   ...DefaultNotificationSettings,
                   ...(booking.stadion.owner
                     .notificationSettings as Partial<NotificationSettings_type>),
                 };
-                if (settings.CANCELLED_BOOKINGS) {
-                  void this.notifikationService.bookingCanceledNotifikation(
+                if (settings.BOOKING_CONFIRMED) {
+                  void this.notifikationService.bookingConfirmentNotifikation(
                     booking.id,
-                    booking.stadion.owner.id
+                    booking.stadion.owner_id,
                   );
                 }
+              } catch (error) {
+                await this.utils.errorFunction(ctx);
               }
-             
-              const days = format(booking.date, 'dd.MM.yyyy');
-
-              const send = await ctx.reply(
-                this.i18n.translate('booking.booking_cancelled', {
-                  lang,
-                  args: {
-                    date: days,
-                    start_time: booking.start_time,
-                    end_time: booking.end_time,
-                  },
-                }),
-                {
-                  parse_mode: 'Markdown',
-                  reply_markup: {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'back_user_5',
-                        },
-                      ],
-                    ],
-                  },
-                },
-              );
-              if (!ctx.session.bookingBrones) {
-                ctx.session.bookingBrones = [];
-              }
-              ctx.session.bookingBrones.push(send.message_id);
-              if (ctx.callbackQuery) {
-                try {
-                  await ctx.answerCbQuery();
-                } catch (error) {}
-              }
-              break;
             }
+            break;
+          case 'cancel': {
+            const booking = await this.prisma.booking.findUnique({
+              where: { id: Number(bookingId) },
+              include: { stadion: { include: { owner: true } } },
+            });
+            if (!booking) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+            if (booking.status === 'CANCELED') {
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.already_cancelled', { lang }),
+                { show_alert: true },
+              );
+              return;
+            }
+            await this.prisma.booking.update({
+              where: { id: booking.id },
+              data: { status: 'CANCELED' },
+            });
+            if (booking.status === 'CONFIRMED' || booking.status === 'PAID') {
+              const settings: NotificationSettings_type = {
+                ...DefaultNotificationSettings,
+                ...(booking.stadion.owner
+                  .notificationSettings as Partial<NotificationSettings_type>),
+              };
+              if (settings.CANCELLED_BOOKINGS) {
+                void this.notifikationService.bookingCanceledNotifikation(
+                  booking.id,
+                  booking.stadion.owner.id,
+                );
+              }
+            }
+
+            const days = format(booking.date, 'dd.MM.yyyy');
+
+            const send = await ctx.reply(
+              this.i18n.translate('booking.booking_cancelled', {
+                lang,
+                args: {
+                  date: days,
+                  start_time: booking.start_time,
+                  end_time: booking.end_time,
+                },
+              }),
+              {
+                parse_mode: 'Markdown',
+                reply_markup: {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'back_user_5',
+                      },
+                    ],
+                  ],
+                },
+              },
+            );
+            if (!ctx.session.bookingBrones) {
+              ctx.session.bookingBrones = [];
+            }
+            ctx.session.bookingBrones.push(send.message_id);
+            if (ctx.callbackQuery) {
+              try {
+                await ctx.answerCbQuery();
+              } catch (error) {}
+            }
+            break;
+          }
           case 'selectPeyments':
             {
               try {
@@ -4236,19 +4238,24 @@ export class BotUpdate {
 
             await this.utils.safeEditOrReply(
               ctx,
-              `${title}
-
-━━━━━━━━━━━━━━
-📝 ${message}
-
-🕒 Yuborilgan sana: ${formatDate(notification.sentAt ? notification.sentAt : notification.createdAt, lang)}
-
-━━━━━━━━━━━━━━`,
+              this.i18n.translate('notification.notification.detail', {
+                lang,
+                args: {
+                  title,
+                  message,
+                  date: formatDate(
+                    notification.sentAt
+                      ? notification.sentAt
+                      : notification.createdAt,
+                    lang,
+                  ),
+                },
+              }),
               {
                 inline_keyboard: [
                   [
                     {
-                      text: `${this.i18n.translate('schedule.back', { lang })}`,
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: JSON.stringify({
                         type:
                           count > 0
@@ -4338,14 +4345,19 @@ export class BotUpdate {
 
             await this.utils.safeEditOrReply(
               ctx,
-              `${title}
-
-━━━━━━━━━━━━━━
-📝 ${message}
-
-🕒 Yuborilgan sana: ${formatDate(notification.sentAt ? notification.sentAt : notification.createdAt, lang)}
-
-━━━━━━━━━━━━━━`,
+                  this.i18n.translate('notification.notification.detail', {
+                lang,
+                args: {
+                  title,
+                  message,
+                  date: formatDate(
+                    notification.sentAt
+                      ? notification.sentAt
+                      : notification.createdAt,
+                    lang,
+                  ),
+                },
+              }),
               {
                 inline_keyboard: [
                   [

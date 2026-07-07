@@ -14,5 +14,13 @@
   "no_read_messages": "✅ You have no read notifications",
   "no_notifications": "🔔 You don't have any notifications yet",
   "enabled": "🟢 Activated!\n\n📢 You will now receive real-time notifications about {label}.",
-  "disabled": "🔕 Disabled!\n\n📴 You will no longer receive notifications about {label}."
+  "disabled": "🔕 Disabled!\n\n📴 You will no longer receive notifications about {label}.",
+
+  "notification": {
+    "detail": "<b>{title}</b>\n\n━━━━━━━━━━━━━━\n📝 {message}\n\n🕒 Sent at: {date}\n\n━━━━━━━━━━━━━━",
+    "premium_expiry": {
+      "title": "⭐ Your Premium subscription will expire in {daysLeft} days.",
+      "message": "To continue enjoying all Premium features without interruption, we recommend renewing your subscription before it expires.\n\n📅 Expiration date: {endDate}"
+    }
+  }
 }
