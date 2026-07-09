@@ -10,7 +10,6 @@ import * as path from 'path';
 import { UtileModule } from './utils/utils.module';
 import { OwnersModule } from './owners/owners.module';
 import { UsersModule } from './users/users.module';
-import { MailService } from './mail/mail.service';
 import { INITIAL_SESSION } from './helpers/interface';
 import { CronModule } from './cron/cron.module';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -18,9 +17,9 @@ import { QrModule } from './qr/qr.module';
 import { PaymentModule } from './payment/payment.module';
 import { AdminModule } from './admin/admin.module';
 import { NotifikationModule } from './notifikation/notifikation.module';
+import { WeeklyReportModule } from './mail/weekly-report.module';
 
 @Module({
-  providers: [MailService],
   imports: [
     I18nModule.forRoot({
       fallbackLanguage: 'uz',
@@ -52,6 +51,7 @@ import { NotifikationModule } from './notifikation/notifikation.module';
     UtileModule,
     OwnersModule,
     UsersModule,
+    WeeklyReportModule,
     CronModule,
     QrModule,
     PaymentModule,

@@ -23,6 +23,7 @@ model Owners {
   notification         Notification[]
   subscriptions        Subscription[]
   premiumTransactions  PremiumTransaction[]
+  advertisements       Advertisement[]
 }
 
 model Users {
@@ -71,6 +72,7 @@ model Stadion {
   stadionChedules         Stadion_chedule[]
   stadionOffDays          stadion_off_days[]
   stadionSpecialSchedules stadion_special_schedule[]
+  advertisements          Advertisement[]
 
   @@index([owner_id])
 }
@@ -182,7 +184,7 @@ model Subscription {
   id Int @id @default(autoincrement())
 
   ownerId Int
-  owner   Owners @relation(fields: [ownerId], references: [id],onDelete: Cascade)
+  owner   Owners @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   plan PremiumPlan
 
@@ -247,6 +249,23 @@ model MyFavoriteStadium {
   stadion    Stadion  @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
 
   @@unique([chat_id, stadion_id])
+}
+
+model Advertisement {
+  id        Int      @id @default(autoincrement())
+  ownerId   Int
+  text      String
+  stadionId Int?
+  imageUrl  String
+  startsAt  DateTime
+  endsAt    DateTime
+  isActive  Boolean  @default(true)
+
+  owner   Owners   @relation(fields: [ownerId], references: [id])
+  stadion Stadion? @relation(fields: [stadionId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Notification {
@@ -318,6 +337,7 @@ enum NotificationType {
   BOOKING_CONFIRMED
   PREMIUM_EXPIRY
 }
+
 enum AdminStatus {
   PENDING
   APPROVED
