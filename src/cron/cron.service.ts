@@ -189,6 +189,7 @@ export class CronService {
           },
         }),
       ]);
+      
     } catch (error) {
       console.error('Deactivate expired subscriptions error:', error);
     }

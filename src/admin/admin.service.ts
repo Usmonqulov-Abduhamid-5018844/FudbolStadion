@@ -1,12 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { PremiumReason } from '@prisma/client';
+import { NotificationType, PremiumReason } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
 import { PLAN_LABELS, PremiumPlan } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { getPremiumReasonText } from 'src/helpers/reason';
+import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { PREMIUM_STATISTICS } from 'src/types/notifikation';
 import { UtilisService } from 'src/utils/utile.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 
@@ -16,6 +18,7 @@ export class AdminService {
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
     private readonly utils: UtilisService,
+    private readonly notificationService: NotifikationService,
   ) {}
 
   async admin_paneli(ctx: MyContext, lang: string) {
@@ -968,6 +971,7 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
     ownerId: number,
     currentPage: number,
     historyPage: number,
+    lang = 'uz',
   ) {
     try {
       const limit = 5;
@@ -1022,6 +1026,7 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
           const trialDays =
             statistics.find((item) => item.reason === 'TRIAL')?._sum.duration ??
             0;
+          const T = PREMIUM_STATISTICS;
 
           const text = premium
             ? `
@@ -1039,15 +1044,17 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
 
 ⏳ <b>Amal qilish muddati:</b> ${formatDate(premium.endDate, lang)}
 _____________________________________________\n
-${purchaseDays > 0 ? `💳 <b>Sotib olingan:</b> ${purchaseDays} kun\n\n` : ''}${
-                giftDays > 0 ? `🎁 <b>Sovg'a:</b> +${giftDays} kun\n\n` : ''
-              }${
+${
+  purchaseDays > 0
+    ? `<b>${PREMIUM_STATISTICS.PURCHASE[lang]}:</b> ${purchaseDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n`
+    : ''
+}${giftDays > 0 ? `<b>${PREMIUM_STATISTICS.GIFT[lang]}:</b> +${giftDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n` : ''}${
                 compensationDays > 0
-                  ? `🤝 <b>Kompensatsiya:</b> +${compensationDays} kun\n\n`
+                  ? `<b>${PREMIUM_STATISTICS.COMPENSATION[lang]}:</b> +${compensationDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n`
                   : ''
               }${
                 trialDays > 0
-                  ? `🎉 <b>Sinov muddati:</b> ${trialDays} kun\n`
+                  ? `<b>${PREMIUM_STATISTICS.TRIAL[lang]}:</b> +${trialDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n`
                   : ''
               }
 ____________________________________________
@@ -1205,44 +1212,31 @@ Quyidagi amallardan birini tanlang 👇
           break;
         }
         case 'gift': {
+          const reasons: PremiumReason[] = [
+            PremiumReason.GIFT,
+            PremiumReason.COMPENSATION,
+            PremiumReason.TRIAL,
+          ];
+
+          const inline_keyboard = reasons.map((reason) => [
+            {
+              text: getPremiumReasonText(reason, this.i18n, lang),
+              callback_data: `ownerPremiumReason_${reason}_${ownerId}_${currentPage}`,
+            },
+          ]);
+
+          inline_keyboard.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `AdminOwner_premium_${ownerId}_${currentPage}_${historyPage}`,
+            },
+          ]);
+
           await this.utils.safeEditOrReply(
             ctx,
-            `🎁 Premium muddatini tanlang`,
+            `🎁 <b>Premium sovg'a qilish</b>\n\nUshbu Premiumni berish sababi quyidagilardan biri bo'lishi kerak:`,
             {
-              inline_keyboard: [
-                [
-                  {
-                    text: '⭐ 1 hafta',
-                    callback_data: `ownerPremiumGift_7_${ownerId}_${currentPage}`,
-                  },
-                  {
-                    text: '⭐ 1 oy',
-                    callback_data: `ownerPremiumGift_30_${ownerId}_${currentPage}`,
-                  },
-                ],
-                [
-                  {
-                    text: '⭐ 3 oy',
-                    callback_data: `ownerPremiumGift_90_${ownerId}_${currentPage}`,
-                  },
-                  {
-                    text: '⭐ 6 oy',
-                    callback_data: `ownerPremiumGift_180_${ownerId}_${currentPage}`,
-                  },
-                ],
-                [
-                  {
-                    text: '⭐ 12 oy',
-                    callback_data: `ownerPremiumGift_365_${ownerId}_${currentPage}`,
-                  },
-                ],
-                [
-                  {
-                    text: '⬅️ Orqaga',
-                    callback_data: `AdminOwner_premium_${ownerId}_${currentPage}_${historyPage}`,
-                  },
-                ],
-              ],
+              inline_keyboard,
             },
           );
           break;
@@ -1258,11 +1252,61 @@ Quyidagi amallardan birini tanlang 👇
       console.log(error);
     }
   }
+
+  async ownerPremiumReason(
+    ctx: MyContext,
+    reason: string,
+    ownerId: number,
+    currentPage: number,
+  ) {
+    try {
+      await this.utils.safeEditOrReply(ctx, `🎁 Premium muddatini tanlang`, {
+        inline_keyboard: [
+          [
+            {
+              text: '⭐ 1 hafta',
+              callback_data: `ownerPremiumGift_7_${ownerId}_${currentPage}_${reason}`,
+            },
+            {
+              text: '⭐ 1 oy',
+              callback_data: `ownerPremiumGift_30_${ownerId}_${currentPage}_${reason}`,
+            },
+          ],
+          [
+            {
+              text: '⭐ 3 oy',
+              callback_data: `ownerPremiumGift_90_${ownerId}_${currentPage}_${reason}`,
+            },
+            {
+              text: '⭐ 6 oy',
+              callback_data: `ownerPremiumGift_180_${ownerId}_${currentPage}_${reason}`,
+            },
+          ],
+          [
+            {
+              text: '⭐ 12 oy',
+              callback_data: `ownerPremiumGift_365_${ownerId}_${currentPage}_${reason}`,
+            },
+          ],
+          [
+            {
+              text: '⬅️ Orqaga',
+              callback_data: `AdminOwner_gift_${ownerId}_${currentPage}_1`,
+            },
+          ],
+        ],
+      });
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
   async ownerPremiumGift(
     ctx: MyContext,
     days: number,
     ownerId: number,
     currentPage: number,
+    reason:PremiumReason
   ) {
     try {
       const lang = await this.utils.langs(ctx);
@@ -1328,7 +1372,7 @@ ${
           [
             {
               text: '✅ Ha, sovg‘a qilish',
-              callback_data: `AdminOwnerConfirmGift_${days}_${owner.id}_${currentPage}`,
+              callback_data: `AdminOwnerConfirmGift_${days}_${owner.id}_${currentPage}_${reason}`,
             },
           ],
           [
@@ -1348,6 +1392,7 @@ ${
     day: number,
     ownerId: number,
     currentPage: number,
+    reason: PremiumReason
   ) {
     try {
       const lang = await this.utils.langs(ctx);
@@ -1423,7 +1468,7 @@ ${
 
               amount: 0,
 
-              reason: 'GIFT',
+              reason,
 
               provider: 'ADMIN_GIFT',
 
@@ -1445,7 +1490,7 @@ ${
               startDate,
               endDate,
               isActive: true,
-              reason: 'GIFT',
+              reason,
             },
           });
 
@@ -1460,7 +1505,7 @@ ${
 
               amount: 0,
 
-              reason: 'GIFT',
+              reason,
 
               provider: 'ADMIN_GIFT',
 
@@ -1478,10 +1523,52 @@ ${
           show_alert: true,
         },
       );
+      const notification = await this.prisma.notification.create({
+        data: {
+          ownerId,
+          type: NotificationType.PREMIUM_EXPIRY,
+          translations: {
+            uz: {
+              title: "🎁 Premium sovg'a qilindi",
+              message: `Tabriklaymiz!
+
+Administrator sizga ${PLAN_LABELS.uz[plan]} muddatga Premium sovg'a qildi.
+
+✨ Premium funksiyalar endi siz uchun faol.
+
+Rahmat!`,
+            },
+            ru: {
+              title: '🎁 Вам подарили Premium',
+              message: `Поздравляем!
+
+Администратор подарил вам Premium на ${PLAN_LABELS.ru[plan]}.
+
+✨ Все Premium-возможности уже активны.
+
+Спасибо!`,
+            },
+            en: {
+              title: '🎁 Premium Gift Received',
+              message: `Congratulations!
+
+The administrator has gifted you Premium for ${PLAN_LABELS.en[plan]}.
+
+✨ All Premium features are now active.
+
+Thank you!`,
+            },
+          },
+        },
+      });
+      await this.notificationService.sendNotification(
+        owner.chatID,
+        notification.id,
+      );
+
       return this.AdminOwner_premium(ctx, 'premium', owner.id, currentPage, 1);
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
   }
-  
 }

@@ -12,6 +12,7 @@ import {
   AdminStatus,
   Booking_status,
   Payments,
+  PremiumReason,
   Prisma,
 } from '@prisma/client';
 import {
@@ -1031,6 +1032,21 @@ export class BotUpdate {
       console.log(error);
     } finally {
       await ctx.answerCbQuery().catch(() => {});
+    }
+  }
+
+  @Action(/advertisement_(\w+)_(\d+)/)
+  async advertisement(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const match = ctx.match as RegExpMatchArray;
+      const action = match[1];
+      const ownerId = Number(match[2]);
+
+      return this.ownerService.advertisement(ctx, action, ownerId, lang);
+
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
     }
   }
 
@@ -2873,26 +2889,41 @@ export class BotUpdate {
       Number(historyPage),
     );
   }
-  @Action(/ownerPremiumGift_(\d+)_(\d+)_(\d+)/)
-  async ownerPremiumGift(@Ctx() ctx: MyContext) {
+  @Action(/ownerPremiumReason_(\w+)_(\d+)_(\d+)/)
+  async ownerPremiumReason(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, giftId, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
-    return this.adminPaneli.ownerPremiumGift(
+    const [_, reason, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.ownerPremiumReason(
       ctx,
-      Number(giftId),
+      reason,
       Number(ownerId),
       Number(currentPage),
     );
   }
-  @Action(/AdminOwnerConfirmGift_(\d+)_(\d+)_(\d+)/)
-  async AdminOwnerConfirmGift(@Ctx() ctx: MyContext) {
+  @Action(/ownerPremiumGift_(\d+)_(\d+)_(\d+)_(\w+)/)
+  async ownerPremiumGift(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, giftId, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
-    return this.adminPaneli.AdminOwnerConfirmGift(
+    const [_, days, ownerId, currentPage, reason] =
+      ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.ownerPremiumGift(
       ctx,
-      Number(giftId),
+      Number(days),
       Number(ownerId),
       Number(currentPage),
+      reason as PremiumReason,
+    );
+  }
+  @Action(/AdminOwnerConfirmGift_(\d+)_(\d+)_(\d+)_(\w+)/)
+  async AdminOwnerConfirmGift(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const [_, days, ownerId, currentPage, reason] =
+      ctx.callbackQuery.data.split('_');
+    return this.adminPaneli.AdminOwnerConfirmGift(
+      ctx,
+      Number(days),
+      Number(ownerId),
+      Number(currentPage),
+      reason as PremiumReason,
     );
   }
 
@@ -2916,6 +2947,7 @@ export class BotUpdate {
       type: string;
       id: number;
       day: number;
+      page: number;
       provider: string;
       schedule_id: number;
       stadion_off: number;
@@ -4126,12 +4158,132 @@ export class BotUpdate {
               );
               return;
             }
+            const ownerId = Number(data.id);
+            await this.utils.safeEditOrReply(
+              ctx,
+              `📢 <b>Reklamalar</b>
+
+Ushbu bo'lim orqali reklamalaringizni yaratishingiz, boshqarishingiz va ularning statistikasini kuzatishingiz mumkin.
+
+Quyidagi bo'limlardan birini tanlang 👇`,
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '➕ Reklama yaratish',
+                      callback_data: `advertisement_create_${ownerId}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: '📋 Mening reklamalarim',
+                      callback_data: `advertisement_list_${ownerId}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: '📊 Statistika',
+                      callback_data: `advertisement_statistics_${ownerId}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: "📖 Qo'llanma",
+                      callback_data: `advertisement_help_${ownerId}`,
+                    },
+                  ],
+                  [
+                    {
+                      text: '⬅️ Orqaga',
+                      callback_data: JSON.stringify({
+                        type: 'ownerSettings_back',
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+
             await ctx
               .answerCbQuery()
               .then(() => {})
               .catch();
           }
           break;
+
+        case 'ownerSettings_back': {
+          const owner = await this.prisma.owners.findUnique({
+            where: { chatID: String(ctx.from?.id) },
+          });
+          if (!owner) {
+            ctx.reply(this.i18n.translate('error.error', { lang }));
+            return;
+          }
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('settings.title', { lang }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('settings.language', { lang }),
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'language',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('settings.notification', {
+                      lang,
+                    }),
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'notification',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('settings.phone', { lang }),
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'phone',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('premium.advertising.button', {
+                      lang,
+                    }),
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'advertising',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('premium.premium', { lang }),
+                    callback_data: JSON.stringify({
+                      id: owner.id,
+                      type: 'ownerPremium',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_owner_1',
+                  },
+                ],
+              ],
+            },
+          );
+          break;
+        }
         case 'phone_update':
           {
             if (!ctx.session.owner_registor) {
@@ -4154,16 +4306,35 @@ export class BotUpdate {
           break;
         case 'notification_unread':
           {
-            const notifications = await this.prisma.notification.findMany({
+            const limit = 5;
+
+            const total = await this.prisma.notification.count({
               where: {
                 ownerId: data.id,
                 isRead: false,
               },
-              orderBy: {
-                createdAt: 'desc',
-              },
-              take: 30,
             });
+            const currentPage = Math.max(1, Number(data.page) || 1);
+
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+
+            const page = Math.min(currentPage, totalPages);
+
+            const skip = (page - 1) * limit;
+
+            const [notifications] = await Promise.all([
+              this.prisma.notification.findMany({
+                where: {
+                  ownerId: data.id,
+                  isRead: false,
+                },
+                orderBy: {
+                  createdAt: 'desc',
+                },
+                skip,
+                take: limit,
+              }),
+            ]);
 
             if (!notifications.length) {
               await ctx.answerCbQuery(
@@ -4172,38 +4343,73 @@ export class BotUpdate {
               return;
             }
 
+            const keyboard: InlineKeyboardButton[][] = [
+              ...notifications.map((item) => [
+                {
+                  text:
+                    NotificationNames[item.type]?.[lang] ??
+                    NotificationNames[item.type]?.uz,
+                  callback_data: JSON.stringify({
+                    type: 'notification_view',
+                    id: item.id,
+                    page: page,
+                  }),
+                },
+              ]),
+            ];
+
+            if (totalPages > 1) {
+              const row: InlineKeyboardButton[] = [];
+
+              if (page > 1) {
+                row.push({
+                  text: this.i18n.translate('stadions.Previous', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_unread',
+                    id: data.id,
+                    page: page - 1,
+                  }),
+                });
+              }
+
+              row.push({
+                text: `${page} / ${totalPages}`,
+                callback_data: 'ignore',
+              });
+
+              if (page < totalPages) {
+                row.push({
+                  text: this.i18n.translate('stadions.Next', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_unread',
+                    id: data.id,
+                    page: page + 1,
+                  }),
+                });
+              }
+
+              keyboard.push(row);
+            }
+
+            keyboard.push([
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'notification_back',
+                  id: data.id,
+                }),
+              },
+            ]);
+
             await this.utils.safeEditOrReply(
               ctx,
               `🟢 ${this.i18n.translate('notification.unread', { lang })}`,
               {
-                inline_keyboard: [
-                  ...notifications.map((item) => [
-                    {
-                      text:
-                        NotificationNames[item.type]?.[lang] ||
-                        NotificationNames[item.type]?.uz,
-                      callback_data: JSON.stringify({
-                        type: 'notification_view',
-                        id: item.id,
-                      }),
-                    },
-                  ]),
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.back', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'notification_back',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
+                inline_keyboard: keyboard,
               },
             );
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
+
+            await ctx.answerCbQuery().catch(() => {});
           }
           break;
         case 'notification_view':
@@ -4262,6 +4468,7 @@ export class BotUpdate {
                             ? 'notification_unread'
                             : 'notification_back',
                         id: notification.ownerId,
+                        page: data.page,
                       }),
                     },
                   ],
@@ -4275,6 +4482,22 @@ export class BotUpdate {
         }
         case 'notification_read':
           {
+            const limit = 5;
+
+            const total = await this.prisma.notification.count({
+              where: {
+                ownerId: data.id,
+                isRead: true,
+              },
+            });
+            const currentPage = Math.max(1, Number(data.page) || 1);
+
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+
+            const page = Math.min(currentPage, totalPages);
+
+            const skip = (page - 1) * limit;
+
             const notifications = await this.prisma.notification.findMany({
               where: {
                 ownerId: data.id,
@@ -4283,7 +4506,8 @@ export class BotUpdate {
               orderBy: {
                 createdAt: 'desc',
               },
-              take: 30,
+              skip,
+              take: limit,
             });
 
             if (!notifications.length) {
@@ -4293,32 +4517,69 @@ export class BotUpdate {
               return;
             }
 
+            const keyboard: InlineKeyboardButton[][] = [
+              ...notifications.map((item) => [
+                {
+                  text:
+                    NotificationNames[item.type]?.[lang] ??
+                    NotificationNames[item.type]?.uz,
+                  callback_data: JSON.stringify({
+                    type: 'notification_read_view',
+                    id: item.id,
+                    page: page,
+                  }),
+                },
+              ]),
+            ];
+
+            if (totalPages > 1) {
+              const row: InlineKeyboardButton[] = [];
+
+              if (page > 1) {
+                row.push({
+                  text: this.i18n.translate('stadions.Previous', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_read',
+                    id: data.id,
+                    page: page - 1,
+                  }),
+                });
+              }
+
+              row.push({
+                text: `${page} / ${totalPages}`,
+                callback_data: 'ignore',
+              });
+
+              if (page < totalPages) {
+                row.push({
+                  text: this.i18n.translate('stadions.Next', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_read',
+                    id: data.id,
+                    page: page + 1,
+                  }),
+                });
+              }
+
+              keyboard.push(row);
+            }
+
+            keyboard.push([
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'notification_back',
+                  id: data.id,
+                }),
+              },
+            ]);
+
             await this.utils.safeEditOrReply(
               ctx,
-              `✅ ${this.i18n.translate('notification.read', { lang })}`,
+              `🟢 ${this.i18n.translate('notification.read', { lang })}`,
               {
-                inline_keyboard: [
-                  ...notifications.map((item) => [
-                    {
-                      text:
-                        NotificationNames[item.type]?.[lang] ??
-                        NotificationNames[item.type]?.uz,
-                      callback_data: JSON.stringify({
-                        type: 'notification_read_view',
-                        id: item.id,
-                      }),
-                    },
-                  ]),
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'notification_back',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
+                inline_keyboard: keyboard,
               },
             );
           }
@@ -4345,7 +4606,7 @@ export class BotUpdate {
 
             await this.utils.safeEditOrReply(
               ctx,
-                  this.i18n.translate('notification.notification.detail', {
+              this.i18n.translate('notification.notification.detail', {
                 lang,
                 args: {
                   title,
@@ -4366,6 +4627,7 @@ export class BotUpdate {
                       callback_data: JSON.stringify({
                         type: 'notification_read',
                         id: notification.ownerId,
+                        page: data.page,
                       }),
                     },
                   ],
@@ -4377,6 +4639,21 @@ export class BotUpdate {
 
         case 'notification_all':
           {
+            const limit = 5;
+
+            const total = await this.prisma.notification.count({
+              where: {
+                ownerId: data.id,
+              },
+            });
+            const currentPage = Math.max(1, Number(data.page) || 1);
+
+            const totalPages = Math.max(1, Math.ceil(total / limit));
+
+            const page = Math.min(currentPage, totalPages);
+
+            const skip = (page - 1) * limit;
+
             const notifications = await this.prisma.notification.findMany({
               where: {
                 ownerId: data.id,
@@ -4384,7 +4661,8 @@ export class BotUpdate {
               orderBy: {
                 createdAt: 'desc',
               },
-              take: 30,
+              skip,
+              take: limit,
             });
 
             if (!notifications.length) {
@@ -4393,36 +4671,72 @@ export class BotUpdate {
               );
               return;
             }
+            const keyboard: InlineKeyboardButton[][] = [
+              ...notifications.map((item) => [
+                {
+                  text: `${item.isRead ? '✅' : '🟢'} ${
+                    NotificationNames[item.type]?.[lang] ??
+                    NotificationNames[item.type]?.uz
+                  }`,
+                  callback_data: JSON.stringify({
+                    type: item.isRead
+                      ? 'notification_read_view'
+                      : 'notification_view',
+                    id: item.id,
+                    page: page,
+                  }),
+                },
+              ]),
+            ];
+
+            if (totalPages > 1) {
+              const row: InlineKeyboardButton[] = [];
+
+              if (page > 1) {
+                row.push({
+                  text: this.i18n.translate('stadions.Previous', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_all',
+                    id: data.id,
+                    page: page - 1,
+                  }),
+                });
+              }
+
+              row.push({
+                text: `${page} / ${totalPages}`,
+                callback_data: 'ignore',
+              });
+
+              if (page < totalPages) {
+                row.push({
+                  text: this.i18n.translate('stadions.Next', { lang }),
+                  callback_data: JSON.stringify({
+                    type: 'notification_all',
+                    id: data.id,
+                    page: page + 1,
+                  }),
+                });
+              }
+
+              keyboard.push(row);
+            }
+
+            keyboard.push([
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: JSON.stringify({
+                  type: 'notification_back',
+                  id: data.id,
+                }),
+              },
+            ]);
 
             await this.utils.safeEditOrReply(
               ctx,
               `📋 ${this.i18n.translate('notification.all', { lang })}`,
               {
-                inline_keyboard: [
-                  ...notifications.map((item) => [
-                    {
-                      text: `${item.isRead ? '✅' : '🟢'} ${
-                        NotificationNames[item.type]?.[lang] ??
-                        NotificationNames[item.type]?.uz
-                      }`,
-                      callback_data: JSON.stringify({
-                        type: item.isRead
-                          ? 'notification_read_view'
-                          : 'notification_view',
-                        id: item.id,
-                      }),
-                    },
-                  ]),
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'notification_back',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
+                inline_keyboard: keyboard,
               },
             );
           }

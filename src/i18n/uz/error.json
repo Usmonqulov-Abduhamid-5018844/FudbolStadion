@@ -19,5 +19,7 @@
 
   "only_number_error": "❌ Faqat son kiriting (masalan: 10)",
 
-  "invalid_range_error": "❌ Iltimos, 6 dan katta va 20 dan kichik son kiriting"
+  "invalid_range_error": "❌ Iltimos, 6 dan katta va 20 dan kichik son kiriting",
+
+  "invalid_action": "❗ Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\n\nIltimos, botdagi mavjud tugmalardan foydalaning."
 }

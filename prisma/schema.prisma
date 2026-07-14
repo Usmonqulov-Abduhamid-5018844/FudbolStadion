@@ -27,16 +27,17 @@ model Owners {
 }
 
 model Users {
-  id                 Int                 @id @default(autoincrement())
-  username           String?
-  phone              String
-  full_name          String
-  chatID             String              @unique
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  bookings           Booking[]
-  myFavoriteStadiums MyFavoriteStadium[]
-  tranzaktions       Tranzaktion[]
+  id                  Int                  @id @default(autoincrement())
+  username            String?
+  phone               String
+  full_name           String
+  chatID              String               @unique
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  bookings            Booking[]
+  myFavoriteStadiums  MyFavoriteStadium[]
+  tranzaktions        Tranzaktion[]
+  advertisementClicks AdvertisementClick[]
 
   @@index([phone])
 }
@@ -251,23 +252,6 @@ model MyFavoriteStadium {
   @@unique([chat_id, stadion_id])
 }
 
-model Advertisement {
-  id        Int      @id @default(autoincrement())
-  ownerId   Int
-  text      String
-  stadionId Int?
-  imageUrl  String
-  startsAt  DateTime
-  endsAt    DateTime
-  isActive  Boolean  @default(true)
-
-  owner   Owners   @relation(fields: [ownerId], references: [id])
-  stadion Stadion? @relation(fields: [stadionId], references: [id], onDelete: SetNull)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model Notification {
   id               Int              @id @default(autoincrement())
   ownerId          Int
@@ -285,6 +269,64 @@ model Notification {
 
   @@index([ownerId, isRead, sentAt])
   @@index([createdAt])
+}
+
+model Advertisement {
+  id Int @id @default(autoincrement())
+
+  ownerId Int
+  owner   Owners @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  stadionId Int?
+  stadion   Stadion? @relation(fields: [stadionId], references: [id], onDelete: SetNull)
+
+  title       String
+  description String @db.Text
+
+  images String?
+
+  startsAt DateTime
+  endsAt   DateTime
+
+  status AdvertisementStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  clicks AdvertisementClick[]
+
+  @@index([ownerId])
+  @@index([stadionId])
+  @@index([status])
+  @@index([startsAt, endsAt])
+}
+
+model AdvertisementClick {
+  id Int @id @default(autoincrement())
+
+  advertisementId Int
+  advertisement   Advertisement @relation(fields: [advertisementId], references: [id], onDelete: Cascade)
+
+  source AdvertisementClickSource
+  userId Int
+  user   Users                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  clickedAt DateTime @default(now())
+
+  @@index([advertisementId])
+  @@index([userId])
+}
+
+enum AdvertisementClickSource {
+  BOT
+  CHANNEL
+}
+
+enum AdvertisementStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  REJECTED
 }
 
 enum Payments {

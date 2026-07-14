@@ -1,3 +1,4 @@
+-- Active: 1782385310574@@127.0.0.1@5432@football_booking
 -- DATABASE
 CREATE DATABASE football_booking;
 
@@ -167,3 +168,21 @@ select * from stadiums where price_per_hour BETWEEN 100000 and 200000
 select name, price_per_hour from stadiums order by price_per_hour DESC limit 3
 
 select * from users order by age ASC limit 2
+
+select * from stadiums ORDER BY capacity desc LIMIT 1
+
+select * from users ORDER BY created_at DESC LIMIT 5
+
+select COUNT(*) from users;
+
+select count(*) from stadiums;
+
+select AVG(price_per_hour) from stadiums;
+
+select MAX(total_price) from bookings;
+
+select MIN(total_price) from bookings;
+
+select COUNT(*) from stadiums GROUP BY city HAVING COUNT(*) > 1;
+
+select COUNT(*) from users GROUP BY city  HAVING COUNT(*) > 1;

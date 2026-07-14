@@ -47,10 +47,10 @@ export const NotificationNames = {
   },
 
   PREMIUM_EXPIRY: {
-    uz: '⭐ Premium muddati tugamoqda',
-    ru: '⭐ Срок Premium истекает',
-    en: '⭐ Premium is expiring',
-  },
+  uz: '⭐ Premium',
+  ru: '⭐ Premium',
+  en: '⭐ Premium',
+},
 } as const;
 
 export const NotificationLabels = {
@@ -88,5 +88,29 @@ export const NotificationLabels = {
     uz: '⭐ Premium ogohlantirish',
     ru: '⭐ Premium уведомление',
     en: '⭐ Premium alert',
+  },
+} as const;
+
+
+export const PREMIUM_STATISTICS = {
+  PURCHASE: {
+    uz: '💳 Sotib olingan',
+    ru: '💳 Куплено',
+    en: '💳 Purchased',
+  },
+  GIFT: {
+    uz: "🎁 Sovg'a",
+    ru: '🎁 Подарок',
+    en: '🎁 Gift',
+  },
+  COMPENSATION: {
+    uz: '🤝 Kompensatsiya',
+    ru: '🤝 Компенсация',
+    en: '🤝 Compensation',
+  },
+  TRIAL: {
+    uz: '🎉 Sinov muddati',
+    ru: '🎉 Пробный период',
+    en: '🎉 Trial Period',
   },
 } as const;

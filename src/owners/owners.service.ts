@@ -136,7 +136,7 @@ export class OwnersService {
             phone: String(ctx.session.owner_registor.phone),
             email: String(ctx.session.owner_registor.email),
             chatID: String(ctx.from!.id),
-            notificationSettings: DefaultNotificationSettings
+            notificationSettings: DefaultNotificationSettings,
           };
           await this.prisma.owners.create({ data: { ...data } });
 
@@ -1079,7 +1079,7 @@ export class OwnersService {
             } catch (error) {}
           }
           break;
-        case "9":{
+        case '9': {
           return this.premium(ctx, Number(data), lang);
         }
         default: {
@@ -2049,6 +2049,7 @@ export class OwnersService {
           },
         },
       });
+
       if (!subscription) {
         const message = this.i18n.translate('premium.premium_message.text', {
           lang,
@@ -2138,15 +2139,20 @@ export class OwnersService {
 
       const statistic = [
         purchaseDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.purchase', { lang })}:</b> ${purchaseDays} ${this.i18n.translate("premium.premium_active.day",{lang})}`
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.purchase', { lang })}:</b> ${purchaseDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
           : null,
 
-        giftDays > 0 ? `<b>${this.i18n.translate('premium.premium_active.reason.gift', { lang })}:</b> +${giftDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+        giftDays > 0
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.gift', { lang })}:</b> +${giftDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
+          : null,
 
         compensationDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.compensation', { lang })}:</b> +${compensationDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.compensation', { lang })}:</b> +${compensationDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
+          : null,
 
-        trialDays > 0 ? `<b>${this.i18n.translate('premium.premium_active.reason.trial', { lang })}:</b> ${trialDays} ${this.i18n.translate("premium.premium_active.day",{lang})}` : null,
+        trialDays > 0
+          ? `<b>${this.i18n.translate('premium.premium_active.reason.trial', { lang })}:</b> ${trialDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
+          : null,
       ]
         .filter(Boolean)
         .join('\n\n');
@@ -2160,7 +2166,6 @@ export class OwnersService {
           end_date: formatDate(subscription.endDate, lang),
           statistics: statistic,
           days_left: daysLeft,
-
         },
       });
 
@@ -2172,7 +2177,6 @@ export class OwnersService {
                 lang,
               }),
               callback_data: `SelectOwnerPremium_extend_${subscription.ownerId}`,
-              
             },
           ],
           [
@@ -2315,8 +2319,7 @@ export class OwnersService {
         },
       });
 
-      let settings =
-        owner?.notificationSettings as NotificationSettings_type;
+      let settings = owner?.notificationSettings as NotificationSettings_type;
 
       await this.utils.safeEditOrReply(
         ctx,
@@ -2374,5 +2377,108 @@ export class OwnersService {
         },
       );
     } catch (error) {}
+  }
+
+  async advertisement(
+    ctx: MyContext,
+    action: string,
+    ownerId: number,
+    lang: string,
+  ) {
+    try {
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: ownerId },
+      });
+
+      if (!owner) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      switch (action) {
+        case 'create':
+          {
+            await this.utils.safeEditOrReply(
+              ctx,
+              `➕ <b>Yangi reklama</b>
+
+Reklamangiz qayerda ko'rsatilishini tanlang 👇`,
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '🏟 Muayyan stadion uchun',
+                      callback_data: 'advertisement_create_stadium',
+                    },
+                  ],
+                  [
+                    {
+                      text: '🌍 Barcha stadionlar uchun',
+                      callback_data: 'advertisement_create_all',
+                    },
+                  ],
+                  [
+                    {
+                      text: '⬅️ Orqaga',
+                      callback_data: JSON.stringify({
+                        type: 'advertising',
+                        id: owner.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        case 'list':
+          {
+          }
+
+          break;
+        case 'statistics':
+          {
+          }
+          break;
+        case 'help':
+          {
+            await this.utils.safeEditOrReply(
+              ctx,
+              `📖 <b>Reklama qo'llanmasi</b>
+
+• Reklama faqat Premium foydalanuvchilar uchun mavjud.
+
+• Reklama yaratishda sarlavha, matn va rasm qo'shishingiz mumkin.
+
+• Reklama boshlanish va tugash sanasini belgilashingiz mumkin.
+
+• Faol reklamalaringizni istalgan vaqtda tahrirlashingiz yoki o'chirishingiz mumkin.
+
+• Reklama statistikasi orqali ko'rilganlar va bosilganlar sonini kuzatishingiz mumkin.`,
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: '⬅️ Orqaga',
+                      callback_data: JSON.stringify({
+                        type: 'advertising',
+                        id: owner.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+          }
+          break;
+        default:
+          await ctx.answerCbQuery(
+            this.i18n.translate('error.invalid_action', { lang }),
+            { show_alert: true },
+          );
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
   }
 }
