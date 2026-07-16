@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Payments, Prisma } from '@prisma/client';
+import { AdvertisementStatus, Payments, Prisma } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
@@ -2031,7 +2031,6 @@ export class OwnersService {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log(error);
     } finally {
       ctx.session.owner_registor.id = null;
     }
@@ -2398,37 +2397,61 @@ export class OwnersService {
       switch (action) {
         case 'create':
           {
-            await this.utils.safeEditOrReply(
-              ctx,
-              `➕ <b>Yangi reklama</b>
+            const monthStart = new Date();
+            monthStart.setDate(1);
+            monthStart.setHours(0, 0, 0, 0);
 
-Reklamangiz qayerda ko'rsatilishini tanlang 👇`,
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: '🏟 Muayyan stadion uchun',
-                      callback_data: 'advertisement_create_stadium',
-                    },
-                  ],
-                  [
-                    {
-                      text: '🌍 Barcha stadionlar uchun',
-                      callback_data: 'advertisement_create_all',
-                    },
-                  ],
-                  [
-                    {
-                      text: '⬅️ Orqaga',
-                      callback_data: JSON.stringify({
-                        type: 'advertising',
-                        id: owner.id,
-                      }),
-                    },
-                  ],
-                ],
+            const monthEnd = new Date(monthStart);
+            monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+            const createdCount = await this.prisma.advertisement.count({
+              where: {
+                ownerId: owner.id,
+                createdAt: {
+                  gte: monthStart,
+                  lt: monthEnd,
+                },
               },
-            );
+            });
+
+            if (createdCount >= 10) {
+              await ctx.answerCbQuery(
+                '❌ Siz ushbu oy uchun reklama limitidan foydalandingiz.',
+                { show_alert: true },
+              );
+              return;
+            }
+            ctx.session.step = 'ADVERTISEMENT_TITLE';
+            try {
+              await this.utils.safeEditOrReply(
+                ctx,
+                `📢 <b>Yangi reklama</b>
+  
+  📝 Reklama sarlavhasini kiriting.
+  
+  Masalan:
+  🔥 Bugun barcha bronlarga 20% chegirma
+  
+  ❌ Reklama yaratishni bekor qilish uchun pastdagi tugmadan foydalaning.`,
+                {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: '❌ Bekor qilish',
+                        callback_data: JSON.stringify({
+                          type: 'advertising',
+                          id: owner.id,
+                        }),
+                      },
+                    ],
+                  ],
+                },
+              );
+            } catch (error) {}
+
+            if (ctx.answerCbQuery) {
+              await ctx.answerCbQuery().catch(() => {});
+            }
           }
           break;
         case 'list':
@@ -2454,7 +2477,10 @@ Reklamangiz qayerda ko'rsatilishini tanlang 👇`,
 
 • Faol reklamalaringizni istalgan vaqtda tahrirlashingiz yoki o'chirishingiz mumkin.
 
-• Reklama statistikasi orqali ko'rilganlar va bosilganlar sonini kuzatishingiz mumkin.`,
+• Reklama statistikasi orqali ko'rilganlar va bosilganlar sonini kuzatishingiz mumkin.
+
+• Siz bir oyda faqat 10 martagacha reklama joylashingiz mumkin.`,
+
               {
                 inline_keyboard: [
                   [
@@ -2477,6 +2503,450 @@ Reklamangiz qayerda ko'rsatilishini tanlang 👇`,
             { show_alert: true },
           );
       }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  async ownerAdvertisement(
+    ctx: MyContext,
+    type: string,
+    text: string,
+    lang: string,
+  ) {
+    try {
+      ctx.session.advertisements ??= [];
+      const chatId = String(ctx.from?.id);
+      const ownerId = await this.prisma.owners.findUnique({
+        where: { chatID: chatId },
+      });
+      if (!ownerId) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      if (type === 'ADVERTISEMENT_TITLE') {
+        if (!ctx.message || !('text' in ctx.message)) {
+          const send = await ctx.reply(
+            "❗ Iltimos, reklama sarlavhasini matn ko'rinishida yuboring.",
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        const title = text.trim();
+
+        if (!title.length) {
+          const send = await ctx.reply(
+            "❗ Reklama sarlavhasi bo'sh bo'lishi mumkin emas.",
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        if (title.length > 100) {
+          const send = await ctx.reply(
+            '❗ Reklama sarlavhasi 100 ta belgidan oshmasligi kerak.',
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        ctx.session.advertisement.title = title;
+        if (ctx.message?.message_id) {
+          ctx.session.advertisements.push(ctx.message?.message_id);
+        }
+
+        ctx.session.step = 'ADVERTISEMENT_DESCRIPTION';
+
+        const send = await ctx.reply(
+          `📝 Reklama matnini kiriting.
+
+Bu matn foydalanuvchilarga ko'rsatiladi.
+
+❌ Telefon raqami, Telegram username yoki tashqi havolalar yozish taqiqlanadi.`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: '❌ Bekor qilish',
+                    callback_data: JSON.stringify({
+                      type: 'advertising',
+                      id: ownerId.id,
+                    }),
+                  },
+                ],
+              ],
+            },
+          },
+        );
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+      if (type === 'ADVERTISEMENT_DESCRIPTION') {
+        if (!ctx.message || !('text' in ctx.message)) {
+          const send = await ctx.reply(
+            "❗ Iltimos, reklama matnini matn ko'rinishida yuboring.",
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        const description = text.trim();
+
+        if (!description.length) {
+          const send = await ctx.reply(
+            "❗ Reklama matni bo'sh bo'lishi mumkin emas.",
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        if (description.length > 1000) {
+          const send = await ctx.reply(
+            '❗ Reklama matni 1000 ta belgidan oshmasligi kerak.',
+          );
+          ctx.session.advertisements.push(send.message_id);
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message?.message_id);
+          }
+          return;
+        }
+
+        ctx.session.advertisement.description = description;
+        ctx.session.step = 'ADVERTISEMENT_IMAGE';
+        if (ctx.message?.message_id) {
+          ctx.session.advertisements.push(ctx.message?.message_id);
+        }
+
+        const send = await ctx.reply(
+          `🖼 <b>Reklama rasmi</b>
+
+Endi reklamangiz uchun rasm yuboring.
+
+📌 Rasm qo'shish ixtiyoriy.
+
+Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: "⏭ Rasm qo'shmaslik",
+                    callback_data: JSON.stringify({
+                      type: 'advertisement_skip_image',
+                    }),
+                  },
+                ],
+                [
+                  {
+                    text: '❌ Bekor qilish',
+                    callback_data: JSON.stringify({
+                      type: 'advertising',
+                      id: ownerId.id,
+                    }),
+                  },
+                ],
+              ],
+            },
+          },
+        );
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async selectAdvertisementStadium(ctx: MyContext, lang: string) {
+    const owner = await this.prisma.owners.findUnique({
+      where: {
+        chatID: String(ctx.from?.id),
+      },
+      include: {
+        stadions: {
+          where: {
+            admin_status: 'APPROVED',
+            working_status: true,
+          },
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!owner) {
+      return;
+    }
+
+    const send = await ctx.reply(
+      `🏟 Reklama qaysi stadion uchun chiqarilsin?`,
+      {
+        reply_markup: {
+          inline_keyboard: [
+            ...owner.stadions.map((item) => [
+              {
+                text: `🏟 ${item.name}`,
+                callback_data: JSON.stringify({
+                  type: 'advertisement_select_stadium',
+                  id: item.id,
+                }),
+              },
+            ]),
+            [
+              {
+                text: '⬅️ Bekor qilish',
+                callback_data: JSON.stringify({
+                  type: 'advertising',
+                  id: owner.id,
+                }),
+              },
+            ],
+          ],
+        },
+      },
+    );
+    ctx.session.advertisements ??= [];
+    ctx.session.advertisements.push(send.message_id);
+  }
+
+  async advertisementPreview(ctx: MyContext, lang: string) {
+    try {
+      ctx.session.advertisements ??= [];
+      const { stadionId, title, description, image } =
+        ctx.session.advertisement;
+
+      if (!stadionId) {
+        const send = await ctx.reply('❌ Stadion topilmadi.');
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+
+      const stadion = await this.prisma.stadion.findUnique({
+        where: { id: stadionId },
+        include: {
+          region: true,
+          region_items: true,
+          owner: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!stadion) {
+        const send = await ctx.reply('❌ Stadion topilmadi.');
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+
+      const caption = `
+📢 <b>Reklama Preview</b>
+
+━━━━━━━━━━━━━━━
+
+🏟 <b>Stadion:</b> ${stadion.name}
+
+📍 <b>Hudud:</b> ${stadion.region?.name} / ${stadion.region_items?.name}
+
+💰 <b>Narxi:</b> ${stadion.price.toLocaleString()} so'm / soat
+
+━━━━━━━━━━━━━━━
+
+📝 <b>${title}</b>
+
+${description}
+
+━━━━━━━━━━━━━━━
+
+👇 <i>Foydalanuvchilarga reklama aynan shunday ko'rinadi.</i>
+
+Tasdiqlaysizmi?
+`.trim();
+
+      const keyboard = {
+        inline_keyboard: [
+          [
+            {
+              text: '⚽ Bron qilish',
+              callback_data: JSON.stringify({
+                type: 'advertisement_preview_booking',
+                stadionId: stadion.id,
+              }),
+            },
+          ],
+          [
+            {
+              text: '✅ Tasdiqlash',
+              callback_data: JSON.stringify({
+                type: 'advertisement_confirm',
+                id: stadion.owner.id,
+              }),
+            },
+          ],
+          [
+            {
+              text: '❌ Bekor qilish',
+              callback_data: JSON.stringify({
+                type: 'advertising',
+                id: stadion.owner.id,
+              }),
+            },
+          ],
+        ],
+      };
+
+      if (image) {
+        const send = await ctx.replyWithPhoto(image, {
+          caption,
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        });
+        ctx.session.advertisements?.push(send.message_id);
+      } else {
+        const send = await ctx.reply(caption, {
+          parse_mode: 'HTML',
+          reply_markup: keyboard,
+        });
+        ctx.session.advertisements.push(send.message_id);
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    } finally {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery();
+      }
+    }
+  }
+
+  async advertisement_created(ctx: MyContext, lang: string) {
+    try {
+      const chatId = String(ctx.from?.id);
+      ctx.session.advertisements ??= [];
+      const now = new Date();
+
+      const owner = await this.prisma.owners.findUnique({
+        where: { chatID: chatId },
+      });
+
+      if (!owner) {
+        return this.utils.errorFunction(ctx);
+      }
+
+      const premium = await this.prisma.subscription.findFirst({
+        where: {
+          ownerId: owner.id,
+          isActive: true,
+          endDate: {
+            gt: now,
+          },
+        },
+      });
+
+      if (!premium) {
+        const send = await ctx.reply(
+          "❌ Reklama yaratish uchun Premium faol bo'lishi kerak.",
+        );
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+
+      const monthStart = now;
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const monthEnd = new Date(monthStart);
+      monthEnd.setMonth(monthEnd.getMonth() + 1);
+
+      const createdCount = await this.prisma.advertisement.count({
+        where: {
+          ownerId: owner.id,
+          createdAt: {
+            gte: monthStart,
+            lt: monthEnd,
+          },
+        },
+      });
+
+      if (createdCount >= 10) {
+        const send = await ctx.reply(
+          '❌ Siz ushbu oy uchun reklama limitidan foydalandingiz.',
+        );
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+      if (!ctx.session.advertisement.stadionId) {
+        const send = await ctx.reply('❌ Stadion tanlanmagan.');
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+
+      const stadion = await this.prisma.stadion.findFirst({
+        where: {
+          id: ctx.session.advertisement.stadionId,
+          owner_id: owner.id,
+        },
+      });
+
+      if (!stadion) {
+        const send = await ctx.reply('❌ Stadion topilmadi.');
+        ctx.session.advertisements.push(send.message_id);
+        return;
+      }
+      const expiresAt = new Date(now);
+      expiresAt.setDate(expiresAt.getDate() + 5);
+
+      await this.prisma.advertisement.create({
+        data: {
+          ownerId: owner.id,
+          stadionId: stadion.id,
+          title: ctx.session.advertisement.title!,
+          description: ctx.session.advertisement.description!,
+          image: ctx.session.advertisement.image,
+          expiresAt,
+          status: AdvertisementStatus.ACTIVE,
+        },
+      });
+
+      if (ctx.session.advertisements.length) {
+        await ctx.deleteMessages(ctx.session.advertisements);
+      }
+      ctx.session.advertisements = [];
+
+      ctx.session.advertisement = {
+        title: null,
+        description: null,
+        image: null,
+        stadionId: null,
+        isAllStadiums: false,
+      };
+
+      ctx.session.step = null;
+
+      await ctx.reply(
+        `✅ Reklamangiz muvaffaqiyatli yaratildi.
+
+📢 Endi reklama foydalanuvchilarga ko'rsatiladi.`,
+      );
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

@@ -42,6 +42,15 @@ export interface IStadion {
   stadionOffDays?: stadion_off_days[];
   stadionSpecialSchedules?: stadion_special_schedule[];
   ownerActiveBooking?: number[];
+  advertisements?: number[];
+
+  advertisement?: {
+    title?: string;
+    description?: string;
+    image?: string;
+    stadionId?: number;
+    isAllStadiums?: boolean;
+  };
 }
 
 export interface IBooking {
@@ -91,18 +100,26 @@ export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
-  admin_messageId:null,
+  admin_messageId: null,
   maxCount: null,
   booking_step: null,
   stadion_step: null,
   ownerBrons: null,
   ownerDataFilter: null,
+  advertisements: [],
   owner_registor: {
     full_name: null,
     email: null,
     phone: null,
     step: null,
     id: null,
+  },
+  advertisement: {
+    title: null,
+    description: null,
+    image: null,
+    stadionId: null,
+    isAllStadiums: false,
   },
   user_registor: {
     full_name: null,
@@ -188,6 +205,6 @@ export const PREMIUM_PLANS = {
 
 export const CURRENCY_LABELS = {
   uz: "so'm",
-  ru: "сум",
-  en: "UZS",
+  ru: 'сум',
+  en: 'UZS',
 } as const;

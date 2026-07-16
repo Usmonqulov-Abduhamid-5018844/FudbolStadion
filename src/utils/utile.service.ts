@@ -1,9 +1,5 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
-import {
-  Booking_status,
-  Pay_method,
-  Payments,
-} from '@prisma/client';
+import { Booking_status, Pay_method, Payments } from '@prisma/client';
 import { subDays } from 'date-fns';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
@@ -196,10 +192,12 @@ export class UtilisService implements OnModuleInit {
         ],
       },
     });
-    await ctx
-      .answerCbQuery()
-      .then(() => {})
-      .catch();
+    if (ctx.callbackQuery) {
+      await ctx
+        .answerCbQuery()
+        .then(() => {})
+        .catch();
+    }
 
     console.log('Error occurred');
   }

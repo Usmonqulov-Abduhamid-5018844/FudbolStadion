@@ -1044,7 +1044,6 @@ export class BotUpdate {
       const ownerId = Number(match[2]);
 
       return this.ownerService.advertisement(ctx, action, ownerId, lang);
-
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
@@ -4203,14 +4202,50 @@ Quyidagi bo'limlardan birini tanlang 👇`,
                 ],
               },
             );
-
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
+            if (ctx.session.advertisements?.length) {
+              await ctx.deleteMessages(ctx.session.advertisements);
+               ctx.session.advertisements = [];
+            }
+            ctx.session.advertisement = {
+                title:null,
+                description:null,
+                image:null,
+                stadionId:null,
+                isAllStadiums:false,
+            };
+            if (ctx.callbackQuery) {
+              await ctx
+                .answerCbQuery()
+                .then(() => {})
+                .catch();
+            }
           }
           break;
 
+        case 'advertisement_skip_image': {
+          ctx.session.advertisement.image = null;
+          ctx.session.step = null;
+          if(ctx.callbackQuery){
+            await ctx.answerCbQuery().catch(()=> {})
+          }
+          return await this.ownerService.selectAdvertisementStadium(ctx, lang);
+        }
+        case "advertisement_select_stadium":{
+          ctx.session.advertisement.stadionId = data.id
+          return await this.ownerService.advertisementPreview(ctx, lang);
+        }
+        case "advertisement_preview_booking":{
+          if(ctx.callbackQuery){
+            await ctx.answerCbQuery("Faqat userlar brom qila oladi")
+          }
+          break
+        }
+        case "advertisement_confirm":{
+          if(ctx.callbackQuery){
+            await ctx.answerCbQuery()
+          }
+          return await this.ownerService.advertisement_created(ctx,lang)
+        }
         case 'ownerSettings_back': {
           const owner = await this.prisma.owners.findUnique({
             where: { chatID: String(ctx.from?.id) },
@@ -4949,6 +4984,19 @@ Quyidagi bo'limlardan birini tanlang 👇`,
           ctx.session.step = null;
           return this.botService.stadion_image(ctx, stadion.id);
         }
+      }
+      if (ctx.session.step === 'ADVERTISEMENT_IMAGE') {
+        if (
+          ctx.message &&
+          'photo' in ctx.message &&
+          ctx.message.photo.length > 0
+        ) {
+          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+          ctx.session.advertisement.image = image;
+          ctx.session.advertisements?.push(ctx.message.message_id);
+          ctx.session.step = null;
+          return this.ownerService.selectAdvertisementStadium(ctx, lang);
+        }
       } else {
         await ctx.reply(this.i18n.translate('error.warning_image', { lang }));
       }
@@ -5339,6 +5387,15 @@ Quyidagi bo'limlardan birini tanlang 👇`,
         }
         ctx.session.ownerBrons = null;
         return this.ownerService.searchBooking(ctx, input, lang);
+      }
+      if (
+        ctx.session.step &&
+        ['ADVERTISEMENT_TITLE', 'ADVERTISEMENT_DESCRIPTION'].includes(
+          ctx.session.step,
+        )
+      ) {
+        const type = ctx.session.step;
+        return this.ownerService.ownerAdvertisement(ctx, type, text, lang);
       }
 
       if (

@@ -277,28 +277,31 @@ model Advertisement {
   ownerId Int
   owner   Owners @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
-  stadionId Int?
-  stadion   Stadion? @relation(fields: [stadionId], references: [id], onDelete: SetNull)
+  stadionId Int
+  stadion   Stadion @relation(fields: [stadionId], references: [id], onDelete: SetNull)
 
-  title       String
+  title String @db.VarChar(120)
+
   description String @db.Text
 
-  images String?
+  image String?
 
-  startsAt DateTime
-  endsAt   DateTime
+  clickCount Int @default(0)
 
-  status AdvertisementStatus @default(PENDING)
+  channelSentCount Int @default(0)
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  lastSentAt DateTime?
+
+  activatedAt DateTime            @default(now())
+  expiresAt   DateTime
+  status      AdvertisementStatus @default(ACTIVE)
 
   clicks AdvertisementClick[]
+ createdAt        DateTime         @default(now())
 
   @@index([ownerId])
   @@index([stadionId])
   @@index([status])
-  @@index([startsAt, endsAt])
 }
 
 model AdvertisementClick {

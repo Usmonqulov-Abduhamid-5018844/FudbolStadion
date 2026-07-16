@@ -18,8 +18,17 @@ export interface ISession {
   bookingBrones?: number[];
   booking_step: string | null;
   ownerActiveBooking?: number[];
+  advertisements?: number[];
   ownerBrons: string  | null
   ownerDataFilter: string | null
+
+  advertisement: {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  stadionId: number | null;
+  isAllStadiums: boolean;
+};
 }
 export interface Stadion {
   step: number;
@@ -62,4 +71,13 @@ export interface registorUser {
 export interface MyContext extends Context {
   session: ISession;
   match?: RegExpMatchArray;
+  advertisement: AdvertisementSession;
+}
+
+export interface AdvertisementSession {
+  title: string | null;
+  description: string | null;
+  image: string | null;
+  stadionId: number | null;
+  isAllStadiums: boolean;
 }
