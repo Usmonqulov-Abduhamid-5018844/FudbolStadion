@@ -1,0 +1,88 @@
+{
+  "advertisement_title": "📢 <b>Create a New Advertisement</b>\n\n📝 Enter a short and eye-catching title for your advertisement.\n\n💡 <b>Example:</b>\n🔥 20% off on all bookings today\n⚽ Special offer for evening bookings\n🎁 Free gift with your first booking\n\n⬇️ Use the button below if you want to cancel creating the advertisement.",
+
+  "my_advertisements": "📢 <b>My Advertisements</b>\n\nHere you can manage all of your advertisements.\n\nSelect the section you want 👇",
+
+  "status": {
+    "ACTIVE": "🟢 Active",
+    "PENDING": "🟡 Pending",
+    "EXPIRED": "⚫ Expired"
+  },
+
+  "statistics_not_ready": "📊 Statistics are not available yet.\n\nThey will appear after your advertisement is shown.",
+
+  "statistics": "📊 <b>Advertisement Statistics</b>\n\n━━━━━━━━━━━━━━━━━━\n\n📢 <b>Total Advertisements:</b> {total}\n\n🟢 Active: {active}\n🟡 Pending: {pending}\n⚫ Expired: {expired}\n\n━━━━━━━━━━━━━━━━━━\n\n👀 <b>Displayed in Bot:</b>\n{totalViews} times\n\n📣 <b>Sent to Channel:</b>\n{totalChannel} times\n\n👆 <b>Advertisement Clicks:</b>\n{totalClicks} times\n\n📈 <b>Overall CTR:</b>\n{ctr}%\n\n━━━━━━━━━━━━━━━━━━\n\n🔥 <b>Most Viewed Advertisement</b>\n\n🏟 {mostViewedStadium}\n\n👀 {mostViewedViews} times\n👆 {mostViewedClicks} times\n\n━━━━━━━━━━━━━━━━━━\n\n⭐ <b>Most Clicked Advertisement</b>\n\n🏟 {mostClickedStadium}\n\n👆 {mostClickedClicks} times\n\n━━━━━━━━━━━━━━━━━━\n\n🏆 <b>Best Performing Advertisement</b>\n\n🏟 {bestCTRStadium}\n\n📈 CTR: {bestCTR}%\n\n👀 {bestCTRViews} times\n👆 {bestCTRClicks} times",
+
+  "guide": "📖 <b>Advertisement Guide</b>\n\n📢 An active Premium subscription is required to use the advertising service.\n\n📝 When creating an advertisement, you can add a title, description, and an optional image.\n\n⏳ Newly created advertisements are saved with the <b>Pending</b> status and are not shown to users.\n\n▶️ You can activate your advertisement at any time from the <b>My Advertisements</b> section.\n\n🟢 You can have a maximum of <b>2 active advertisements</b> at the same time.\n\n📅 Once activated, an advertisement will be shown to users for <b>5 days</b>, after which it will automatically move to the <b>Expired</b> status.\n\n📊 You can monitor views, clicks, and performance statistics for each advertisement.",
+
+  "title_only_text": "❗ Please send the advertisement title as plain text.",
+  "title_empty": "❗ The advertisement title cannot be empty.",
+  "title_too_long": "❗ The advertisement title must not exceed 100 characters.",
+  "enter_description": "📝 <b>Enter the advertisement description.</b>\n\n📢 This text will be displayed to users together with your advertisement.\n\n🚫 Phone numbers, Telegram usernames (@username), and external links are not allowed.",
+
+  "description_only_text": "❗ Please send the advertisement description as plain text.",
+  "description_empty": "❗ The advertisement description cannot be empty.",
+  "description_too_long": "❗ The advertisement description must not exceed 1000 characters.",
+  "enter_image": "🖼 <b>Advertisement Image</b>\n\nNow send an image for your advertisement.\n\n📌 Adding an image is optional.\n\nIf you don't want to add an image, press the button below.",
+  "skip_image": "⏭ Skip image",
+  "description_invalid": "❌ The advertisement description must not contain phone numbers, Telegram usernames (@username), or external links.",
+
+  "skip_image_button": "⏭️ Skip Image",
+  "cancel": "❌ Cancel",
+
+  "select_stadium": "🏟 Which stadium should this advertisement be shown for?",
+
+  "stadium_not_found": "❌ Stadium not found.",
+
+  "preview": {
+    "title": "📢 <b>Advertisement Preview</b>",
+    "stadium": "🏟 <b>Stadium:</b>",
+    "location": "📍 <b>Location:</b>",
+    "price": "💰 <b>Price:</b>",
+    "per_hour": "UZS / hour",
+    "shown": "👇 <i>This is exactly how users will see your advertisement.</i>",
+    "confirm_question": "Do you want to publish it?",
+    "booking": "⚽ Book Now",
+    "confirm": "✅ Confirm",
+    "cancel": "❌ Cancel"
+  },
+
+  "premium_required": "❌ You need an active Premium subscription to create advertisements.",
+
+  "created_success": "✅ Your advertisement has been created successfully.\n\n📢 You can now activate it from the <b>My Advertisements</b> section.",
+
+  "no_active_ads": "🟢 You don't have any active advertisements yet.\n\n📝 Create an advertisement first, then activate it.",
+
+  "active_info": "🟢 <b>Active Advertisement</b>\n\n🏟 <b>Stadium:</b> {stadium}\n\n📢 <b>Title:</b>\n{title}\n\n📝 <b>Description:</b>\n{description}\n\n👆 <b>Clicks:</b> {clickCount}\n\n🤖 <b>Shown in Bot:</b> {botViewCount}\n\n📣 <b>Sent to Channel:</b> {channelSentCount}\n\n⏳ <b>Time Remaining:</b> {timeLeft}",
+
+  "no_pending_ads": "🟡 You don't have any pending advertisements.\n\n➕ Create a new advertisement and activate it whenever you're ready.",
+
+  "pending_info": "🟡 <b>Pending Advertisement</b>\n\n🏟 <b>Stadium:</b> {stadium}\n\n📢 <b>Title:</b>\n{title}\n\n📝 <b>Description:</b>\n{description}\n\n📅 <b>Created:</b>\n{createdAt}\n\nℹ️ This advertisement is not yet visible to users.",
+  "activate": "▶️ Activate",
+  "activate_limit": "🚫 Activation Limit Reached",
+  "delete": "🗑 Delete",
+
+  "no_expired_ads": "⚫ You don't have any expired advertisements.\n\n📢 Once your active advertisements expire, they will appear in this section.",
+
+  "expired_list_title": "⚫ <b>Expired Advertisements</b>",
+  "expired_item": "<b>{index}.</b>\n\n🏟 <b>Stadium:</b> {stadium}\n\n📢 <b>{title}</b>\n\n👆 <b>Clicks:</b> {clicks}\n🤖 <b>Bot Views:</b> {views}\n📣 <b>Channel Views:</b> {channel}\n\n📅 <b>Expired:</b> {expiredAt}\n\n────────────────────",
+
+  "activate_not_found": "❌ Advertisement not found or has already been activated.",
+
+  "active_limit_reached": "⚠️ You can have a maximum of 2 active advertisements at the same time.\n\nPlease wait until one of your active advertisements expires.",
+
+  "activated_success": "✅ Advertisement activated successfully.\n\n📢 It will be shown to users for {days} days.",
+
+  "not_found": "❌ Advertisement not found.",
+  "deleted_success": "🗑 Advertisement deleted successfully.",
+
+  "booking_only_users": "⚠️ Booking through advertisements is available only for users.",
+
+  "advertisement": {
+    "menu_title": "📢 <b>Advertisements</b>\n\nIn this section you can create advertisements, manage them, and track their performance statistics.\n\nChoose one of the options below 👇",
+    "create": "➕ Create Advertisement",
+    "my_ads": "📋 My Advertisements",
+    "statistics": "📊 Statistics",
+    "help": "📖 Guide"
+  }
+}

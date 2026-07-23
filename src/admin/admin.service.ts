@@ -24,22 +24,53 @@ export class AdminService {
   async admin_paneli(ctx: MyContext, lang: string) {
     try {
       const owners = await this.prisma.owners.count();
-      await this.utils.safeEditOrReply(ctx, 'Admin bo‘limlari:', {
-        inline_keyboard: [
-          [
-            { text: '📊 Statistika', callback_data: 'admins_stats' },
-            { text: '🏟 Stadionlar', callback_data: 'admins_stadiums' },
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('admin.title', { lang }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('admin.language', { lang }),
+                callback_data: 'admins_lang',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('admin.statistics', { lang }),
+                callback_data: 'admins_stats',
+              },
+              {
+                text: this.i18n.translate('admin.stadiums', { lang }),
+                callback_data: 'admins_stadiums',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('admin.bookings', { lang }),
+                callback_data: 'admins_bookings',
+              },
+              {
+                text: this.i18n.translate('admin.premium', { lang }),
+                callback_data: 'admins_premium',
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('admin.owners', {
+                  lang,
+                  args: { count: owners },
+                }),
+                callback_data: 'admins_owners',
+              },
+              {
+                text: this.i18n.translate('admin.broadcast', { lang }),
+                callback_data: 'admins_broadcast',
+              },
+            ],
           ],
-          [
-            { text: '📋 Bronlar', callback_data: 'admins_bookings' },
-            { text: '⭐ Premium', callback_data: 'admins_premium' },
-          ],
-          [
-            { text: `👤 Ownerlar (${owners})`, callback_data: 'admins_owners' },
-            { text: '📢 Xabar yuborish', callback_data: 'admins_broadcast' },
-          ],
-        ],
-      });
+        },
+      );
       if (ctx.session.admin_messageId) {
         await ctx.deleteMessage(ctx.session.admin_messageId);
       }
@@ -49,6 +80,36 @@ export class AdminService {
     try {
       const lang = await this.utils.langs(ctx);
       switch (type) {
+        case 'lang': {
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('common.START', { lang }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: `🇺🇿 O'zbekcha`,
+                    callback_data: 'lang_uz',
+                  },
+                ],
+                [
+                  {
+                    text: `🇷🇺 Русский`,
+                    callback_data: 'lang_ru',
+                  },
+                ],
+                [
+                  {
+                    text: `🇬🇧 English`,
+                    callback_data: 'lang_en',
+                  },
+                ],
+              ],
+            },
+          );
+
+          break;
+        }
         case 'stats':
           {
             ctx.reply('Statistika');
@@ -67,29 +128,47 @@ export class AdminService {
                 where: { admin_status: 'REJECTED' },
               }),
             ]);
-            await this.utils.safeEditOrReply(ctx, '🏟 Stadionlar bo‘limi', {
-              inline_keyboard: [
-                [
-                  {
-                    text: `⏳ Kutilayotgan (${pending})`,
-                    callback_data: 'stadium_pending_0_1',
-                  },
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('admin.stadium.title', { lang }),
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('admin.stadium.pending', {
+                        lang,
+                        args: { count: pending },
+                      }),
+                      callback_data: 'stadium_pending_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('admin.stadium.approved', {
+                        lang,
+                        args: { count: approved },
+                      }),
+                      callback_data: 'stadium_approved_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('admin.stadium.rejected', {
+                        lang,
+                        args: { count: rejected },
+                      }),
+                      callback_data: 'stadium_rejected_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: 'admin_back_1',
+                    },
+                  ],
                 ],
-                [
-                  {
-                    text: `✅ Tasdiqlangan (${approved})`,
-                    callback_data: 'stadium_approved_0_1',
-                  },
-                ],
-                [
-                  {
-                    text: `❌ Rad etilgan (${rejected})`,
-                    callback_data: 'stadium_rejected_0_1',
-                  },
-                ],
-                [{ text: '⬅️ Orqaga', callback_data: 'admin_back_1' }],
-              ],
-            });
+              },
+            );
           }
           break;
         case 'bookings':
@@ -108,34 +187,44 @@ export class AdminService {
               this.prisma.owners.count({ where: { status: 'ACTIVE' } }),
               this.prisma.owners.count({ where: { status: 'BLOCKED' } }),
             ]);
-            await this.utils.safeEditOrReply(ctx, '👤 Ownerlarni boshqarish', {
-              inline_keyboard: [
-                [
-                  {
-                    text: `🟢 Faol ownerlar (${active})`,
-                    callback_data: 'AdminPaner_Owner_active_0_1',
-                  },
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('admin.owner.title', { lang }),
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('admin.owner.active', {
+                        lang,
+                        args: { count: active },
+                      }),
+                      callback_data: 'AdminPaner_Owner_active_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('admin.owner.blocked', {
+                        lang,
+                        args: { count: blocked },
+                      }),
+                      callback_data: 'AdminPaner_Owner_blocked_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('admin.owner.search', { lang }),
+                      callback_data: 'AdminPaner_Owner_search_0_1',
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: 'admin_back_1',
+                    },
+                  ],
                 ],
-                [
-                  {
-                    text: `🔴 Bloklangan ownerlar (${blocked})`,
-                    callback_data: 'AdminPaner_Owner_blocked_0_1',
-                  },
-                ],
-                [
-                  {
-                    text: '🔍 Owner qidirish',
-                    callback_data: 'AdminPaner_Owner_search_0_1',
-                  },
-                ],
-                [
-                  {
-                    text: '⬅️ Orqaga',
-                    callback_data: 'admin_back_1',
-                  },
-                ],
-              ],
-            });
+              },
+            );
           }
           break;
         case 'broadcast':
@@ -177,9 +266,12 @@ export class AdminService {
             ]);
 
             if (!list.length) {
-              await ctx.answerCbQuery('Kutilayotgan stadionlar yo‘q', {
-                show_alert: true,
-              });
+              await ctx.answerCbQuery(
+                this.i18n.translate('admin.pending_empty', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
               return;
             }
             const totalPages = Math.ceil(total / limit);
@@ -187,7 +279,7 @@ export class AdminService {
 
             if (currentPage > 1) {
               paginationButtons.push({
-                text: '⬅️',
+                text: this.i18n.translate('stadions.Previous', { lang }),
                 callback_data: `stadium_pending_${Id}_${currentPage - 1}`,
               });
             }
@@ -199,7 +291,7 @@ export class AdminService {
 
             if (currentPage < totalPages) {
               paginationButtons.push({
-                text: '➡️',
+                text: this.i18n.translate('stadions.Next', { lang }),
                 callback_data: `stadium_pending_${Id}_${currentPage + 1}`,
               });
             }
@@ -213,7 +305,7 @@ export class AdminService {
 
             await this.utils.safeEditOrReply(
               ctx,
-              '⏳ Kutilayotgan stadionlar',
+              this.i18n.translate('admin.pending_list', { lang }),
               {
                 inline_keyboard: [
                   ...button,
@@ -243,9 +335,12 @@ export class AdminService {
             ]);
 
             if (!list.length) {
-              await ctx.answerCbQuery('Tasdiqlangan stadionlar yo‘q', {
-                show_alert: true,
-              });
+              await ctx.answerCbQuery(
+                this.i18n.translate('admin.approved_empty', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
               return;
             }
             const totalPages = Math.ceil(total / limit);
@@ -253,7 +348,7 @@ export class AdminService {
 
             if (currentPage > 1) {
               paginationButtons.push({
-                text: '⬅️',
+                text: this.i18n.translate('stadions.Previous', { lang }),
                 callback_data: `stadium_approved_${Id}_${currentPage - 1}`,
               });
             }
@@ -265,7 +360,7 @@ export class AdminService {
 
             if (currentPage < totalPages) {
               paginationButtons.push({
-                text: '➡️',
+                text: this.i18n.translate('stadions.Next', { lang }),
                 callback_data: `stadium_approved_${Id}_${currentPage + 1}`,
               });
             }
@@ -279,7 +374,7 @@ export class AdminService {
 
             await this.utils.safeEditOrReply(
               ctx,
-              '✅ Tasdiqlangan stadionlar',
+              this.i18n.translate('admin.approved_list', { lang }),
               {
                 inline_keyboard: [
                   ...button,
@@ -309,9 +404,12 @@ export class AdminService {
             ]);
 
             if (!list.length) {
-              await ctx.answerCbQuery('Rad etilgan stadionlar yo‘q', {
-                show_alert: true,
-              });
+              await ctx.answerCbQuery(
+                this.i18n.translate('admin.rejected_empty', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
               return;
             }
             const totalPages = Math.ceil(total / limit);
@@ -319,7 +417,7 @@ export class AdminService {
 
             if (currentPage > 1) {
               paginationButtons.push({
-                text: '⬅️',
+                text: this.i18n.translate('stadions.Previous', { lang }),
                 callback_data: `stadium_rejected_${Id}_${currentPage - 1}`,
               });
             }
@@ -331,7 +429,7 @@ export class AdminService {
 
             if (currentPage < totalPages) {
               paginationButtons.push({
-                text: '➡️',
+                text: this.i18n.translate('stadions.Next', { lang }),
                 callback_data: `stadium_rejected_${Id}_${currentPage + 1}`,
               });
             }
@@ -343,18 +441,22 @@ export class AdminService {
               },
             ]);
 
-            await this.utils.safeEditOrReply(ctx, '❌ Rad etilgan stadionlar', {
-              inline_keyboard: [
-                ...button,
-                ...(totalPages > 1 ? [paginationButtons] : []),
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: 'admins_stadiums',
-                  },
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('admin.rejected_list', { lang }),
+              {
+                inline_keyboard: [
+                  ...button,
+                  ...(totalPages > 1 ? [paginationButtons] : []),
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: 'admins_stadiums',
+                    },
+                  ],
                 ],
-              ],
-            });
+              },
+            );
           }
           break;
         case 'view':
@@ -381,9 +483,12 @@ export class AdminService {
             });
 
             if (!stadion) {
-              await ctx.answerCbQuery('Stadion topilmadi', {
-                show_alert: true,
-              });
+              await ctx.answerCbQuery(
+                this.i18n.translate('admin.not_found', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
               return;
             }
             const schedules =
@@ -414,16 +519,14 @@ export class AdminService {
               : "Yo'q";
 
             const offDays = offDaySchedules.length
-              ? offDaySchedules
-                  .map((d) => d.date.toLocaleDateString('uz-UZ'))
-                  .join('\n')
+              ? offDaySchedules.map((d) => formatDate(d.date, lang)).join('\n')
               : "Yo'q";
 
             const specialDays = specialSchedules.length
               ? specialSchedules
                   .map(
                     (s) =>
-                      `${s.date.toLocaleDateString('uz-UZ')}, ${s.start_time} - ${s.end_time}`,
+                      `${formatDate(s.date, lang)}, ${s.start_time} - ${s.end_time}`,
                   )
                   .join('\n')
               : "Yo'q";
@@ -474,7 +577,7 @@ ${specialDays}
 ━━━━━━━━━━━━━━━
 
 📅 <b>Yaratilgan:</b>
-${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
+${formatDate(stadion.createdAt, lang)}
 `.trim();
 
             const actionButtons: InlineKeyboardButton[][] = [];
@@ -853,7 +956,7 @@ ${new Date(stadion.createdAt).toLocaleString('uz-UZ')}
               [
                 {
                   text: '🏟 Stadionlari',
-                  callback_data: `AdminOwner_stadiums_${owner.id}_${currentPage}`,
+                  callback_data: `AdminOwner_stadiums_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
@@ -1306,7 +1409,7 @@ Quyidagi amallardan birini tanlang 👇
     days: number,
     ownerId: number,
     currentPage: number,
-    reason:PremiumReason
+    reason: PremiumReason,
   ) {
     try {
       const lang = await this.utils.langs(ctx);
@@ -1392,7 +1495,7 @@ ${
     day: number,
     ownerId: number,
     currentPage: number,
-    reason: PremiumReason
+    reason: PremiumReason,
   ) {
     try {
       const lang = await this.utils.langs(ctx);

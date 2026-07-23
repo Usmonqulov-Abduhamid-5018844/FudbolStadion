@@ -30,6 +30,30 @@ export const helpMenuKeyboard_Owner = (i18n: any, lang: string) =>
     ],
     [
       Markup.button.callback(
+        i18n.translate('help.help.menu.premium', { lang }),
+        cb('HELP_PREMIUM'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.advertisement', { lang }),
+        cb('HELP_ADVERTISEMENT'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.statistics', { lang }),
+        cb('HELP_STATISTICS'),
+      ),
+    ],
+    [
+      Markup.button.callback(
+        i18n.translate('help.help.menu.faq', { lang }),
+        cb('HELP_FAQ'),
+      ),
+    ],
+    [
+      Markup.button.callback(
         i18n.translate('help.help.menu.contact', { lang }),
         cb('HELP_CONTACT'),
       ),

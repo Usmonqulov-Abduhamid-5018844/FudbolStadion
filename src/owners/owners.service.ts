@@ -4,11 +4,13 @@ import { InlineKeyboardButton } from '@telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
+import { ADVERTISEMENT } from 'src/common/constants/advertisement.constants';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
 import { IBooking, PLAN_LABELS, Premium_price } from 'src/helpers/interface';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
+import { getLocation } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { getPremiumReasonText } from 'src/helpers/reason';
 import { getPaymentCardUrl } from 'src/helpers/url_click';
@@ -2397,47 +2399,18 @@ export class OwnersService {
       switch (action) {
         case 'create':
           {
-            const monthStart = new Date();
-            monthStart.setDate(1);
-            monthStart.setHours(0, 0, 0, 0);
-
-            const monthEnd = new Date(monthStart);
-            monthEnd.setMonth(monthEnd.getMonth() + 1);
-
-            const createdCount = await this.prisma.advertisement.count({
-              where: {
-                ownerId: owner.id,
-                createdAt: {
-                  gte: monthStart,
-                  lt: monthEnd,
-                },
-              },
-            });
-
-            if (createdCount >= 10) {
-              await ctx.answerCbQuery(
-                '❌ Siz ushbu oy uchun reklama limitidan foydalandingiz.',
-                { show_alert: true },
-              );
-              return;
-            }
             ctx.session.step = 'ADVERTISEMENT_TITLE';
             try {
               await this.utils.safeEditOrReply(
                 ctx,
-                `📢 <b>Yangi reklama</b>
-  
-  📝 Reklama sarlavhasini kiriting.
-  
-  Masalan:
-  🔥 Bugun barcha bronlarga 20% chegirma
-  
-  ❌ Reklama yaratishni bekor qilish uchun pastdagi tugmadan foydalaning.`,
+                this.i18n.translate('advertisement.advertisement_title', {
+                  lang,
+                }),
                 {
                   inline_keyboard: [
                     [
                       {
-                        text: '❌ Bekor qilish',
+                        text: this.i18n.translate('schedule.back', { lang }),
                         callback_data: JSON.stringify({
                           type: 'advertising',
                           id: owner.id,
@@ -2456,36 +2429,241 @@ export class OwnersService {
           break;
         case 'list':
           {
-          }
+            const [activeCount, pendingCount, expiredCount] = await Promise.all(
+              [
+                this.prisma.advertisement.count({
+                  where: {
+                    ownerId: owner.id,
+                    status: AdvertisementStatus.ACTIVE,
+                  },
+                }),
 
-          break;
-        case 'statistics':
-          {
-          }
-          break;
-        case 'help':
-          {
+                this.prisma.advertisement.count({
+                  where: {
+                    ownerId: owner.id,
+                    status: AdvertisementStatus.PENDING,
+                  },
+                }),
+
+                this.prisma.advertisement.count({
+                  where: {
+                    ownerId: owner.id,
+                    status: AdvertisementStatus.EXPIRED,
+                  },
+                }),
+              ],
+            );
+
             await this.utils.safeEditOrReply(
               ctx,
-              `📖 <b>Reklama qo'llanmasi</b>
-
-• Reklama faqat Premium foydalanuvchilar uchun mavjud.
-
-• Reklama yaratishda sarlavha, matn va rasm qo'shishingiz mumkin.
-
-• Reklama boshlanish va tugash sanasini belgilashingiz mumkin.
-
-• Faol reklamalaringizni istalgan vaqtda tahrirlashingiz yoki o'chirishingiz mumkin.
-
-• Reklama statistikasi orqali ko'rilganlar va bosilganlar sonini kuzatishingiz mumkin.
-
-• Siz bir oyda faqat 10 martagacha reklama joylashingiz mumkin.`,
-
+              this.i18n.translate('advertisement.my_advertisements', { lang }),
               {
                 inline_keyboard: [
                   [
                     {
-                      text: '⬅️ Orqaga',
+                      text: `${this.i18n.translate('advertisement.status.ACTIVE', { lang })} (${activeCount})`,
+                      callback_data: `advertisements_status_ACTIVE_${owner.id}_${activeCount}_1`,
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('advertisement.status.PENDING', { lang })} (${pendingCount})`,
+                      callback_data: `advertisements_status_PENDING_${owner.id}_${pendingCount}_1`,
+                    },
+                  ],
+                  [
+                    {
+                      text: `${this.i18n.translate('advertisement.status.EXPIRED', { lang })} (${expiredCount})`,
+                      callback_data: `advertisements_status_EXPIRED_${owner.id}_${expiredCount}_1`,
+                    },
+                  ],
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: JSON.stringify({
+                        type: 'advertising',
+                        id: owner.id,
+                      }),
+                    },
+                  ],
+                ],
+              },
+            );
+            if (ctx.callbackQuery) {
+              await ctx.answerCbQuery().catch(() => {});
+            }
+          }
+          break;
+        case 'statistics': {
+          const [total, active, pending, expired, advertisements] =
+            await Promise.all([
+              this.prisma.advertisement.count({
+                where: {
+                  ownerId: owner.id,
+                },
+              }),
+
+              this.prisma.advertisement.count({
+                where: {
+                  ownerId: owner.id,
+                  status: AdvertisementStatus.ACTIVE,
+                },
+              }),
+
+              this.prisma.advertisement.count({
+                where: {
+                  ownerId: owner.id,
+                  status: AdvertisementStatus.PENDING,
+                },
+              }),
+
+              this.prisma.advertisement.count({
+                where: {
+                  ownerId: owner.id,
+                  status: AdvertisementStatus.EXPIRED,
+                },
+              }),
+
+              this.prisma.advertisement.findMany({
+                where: {
+                  ownerId: owner.id,
+                },
+                include: {
+                  stadion: {
+                    select: {
+                      name: true,
+                    },
+                  },
+                },
+              }),
+            ]);
+          const totalViews = advertisements.reduce(
+            (sum, item) => sum + item.botViewCount,
+            0,
+          );
+
+          if (totalViews === 0) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('advertisement.statistics_not_ready', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
+            return;
+          }
+
+          const totalClicks = advertisements.reduce(
+            (sum, item) => sum + item.clickCount,
+            0,
+          );
+
+          const totalChannel = advertisements.reduce(
+            (sum, item) => sum + item.channelSentCount,
+            0,
+          );
+
+          const ctr =
+            totalViews === 0
+              ? 0
+              : ((totalClicks / totalViews) * 100).toFixed(2);
+
+          const mostViewed =
+            advertisements.length > 0
+              ? advertisements.reduce((a, b) =>
+                  a.botViewCount > b.botViewCount ? a : b,
+                )
+              : null;
+
+          const mostClicked =
+            advertisements.length > 0
+              ? advertisements.reduce((a, b) =>
+                  a.clickCount > b.clickCount ? a : b,
+                )
+              : null;
+
+          const bestCTR =
+            advertisements.length > 0
+              ? advertisements.reduce((best, current) => {
+                  const bestRate =
+                    best.botViewCount === 0
+                      ? 0
+                      : best.clickCount / best.botViewCount;
+
+                  const currentRate =
+                    current.botViewCount === 0
+                      ? 0
+                      : current.clickCount / current.botViewCount;
+
+                  return currentRate > bestRate ? current : best;
+                })
+              : null;
+
+          const bestCTRValue =
+            bestCTR && bestCTR.botViewCount > 0
+              ? ((bestCTR.clickCount / bestCTR.botViewCount) * 100).toFixed(2)
+              : '0';
+
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('advertisement.statistics', {
+              lang,
+              args: {
+                total,
+                active,
+                pending,
+                expired,
+
+                totalViews: totalViews.toLocaleString(),
+                totalChannel: totalChannel.toLocaleString(),
+                totalClicks: totalClicks.toLocaleString(),
+                ctr,
+
+                mostViewedStadium: mostViewed?.stadion.name ?? '-',
+                mostViewedViews: mostViewed?.botViewCount ?? 0,
+                mostViewedClicks: mostViewed?.clickCount ?? 0,
+
+                mostClickedStadium: mostClicked?.stadion.name ?? '-',
+                mostClickedClicks: mostClicked?.clickCount ?? 0,
+
+                bestCTRStadium: bestCTR?.stadion.name ?? '-',
+                bestCTR: bestCTRValue,
+                bestCTRViews: bestCTR?.botViewCount ?? 0,
+                bestCTRClicks: bestCTR?.clickCount ?? 0,
+              },
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: JSON.stringify({
+                      type: 'advertising',
+                      id: owner.id,
+                    }),
+                  },
+                ],
+              ],
+            },
+          );
+
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
+          }
+
+          break;
+        }
+        case 'help':
+          {
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('advertisement.guide', { lang }),
+              {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: JSON.stringify({
                         type: 'advertising',
                         id: owner.id,
@@ -2505,6 +2683,7 @@ export class OwnersService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
   async ownerAdvertisement(
@@ -2526,7 +2705,7 @@ export class OwnersService {
       if (type === 'ADVERTISEMENT_TITLE') {
         if (!ctx.message || !('text' in ctx.message)) {
           const send = await ctx.reply(
-            "❗ Iltimos, reklama sarlavhasini matn ko'rinishida yuboring.",
+            this.i18n.translate('advertisement.title_only_text', { lang }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
@@ -2539,7 +2718,7 @@ export class OwnersService {
 
         if (!title.length) {
           const send = await ctx.reply(
-            "❗ Reklama sarlavhasi bo'sh bo'lishi mumkin emas.",
+            this.i18n.translate('advertisement.title_empty', { lang }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
@@ -2550,7 +2729,7 @@ export class OwnersService {
 
         if (title.length > 100) {
           const send = await ctx.reply(
-            '❗ Reklama sarlavhasi 100 ta belgidan oshmasligi kerak.',
+            this.i18n.translate('advertisement.title_too_long', { lang }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
@@ -2567,17 +2746,14 @@ export class OwnersService {
         ctx.session.step = 'ADVERTISEMENT_DESCRIPTION';
 
         const send = await ctx.reply(
-          `📝 Reklama matnini kiriting.
-
-Bu matn foydalanuvchilarga ko'rsatiladi.
-
-❌ Telefon raqami, Telegram username yoki tashqi havolalar yozish taqiqlanadi.`,
+          this.i18n.translate('advertisement.enter_description', { lang }),
           {
+            parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: '❌ Bekor qilish',
+                    text: this.i18n.translate('schedule.back', { lang }),
                     callback_data: JSON.stringify({
                       type: 'advertising',
                       id: ownerId.id,
@@ -2594,7 +2770,9 @@ Bu matn foydalanuvchilarga ko'rsatiladi.
       if (type === 'ADVERTISEMENT_DESCRIPTION') {
         if (!ctx.message || !('text' in ctx.message)) {
           const send = await ctx.reply(
-            "❗ Iltimos, reklama matnini matn ko'rinishida yuboring.",
+            this.i18n.translate('advertisement.description_only_text', {
+              lang,
+            }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
@@ -2607,7 +2785,7 @@ Bu matn foydalanuvchilarga ko'rsatiladi.
 
         if (!description.length) {
           const send = await ctx.reply(
-            "❗ Reklama matni bo'sh bo'lishi mumkin emas.",
+            this.i18n.translate('advertisement.description_empty', { lang }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
@@ -2618,12 +2796,37 @@ Bu matn foydalanuvchilarga ko'rsatiladi.
 
         if (description.length > 1000) {
           const send = await ctx.reply(
-            '❗ Reklama matni 1000 ta belgidan oshmasligi kerak.',
+            this.i18n.translate('advertisement.description_too_long', { lang }),
           );
           ctx.session.advertisements.push(send.message_id);
           if (ctx.message?.message_id) {
             ctx.session.advertisements.push(ctx.message?.message_id);
           }
+          return;
+        }
+
+        const hasTelegramUsername = /(^|\s)@[a-zA-Z0-9_]{5,32}\b/.test(
+          description,
+        );
+
+        const hasUrl =
+          /(https?:\/\/|www\.|[a-zA-Z0-9-]+\.(com|net|org|uz|ru|io|me|app|co|xyz|online|site|info|biz|dev|ai)\b)/i.test(
+            description,
+          );
+
+        const hasPhone = /(\+?\d[\d\s\-()]{7,}\d)/.test(description);
+
+        if (hasTelegramUsername || hasUrl || hasPhone) {
+          const send = await ctx.reply(
+            this.i18n.translate('advertisement.description_invalid', { lang }),
+          );
+
+          ctx.session.advertisements.push(send.message_id);
+
+          if (ctx.message?.message_id) {
+            ctx.session.advertisements.push(ctx.message.message_id);
+          }
+
           return;
         }
 
@@ -2634,20 +2837,16 @@ Bu matn foydalanuvchilarga ko'rsatiladi.
         }
 
         const send = await ctx.reply(
-          `🖼 <b>Reklama rasmi</b>
-
-Endi reklamangiz uchun rasm yuboring.
-
-📌 Rasm qo'shish ixtiyoriy.
-
-Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
+          this.i18n.translate('advertisement.enter_image', { lang }),
           {
             parse_mode: 'HTML',
             reply_markup: {
               inline_keyboard: [
                 [
                   {
-                    text: "⏭ Rasm qo'shmaslik",
+                    text: this.i18n.translate('advertisement.skip_image', {
+                      lang,
+                    }),
                     callback_data: JSON.stringify({
                       type: 'advertisement_skip_image',
                     }),
@@ -2655,7 +2854,7 @@ Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
                 ],
                 [
                   {
-                    text: '❌ Bekor qilish',
+                    text: this.i18n.translate('advertisement.cancel', { lang }),
                     callback_data: JSON.stringify({
                       type: 'advertising',
                       id: ownerId.id,
@@ -2698,7 +2897,7 @@ Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
     }
 
     const send = await ctx.reply(
-      `🏟 Reklama qaysi stadion uchun chiqarilsin?`,
+      this.i18n.translate('advertisement.select_stadium', { lang }),
       {
         reply_markup: {
           inline_keyboard: [
@@ -2713,7 +2912,7 @@ Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
             ]),
             [
               {
-                text: '⬅️ Bekor qilish',
+                text: this.i18n.translate('advertisement.cancel', { lang }),
                 callback_data: JSON.stringify({
                   type: 'advertising',
                   id: owner.id,
@@ -2735,7 +2934,9 @@ Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
         ctx.session.advertisement;
 
       if (!stadionId) {
-        const send = await ctx.reply('❌ Stadion topilmadi.');
+        const send = await ctx.reply(
+          this.i18n.translate('advertisement.stadium_not_found', { lang }),
+        );
         ctx.session.advertisements.push(send.message_id);
         return;
       }
@@ -2754,21 +2955,32 @@ Agar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.`,
       });
 
       if (!stadion) {
-        const send = await ctx.reply('❌ Stadion topilmadi.');
+        const send = await ctx.reply(
+          this.i18n.translate('advertisement.stadium_not_found', { lang }),
+        );
         ctx.session.advertisements.push(send.message_id);
         return;
       }
+      let locationText = this.i18n.translate('view.not_available', { lang });
+      if (stadion.latitude && stadion.longitude) {
+        locationText = getLocation(
+          stadion.latitude,
+          stadion.longitude,
+          stadion.region.name,
+          stadion.region_items.name,
+        );
+      }
 
       const caption = `
-📢 <b>Reklama Preview</b>
+${this.i18n.translate('advertisement.preview.title', { lang })}
 
 ━━━━━━━━━━━━━━━
 
-🏟 <b>Stadion:</b> ${stadion.name}
+${this.i18n.translate('advertisement.preview.stadium', { lang })} ${stadion.name}
 
-📍 <b>Hudud:</b> ${stadion.region?.name} / ${stadion.region_items?.name}
+${this.i18n.translate('advertisement.preview.location', { lang })} ${locationText}
 
-💰 <b>Narxi:</b> ${stadion.price.toLocaleString()} so'm / soat
+${this.i18n.translate('advertisement.preview.price', { lang })} ${stadion.price.toLocaleString()} ${this.i18n.translate('advertisement.preview.per_hour', { lang })}
 
 ━━━━━━━━━━━━━━━
 
@@ -2778,16 +2990,18 @@ ${description}
 
 ━━━━━━━━━━━━━━━
 
-👇 <i>Foydalanuvchilarga reklama aynan shunday ko'rinadi.</i>
+${this.i18n.translate('advertisement.preview.shown', { lang })}
 
-Tasdiqlaysizmi?
+${this.i18n.translate('advertisement.preview.confirm_question', { lang })}
 `.trim();
 
       const keyboard = {
         inline_keyboard: [
           [
             {
-              text: '⚽ Bron qilish',
+              text: this.i18n.translate('advertisement.preview.booking', {
+                lang,
+              }),
               callback_data: JSON.stringify({
                 type: 'advertisement_preview_booking',
                 stadionId: stadion.id,
@@ -2796,7 +3010,9 @@ Tasdiqlaysizmi?
           ],
           [
             {
-              text: '✅ Tasdiqlash',
+              text: this.i18n.translate('advertisement.preview.confirm', {
+                lang,
+              }),
               callback_data: JSON.stringify({
                 type: 'advertisement_confirm',
                 id: stadion.owner.id,
@@ -2805,7 +3021,9 @@ Tasdiqlaysizmi?
           ],
           [
             {
-              text: '❌ Bekor qilish',
+              text: this.i18n.translate('advertisement.preview.cancel', {
+                lang,
+              }),
               callback_data: JSON.stringify({
                 type: 'advertising',
                 id: stadion.owner.id,
@@ -2864,38 +3082,16 @@ Tasdiqlaysizmi?
 
       if (!premium) {
         const send = await ctx.reply(
-          "❌ Reklama yaratish uchun Premium faol bo'lishi kerak.",
+          this.i18n.translate('advertisement.premium_required', { lang }),
         );
         ctx.session.advertisements.push(send.message_id);
         return;
       }
 
-      const monthStart = now;
-      monthStart.setDate(1);
-      monthStart.setHours(0, 0, 0, 0);
-
-      const monthEnd = new Date(monthStart);
-      monthEnd.setMonth(monthEnd.getMonth() + 1);
-
-      const createdCount = await this.prisma.advertisement.count({
-        where: {
-          ownerId: owner.id,
-          createdAt: {
-            gte: monthStart,
-            lt: monthEnd,
-          },
-        },
-      });
-
-      if (createdCount >= 10) {
-        const send = await ctx.reply(
-          '❌ Siz ushbu oy uchun reklama limitidan foydalandingiz.',
-        );
-        ctx.session.advertisements.push(send.message_id);
-        return;
-      }
       if (!ctx.session.advertisement.stadionId) {
-        const send = await ctx.reply('❌ Stadion tanlanmagan.');
+        const send = await ctx.reply(
+          this.i18n.translate('advertisement.stadium_not_found', { lang }),
+        );
         ctx.session.advertisements.push(send.message_id);
         return;
       }
@@ -2908,12 +3104,14 @@ Tasdiqlaysizmi?
       });
 
       if (!stadion) {
-        const send = await ctx.reply('❌ Stadion topilmadi.');
+        const send = await ctx.reply(
+          this.i18n.translate('advertisement.stadium_not_found', { lang }),
+        );
         ctx.session.advertisements.push(send.message_id);
         return;
       }
       const expiresAt = new Date(now);
-      expiresAt.setDate(expiresAt.getDate() + 5);
+      expiresAt.setDate(expiresAt.getDate() + ADVERTISEMENT.ACTIVE_DAYS);
 
       await this.prisma.advertisement.create({
         data: {
@@ -2923,7 +3121,7 @@ Tasdiqlaysizmi?
           description: ctx.session.advertisement.description!,
           image: ctx.session.advertisement.image,
           expiresAt,
-          status: AdvertisementStatus.ACTIVE,
+          status: AdvertisementStatus.PENDING,
         },
       });
 
@@ -2943,10 +3141,557 @@ Tasdiqlaysizmi?
       ctx.session.step = null;
 
       await ctx.reply(
-        `✅ Reklamangiz muvaffaqiyatli yaratildi.
-
-📢 Endi reklama foydalanuvchilarga ko'rsatiladi.`,
+        this.i18n.translate('advertisement.created_success', { lang }),
+        {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: 'errorBack_1',
+                },
+              ],
+            ],
+          },
+        },
       );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  async advertisementStatus(
+    ctx: MyContext,
+    status: AdvertisementStatus,
+    ownerId: number,
+    statusCount: number,
+    page: number,
+    lang: string,
+  ) {
+    try {
+      switch (status) {
+        case 'ACTIVE': {
+          if (!statusCount) {
+            if (ctx.callbackQuery) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('advertisement.no_active_ads', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
+            }
+            return;
+          }
+          const limit = 1;
+          const currentPage = Math.max(1, Number(page) || 1);
+
+          const [advertisement, total] = await Promise.all([
+            this.prisma.advertisement.findMany({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.ACTIVE,
+              },
+              include: {
+                stadion: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              skip: (currentPage - 1) * limit,
+              take: limit,
+            }),
+
+            this.prisma.advertisement.count({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.ACTIVE,
+              },
+            }),
+          ]);
+
+          const item = advertisement[0];
+
+          const totalPages = Math.ceil(total / limit);
+
+          const expires = item.expiresAt;
+
+          const result = this.utils.bookingTimeCalculate(
+            expires,
+            `${String(expires.getHours()).padStart(2, '0')}:${String(expires.getMinutes()).padStart(2, '0')}`,
+            lang,
+          );
+
+          const text = this.i18n.translate('advertisement.active_info', {
+            lang,
+            args: {
+              stadium: item.stadion.name,
+              title: item.title,
+              description: item.description,
+              clickCount: item.clickCount,
+              botViewCount: item.botViewCount,
+              channelSentCount: item.channelSentCount,
+              timeLeft: result.timeLeftText,
+            },
+          });
+
+          const pagination: InlineKeyboardButton[] = [];
+          const inline_keyboard: InlineKeyboardButton[][] = [];
+
+          if (currentPage > 1) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Previous', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage - 1}`,
+            });
+          }
+
+          pagination.push({
+            text: `${currentPage}/${totalPages}`,
+            callback_data: 'ignore',
+          });
+
+          if (currentPage < totalPages) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Next', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage + 1}`,
+            });
+          }
+
+          if (pagination.length > 1) {
+            inline_keyboard.push(pagination);
+          }
+
+          inline_keyboard.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `advertisementList_${ownerId}_${lang}`,
+            },
+          ]);
+
+          await this.utils.safeEditOrReply(ctx, text, {
+            inline_keyboard,
+          });
+
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
+          }
+          break;
+        }
+        case 'PENDING': {
+          if (!statusCount) {
+            if (ctx.callbackQuery) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('advertisement.no_pending_ads', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
+            }
+            return;
+          }
+          const limit = 1;
+          const currentPage = Math.max(1, Number(page) || 1);
+
+          const [advertisement, total, activeCount] = await Promise.all([
+            this.prisma.advertisement.findMany({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.PENDING,
+              },
+              include: {
+                stadion: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+              skip: (currentPage - 1) * limit,
+              take: limit,
+            }),
+
+            this.prisma.advertisement.count({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.PENDING,
+              },
+            }),
+            this.prisma.advertisement.count({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.ACTIVE,
+              },
+            }),
+          ]);
+
+          const item = advertisement[0];
+          const formatdate = formatDate(item.createdAt, lang);
+          const totalPages = Math.ceil(total / limit);
+
+          const text = this.i18n.translate('advertisement.pending_info', {
+            lang,
+            args: {
+              stadium: item.stadion.name,
+              title: item.title,
+              description: item.description,
+              createdAt: formatdate,
+            },
+          });
+
+          const inline_keyboard: InlineKeyboardButton[][] = [];
+          if (activeCount >= 2) {
+            inline_keyboard.push(
+              [
+                {
+                  text: this.i18n.translate('advertisement.activate_limit', {
+                    lang,
+                  }),
+                  callback_data: `advertisementPending_ignore_${item.id}_${lang}`,
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('advertisement.delete', {
+                    lang,
+                  }),
+                  callback_data: `advertisementPending_delete_${item.id}_${lang}`,
+                },
+              ],
+            );
+          } else {
+            inline_keyboard.push([
+              {
+                text: this.i18n.translate('advertisement.activate', {
+                  lang,
+                }),
+                callback_data: `advertisementPending_activate_${item.id}_${lang}`,
+              },
+              {
+                text: this.i18n.translate('advertisement.delete', {
+                  lang,
+                }),
+                callback_data: `advertisementPending_delete_${item.id}_${lang}`,
+              },
+            ]);
+          }
+
+          const pagination: InlineKeyboardButton[] = [];
+
+          if (currentPage > 1) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Previous', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage - 1}`,
+            });
+          }
+
+          pagination.push({
+            text: `${currentPage}/${totalPages}`,
+            callback_data: 'ignore',
+          });
+
+          if (currentPage < totalPages) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Next', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage + 1}`,
+            });
+          }
+
+          if (pagination.length > 1) {
+            inline_keyboard.push(pagination);
+          }
+
+          inline_keyboard.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `advertisementList_${ownerId}_${lang}`,
+            },
+          ]);
+
+          await this.utils.safeEditOrReply(ctx, text, {
+            inline_keyboard,
+          });
+
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
+          }
+          break;
+        }
+        case 'EXPIRED': {
+          if (!statusCount) {
+            if (ctx.callbackQuery) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('advertisement.no_expired_ads', { lang }),
+                {
+                  show_alert: true,
+                },
+              );
+            }
+            return;
+          }
+
+          const limit = 4;
+          const currentPage = Math.max(1, Number(page) || 1);
+
+          const [advertisements, total] = await Promise.all([
+            this.prisma.advertisement.findMany({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.EXPIRED,
+              },
+              include: {
+                stadion: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
+              orderBy: {
+                expiresAt: 'desc',
+              },
+              skip: (currentPage - 1) * limit,
+              take: limit,
+            }),
+
+            this.prisma.advertisement.count({
+              where: {
+                ownerId,
+                status: AdvertisementStatus.EXPIRED,
+              },
+            }),
+          ]);
+
+          const totalPages = Math.ceil(total / limit);
+
+          let text =
+            this.i18n.translate('advertisement.expired_list_title', { lang }) +
+            '\n\n';
+
+          advertisements.forEach((item, index) => {
+            text +=
+              this.i18n.translate('advertisement.expired_item', {
+                lang,
+                args: {
+                  index: (currentPage - 1) * limit + index + 1,
+                  stadium: item.stadion.name,
+                  title: item.title,
+                  clicks: item.clickCount,
+                  views: item.botViewCount,
+                  channel: item.channelSentCount,
+                  expiredAt: formatDate(item.expiresAt, lang),
+                },
+              }) + '\n\n';
+          });
+
+          const inline_keyboard: InlineKeyboardButton[][] = [];
+
+          const pagination: InlineKeyboardButton[] = [];
+
+          if (currentPage > 1) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Previous', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage - 1}`,
+            });
+          }
+
+          pagination.push({
+            text: `${currentPage}/${totalPages}`,
+            callback_data: 'ignore',
+          });
+
+          if (currentPage < totalPages) {
+            pagination.push({
+              text: this.i18n.translate('stadions.Next', { lang }),
+              callback_data: `advertisements_status_${status}_${ownerId}_${statusCount}_${currentPage + 1}`,
+            });
+          }
+
+          if (pagination.length > 1) {
+            inline_keyboard.push(pagination);
+          }
+
+          inline_keyboard.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `advertisementList_${ownerId}_${lang}`,
+            },
+          ]);
+
+          await this.utils.safeEditOrReply(ctx, text.trim(), {
+            inline_keyboard,
+          });
+
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
+          }
+
+          break;
+        }
+        default: {
+          await this.utils.errorFunction(ctx);
+        }
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    } finally {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => {});
+      }
+    }
+  }
+
+  async advertisement_checking(
+    ctx: MyContext,
+    type: string,
+    advertisementId: number,
+    lang: string,
+  ) {
+    try {
+      switch (type) {
+        case 'activate': {
+          const advertisement = await this.prisma.advertisement.findUnique({
+            where: { id: advertisementId },
+          });
+
+          if (
+            !advertisement ||
+            advertisement.status !== AdvertisementStatus.PENDING
+          ) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('advertisement.activate_not_found', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
+            return;
+          }
+
+          const activeCount = await this.prisma.advertisement.count({
+            where: {
+              ownerId: advertisement.ownerId,
+              status: AdvertisementStatus.ACTIVE,
+            },
+          });
+
+          if (activeCount >= 2) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('advertisement.active_limit_reached', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
+            return;
+          }
+
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + ADVERTISEMENT.ACTIVE_DAYS);
+
+          await this.prisma.advertisement.update({
+            where: {
+              id: advertisement.id,
+            },
+            data: {
+              status: AdvertisementStatus.ACTIVE,
+              expiresAt,
+            },
+          });
+
+          await ctx.answerCbQuery(
+            this.i18n.translate('advertisement.activated_success', {
+              lang,
+              args: {
+                days: ADVERTISEMENT.ACTIVE_DAYS,
+              },
+            }),
+            {
+              show_alert: true,
+            },
+          );
+
+          return await this.advertisement(
+            ctx,
+            'list',
+            advertisement.ownerId,
+            lang,
+          );
+        }
+
+        case 'ignore': {
+          await ctx.answerCbQuery(
+            this.i18n.translate('advertisement.active_limit_reached', {
+              lang,
+            }),
+            {
+              show_alert: true,
+            },
+          );
+          return;
+        }
+
+        case 'delete': {
+          const owner = await this.prisma.owners.findUnique({
+            where: {
+              chatID: String(ctx.from?.id),
+            },
+          });
+
+          const advertisement = await this.prisma.advertisement.findFirst({
+            where: {
+              id: advertisementId,
+              ownerId: owner!.id,
+            },
+          });
+
+          if (!advertisement) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('advertisement.not_found', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
+            return;
+          }
+
+          await this.prisma.advertisement.delete({
+            where: {
+              id: advertisement.id,
+            },
+          });
+
+          await ctx.answerCbQuery(
+            this.i18n.translate('advertisement.deleted_success', {
+              lang,
+            }),
+            {
+              show_alert: true,
+            },
+          );
+
+          return await this.advertisement(
+            ctx,
+            'list',
+            advertisement.ownerId,
+            lang,
+          );
+        }
+
+        default: {
+          await this.utils.errorFunction(ctx);
+          break;
+        }
+      }
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

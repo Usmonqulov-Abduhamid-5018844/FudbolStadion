@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { Admin_S, NotificationType } from '@prisma/client';
+import { Admin_S, AdvertisementStatus, NotificationType } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { formatDate } from 'src/helpers/dateFormat';
@@ -189,7 +189,6 @@ export class CronService {
           },
         }),
       ]);
-      
     } catch (error) {
       console.error('Deactivate expired subscriptions error:', error);
     }
@@ -414,9 +413,33 @@ export class CronService {
             parse_mode: 'HTML',
           },
         );
-      } catch (err) {
-        console.error(err);
+      } catch (err) {}
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE, {
+    timeZone: 'Asia/Tashkent',
+  })
+  async advertisement() {
+    try {
+      const now = new Date();
+
+      const { count } = await this.prisma.advertisement.updateMany({
+        where: {
+          status: AdvertisementStatus.ACTIVE,
+          expiresAt: {
+            lte: now,
+          },
+        },
+        data: {
+          status: AdvertisementStatus.EXPIRED,
+        },
+      });      
+      if (count > 0) {
+        console.log(`${count} ta reklama EXPIRED holatiga o'tkazildi.`);
       }
+    } catch (error) {
+      console.log('Reklama muddatini tekshirishda xatolik');
     }
   }
 }

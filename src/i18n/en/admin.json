@@ -7,5 +7,41 @@
     "5": "Friday",
     "6": "Saturday",
     "7": "Sunday"
-  }
+  },
+
+  "title": "🛠 <b>Admin Control Panel</b>\n\nSelect the section you want to manage 👇",
+  "language": "🌍 Change Language",
+  "statistics": "📊 Statistics",
+  "stadiums": "🏟 Stadium Management",
+  "bookings": "📋 Booking Management",
+  "premium": "⭐ Premium Management",
+  "owners": "👤 Stadium Owners ({count})",
+  "broadcast": "📢 Broadcast Message",
+
+  "stadium": {
+    "title": "🏟 <b>Stadium Management</b>\n\nSelect the section you want to manage 👇",
+    "pending": "⏳ Pending ({count})",
+    "approved": "✅ Approved ({count})",
+    "rejected": "❌ Rejected ({count})"
+  },
+  "owner": {
+    "title": "👤 <b>Owner Management</b>\n\nSelect the section you want to manage 👇",
+    "active": "🟢 Active Owners ({count})",
+    "blocked": "🔴 Blocked Owners ({count})",
+    "search": "🔍 Search Owner"
+  },
+
+  "pending_empty": "⏳ There are currently no stadiums awaiting approval.\n\n📋 Newly added stadiums will automatically appear here for review.",
+
+  "pending_list": "⏳ <b>Pending Stadiums</b>\n\nThe following stadiums are awaiting administrator approval.\nSelect a stadium to review 👇",
+
+  "approved_empty": "✅ There are currently no approved stadiums.\n\n📋 Stadiums approved by the administrator will appear in this section.",
+
+  "approved_list": "✅ <b>Approved Stadiums</b>\n\nThe following stadiums have been approved by the administrator and are active in the system.\nSelect a stadium to view 👇",
+
+  "rejected_empty": "❌ There are currently no rejected stadiums.\n\n📋 Stadiums rejected by the administrator will appear in this section.",
+
+  "rejected_list": "❌ <b>Rejected Stadiums</b>\n\nThe following stadiums have been rejected by the administrator.\nSelect a stadium to view 👇",
+
+  "not_found": "❌ Stadium not found.\n\nIt may have been removed or no longer exists."
 }

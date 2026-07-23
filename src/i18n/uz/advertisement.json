@@ -1,0 +1,88 @@
+{
+  "advertisement_title": "📢 <b>Yangi reklama yaratish</b>\n\n📝 Reklamangiz uchun qisqa va e'tiborni tortadigan sarlavha kiriting.\n\n💡 <b>Masalan:</b>\n🔥 Bugun barcha bronlarga 20% chegirma\n⚽ Kechki bronlarga maxsus aksiya\n🎁 Birinchi bron uchun sovg'a\n\n⬇️ Reklama yaratishni bekor qilish uchun pastdagi tugmadan foydalaning.",
+
+  "my_advertisements": "📢 <b>Reklamalarim</b>\n\nBu yerda barcha reklamalaringizni boshqarishingiz mumkin.\n\nKerakli bo'limni tanlang 👇",
+
+  "status": {
+    "ACTIVE": "🟢 Faol",
+    "PENDING": "🟡 Kutilayotgan",
+    "EXPIRED": "⚫ Tugagan"
+  },
+
+  "statistics_not_ready": "📊 Statistika hali mavjud emas.\n\nReklamangiz ko'rsatilgach statistika paydo bo'ladi.",
+
+  "statistics": "📊 <b>Reklama statistikasi</b>\n\n━━━━━━━━━━━━━━━━━━\n\n📢 <b>Jami reklamalar:</b> {total}\n\n🟢 Faol: {active}\n🟡 Kutilayotgan: {pending}\n⚫ Tugagan: {expired}\n\n━━━━━━━━━━━━━━━━━━\n\n👀 <b>Botda ko'rsatilgan:</b>\n{totalViews} marta\n\n📣 <b>Kanalga yuborilgan:</b>\n{totalChannel} marta\n\n👆 <b>Reklama bosilgan:</b>\n{totalClicks} marta\n\n📈 <b>Umumiy CTR:</b>\n{ctr}%\n\n━━━━━━━━━━━━━━━━━━\n\n🔥 <b>Eng ko'p ko'rilgan reklama</b>\n\n🏟 {mostViewedStadium}\n\n👀 {mostViewedViews} marta\n👆 {mostViewedClicks} marta\n\n━━━━━━━━━━━━━━━━━━\n\n⭐ <b>Eng ko'p bosilgan reklama</b>\n\n🏟 {mostClickedStadium}\n\n👆 {mostClickedClicks} marta\n\n━━━━━━━━━━━━━━━━━━\n\n🏆 <b>Eng samarali reklama</b>\n\n🏟 {bestCTRStadium}\n\n📈 CTR: {bestCTR}%\n\n👀 {bestCTRViews} marta\n👆 {bestCTRClicks} marta",
+
+  "guide": "📖 <b>Reklama qo'llanmasi</b>\n\n📢 Reklama xizmatidan foydalanish uchun Premium obuna faol bo'lishi kerak.\n\n📝 Reklama yaratishda sarlavha, tavsif va ixtiyoriy rasm qo'shishingiz mumkin.\n\n⏳ Yaratilgan reklama dastlab <b>Kutilayotgan</b> holatda saqlanadi va foydalanuvchilarga ko'rsatilmaydi.\n\n▶️ <b>Reklamalarim</b> bo'limidan istalgan vaqtda reklamangizni faollashtirishingiz mumkin.\n\n🟢 Bir vaqtning o'zida maksimal <b>2 ta faol reklama</b> ishlashi mumkin.\n\n📅 Faollashtirilgan reklama <b>5 kun</b> davomida foydalanuvchilarga ko'rsatiladi va muddat tugagach avtomatik ravishda <b>Tugagan</b> holatiga o'tadi.\n\n📊 Har bir reklama bo'yicha ko'rishlar, bosilishlar va samaradorlik statistikasini kuzatishingiz mumkin.",
+
+  "title_only_text": "❗ Iltimos, reklama sarlavhasini matn ko'rinishida yuboring.",
+  "title_empty": "❗ Reklama sarlavhasi bo'sh bo'lishi mumkin emas.",
+  "title_too_long": "❗ Reklama sarlavhasi 100 ta belgidan oshmasligi kerak.",
+  "enter_description": "📝 <b>Reklama tavsifini kiriting.</b>\n\n📢 Ushbu matn foydalanuvchilarga reklamangiz bilan birga ko'rsatiladi.\n\n🚫 Telefon raqami, Telegram username (@username) yoki tashqi havolalarni yuborish taqiqlanadi.",
+
+  "description_only_text": "❗ Iltimos, reklama tavsifini matn ko'rinishida yuboring.",
+  "description_empty": "❗ Reklama tavsifi bo'sh bo'lishi mumkin emas.",
+  "description_too_long": "❗ Reklama tavsifi 1000 ta belgidan oshmasligi kerak.",
+  "enter_image": "🖼 <b>Reklama rasmi</b>\n\nEndi reklamangiz uchun rasm yuboring.\n\n📌 Rasm qo'shish ixtiyoriy.\n\nAgar rasm qo'shishni xohlamasangiz, pastdagi tugmani bosing.",
+  "skip_image": "⏭ Rasm qo'shmaslik",
+  "description_invalid": "❌ Reklama matnida telefon raqami, Telegram username (@username) yoki tashqi havolalar bo'lishi mumkin emas.",
+
+  "skip_image_button": "⏭️ Rasm qo‘shmaslik",
+  "cancel": "❌ Bekor qilish",
+
+  "select_stadium": "🏟 Reklama qaysi stadion uchun chiqarilsin?",
+
+  "stadium_not_found": "❌ Stadion topilmadi.",
+
+  "preview": {
+    "title": "📢 <b>Reklama Preview</b>",
+    "stadium": "🏟 <b>Stadion:</b>",
+    "location": "📍 <b>Hudud:</b>",
+    "price": "💰 <b>Narxi:</b>",
+    "per_hour": "so'm / soat",
+    "shown": "👇 <i>Foydalanuvchilarga reklama aynan shunday ko'rinadi.</i>",
+    "confirm_question": "Tasdiqlaysizmi?",
+    "booking": "⚽ Bron qilish",
+    "confirm": "✅ Tasdiqlash",
+    "cancel": "❌ Bekor qilish"
+  },
+
+  "premium_required": "❌ Reklama yaratish uchun Premium obunangiz faol bo'lishi kerak.",
+
+  "created_success": "✅ Reklamangiz muvaffaqiyatli yaratildi.\n\n📢 Endi reklamangizni <b>Reklamalarim</b> bo'limidan faollashtirishingiz kerak.",
+
+  "no_active_ads": "🟢 Sizda hozircha faol reklamalar mavjud emas.\n\n📝 Avval reklama yarating va uni faollashtiring.",
+
+  "active_info": "🟢 <b>Faol reklama</b>\n\n🏟 <b>Stadion:</b> {stadium}\n\n📢 <b>Sarlavha:</b>\n{title}\n\n📝 <b>Matn:</b>\n{description}\n\n👆 <b>Bosilgan:</b> {clickCount}\n\n🤖 <b>Botda ko'rsatilgan:</b> {botViewCount}\n\n📣 <b>Kanalga yuborilgan:</b> {channelSentCount}\n\n⏳ <b>Qolgan vaqt:</b> {timeLeft}",
+
+  "no_pending_ads": "🟡 Sizda kutilayotgan reklamalar mavjud emas.\n\n➕ Yangi reklama yarating va uni istalgan vaqtda faollashtiring.",
+
+  "pending_info": "🟡 <b>Kutilayotgan reklama</b>\n\n🏟 <b>Stadion:</b> {stadium}\n\n📢 <b>Sarlavha:</b>\n{title}\n\n📝 <b>Matn:</b>\n{description}\n\n📅 <b>Yaratilgan:</b>\n{createdAt}\n\nℹ️ Ushbu reklama hali foydalanuvchilarga ko'rsatilmayapti.",
+  "activate": "▶️ Faollashtirish",
+  "activate_limit": "🚫 Faollashtirish limiti to'lgan",
+  "delete": "🗑 O‘chirish",
+
+  "no_expired_ads": "⚫ Sizda tugagan reklamalar mavjud emas.\n\n📢 Faol reklamalaringiz muddati tugagach, ular shu bo'limda ko'rinadi.",
+
+  "expired_list_title": "⚫ <b>Tugagan reklamalar</b>",
+  "expired_item": "<b>{index}.</b>\n\n🏟 <b>Stadion:</b> {stadium}\n\n📢 <b>{title}</b>\n\n👆 <b>Bosilgan:</b> {clicks}\n🤖 <b>Botda:</b> {views}\n📣 <b>Kanalda:</b> {channel}\n\n📅 <b>Tugagan:</b> {expiredAt}\n\n────────────────────",
+
+  "activate_not_found": "❌ Reklama topilmadi yoki allaqachon faollashtirilgan.",
+
+  "active_limit_reached": "⚠️ Siz bir vaqtda faqat 2 ta faol reklamaga ega bo'lishingiz mumkin.\n\nAvval faol reklamalardan biri tugashini kuting.",
+
+  "activated_success": "✅ Reklama muvaffaqiyatli faollashtirildi.\n\n📢 Reklama {days} kun davomida foydalanuvchilarga ko'rsatiladi.",
+
+  "not_found": "❌ Reklama topilmadi.",
+  "deleted_success": "🗑 Reklama muvaffaqiyatli o'chirildi.",
+
+  "booking_only_users": "⚠️ Reklama orqali bron qilish faqat foydalanuvchilar uchun mavjud.",
+
+  "advertisement": {
+    "menu_title": "📢 <b>Reklamalar</b>\n\nUshbu bo'lim orqali reklamalaringizni yaratishingiz, boshqarishingiz va ularning statistikasini kuzatishingiz mumkin.\n\nQuyidagi bo'limlardan birini tanlang 👇",
+    "create": "➕ Reklama yaratish",
+    "my_ads": "📋 Mening reklamalarim",
+    "statistics": "📊 Statistika",
+    "help": "📖 Qo'llanma"
+  }
+}

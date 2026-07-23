@@ -114,8 +114,8 @@
 
   "workingStatus": {
     "alert": "⚠️ Ish holatini o‘zgartirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling.",
-    "on": "✅ Stadion ishga tushirildi",
-    "off": "⛔ Stadion o‘chirildi",
+    "on": "✅ Stadion muvaffaqiyatli faollashtirildi.\n\n👥 Endi foydalanuvchilar stadionni ko'rishlari va bron qilishlari mumkin.",
+    "off": "⛔ Stadion vaqtincha o‘chirildi.\n\n🚫 Endi foydalanuvchilar bu stadionni ko‘ra olmaydi va bron qila olmaydi.",
     "ownerCard": "⚠️ Ushbu stadionda to‘lov faqat karta orqali amalga oshiriladi.\n\nStadionni yoqish uchun avval to‘lov kartangizni qo‘shishingiz shart."
   },
   "deleteAlert": "⚠️ Bu stadionni o‘chirib bo‘lmaydi!\nHozir bu stadionda faol bronlar mavjud 📅\n\nIltimos, avval bronlarni yakunlang yoki bekor qiling.",

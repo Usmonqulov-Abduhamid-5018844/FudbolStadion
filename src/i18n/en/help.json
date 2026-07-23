@@ -6,12 +6,29 @@
       "start": "▶️ How to start",
       "payment": "💳 Payments",
       "cancel": "❌ Cancel booking",
-      "contact": "📞 Contact admin"
+      "contact": "📞 Contact admin",
+
+      "premium": "⭐ Premium",
+      "advertisement": "📢 Advertisements",
+      "statistics": "📊 Statistics",
+      "faq": "❓ Frequently Asked Questions"
     },
     "about": "⚽ Stadion Bron Bot is a modern platform специально designed for stadium owners, allowing you to fully manage your stadium online.\n\n🎯 Main purpose of the bot:\nTo efficiently manage your stadium, automate the booking process, and increase your revenue.\n\n🛠 With the bot, you can perform the following actions:\n\n🏟 Stadium management:\n• Add a new stadium\n• Edit stadium details (name, location, image)\n• Split a stadium into mini stadiums (if it is large)\n\n⏰ Working time settings:\n• Set daily working hours\n• Add days off\n• Configure special days (holidays, maintenance, etc.)\n\n💰 Pricing and payments:\n• Set prices for each time slot\n• Choose payment methods:\n  - 💳 Card\n  - 💵 Cash\n  - 💳💵 Both\n\n📅 Booking management:\n• View bookings in real time\n• Track the date, time, and status of each booking\n• Clearly monitor free and occupied time slots\n\n📊 Convenient control and monitoring:\n• Continuously track stadium occupancy\n• Simplify planning\n• Avoid confusion and errors\n\n🚀 Our goal:\nTo максимально simplify management for stadium owners, save time, and increase revenue.\n\n💬 If you have any questions or need help, feel free to contact via the bot.",
+
     "start": "▶️ How to start (Guide for stadium owners)\n\nGetting started is very easy 👇\n\n1️⃣ Send the /start command\n\n2️⃣ Set up your profile:\n• Confirm your information\n• The system will register you as a stadium owner\n\n3️⃣ Add a stadium:\n• Enter the stadium name\n• Send location 📍\n• Upload an image 🖼\n• Set capacity 👥\n\n4️⃣ Choose stadium type:\n• 🏟 Big stadium — can be divided into mini stadiums\n• 🎯 Small stadium — works as a standalone unit\n\n5️⃣ Finalize settings:\n• Set working hours ⏰\n• Set pricing 💰\n• Choose payment methods 💳💵\n\n📊 After that you can:\n• See bookings in real time\n• Monitor occupancy\n• Manage free slots\n\n🧭 The bot will guide you step by step.\n\n🚀 Send /start to begin!",
+
     "payment": "💳 Payment settings\n\nYou can choose which payment methods to accept for your stadium.\n\nCustomers can pay using:\n\n💳 Card:\n• Online payment via bank cards\n• Fast and convenient\n\n💵 Cash:\n• Payment on arrival\n\n💳💵 Both:\n• Customer chooses preferred method\n\n⚙️ Important:\n• Card payments require owner card linked\n• Otherwise stadium becomes inactive (working_status = false)\n\n🎯 Proper setup increases customers and convenience.",
+
     "cancel": "❌ Booking cancellation rules\n\nAs a stadium owner, you can manage bookings.\n\n📌 Cancellation:\n• You can cancel when necessary\n\n⏰ Important:\n• If paid, cancel at least 1 hour before start\n\n💳 Refund:\n• Money is automatically returned\n\n⚠️ Limitation:\n• Less than 1 hour — cannot cancel\n\n📊 Result:\n• Slot becomes available again\n\n🎯 Ensures fairness and order.",
-    "contact": "📞 Contact admin\n\nIf you have issues:\n• Bot not working ❌\n• Settings problems ⚙️\n• Payment questions 💳\n• Suggestions 💡\n\n👉 Contact admin\n\n💬 @Abduhamid_1852"
+
+    "contact": "📞 Contact admin\n\nIf you have issues:\n• Bot not working ❌\n• Settings problems ⚙️\n• Payment questions 💳\n• Suggestions 💡\n\n👉 Contact admin\n\n💬 @Abduhamid_1852",
+
+    "premium": "⭐ Premium Features\n\nPremium subscription unlocks additional features.\n\nWith Premium you can:\n\n• 📢 Create advertisements.\n• 📈 View detailed statistics.\n• 🚀 Promote your stadium to users.\n• ⚡ Access future Premium features.\n\nPremium features become unavailable once your subscription expires.",
+
+    "advertisement": "📢 Advertisements\n\nPremium users can create advertisements.\n\n• Advertisements are created in Pending status.\n• They can be activated anytime.\n• Maximum 2 advertisements can be active simultaneously.\n• Each advertisement stays active for 5 days.\n• Statistics are collected automatically.",
+
+    "statistics": "📊 Statistics\n\nThe bot automatically tracks your stadium and advertisement performance.\n\nYou can monitor:\n\n• Bookings\n• Revenue\n• Advertisement views\n• Clicks\n• CTR\n• Best performing advertisement\n\nAll statistics are updated in real time.",
+
+    "faq": "❓ Frequently Asked Questions\n\nQ: Why isn't my advertisement visible?\nA: Activate it from My Advertisements.\n\nQ: Why can't I activate it?\nA: You already have 2 active advertisements.\n\nQ: What happens when Premium expires?\nA: Premium features become unavailable.\n\nQ: When will statistics appear?\nA: After your advertisement starts being shown to users."
   }
 }

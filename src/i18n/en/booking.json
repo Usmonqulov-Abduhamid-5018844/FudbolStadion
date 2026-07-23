@@ -74,7 +74,7 @@
 
   "cancel_not_allowed": "⛔ Less than 1 hour is left before the game starts.\nTherefore, this booking can no longer be canceled.\nPlease plan your bookings in advance ⚽",
 
-  "qr_caption": "🎫 Your booking QR code\n\nAdmin will scan it when you arrive at the stadium",
+  "qr_caption": "🎫 <b>Your Booking QR Code</b>\n\n📍 When you arrive at the stadium, show this QR code to the stadium owner.\n\n📱 The stadium owner will scan the QR code to confirm your booking.",
   "qr_button": "📲 Generate QR",
 
   "change_payment_method": "💳 Change Payment Method",

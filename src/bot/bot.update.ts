@@ -10,6 +10,7 @@ import { Markup } from 'telegraf';
 import {
   Admin_S,
   AdminStatus,
+  AdvertisementStatus,
   Booking_status,
   Payments,
   PremiumReason,
@@ -1048,6 +1049,56 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
+  @Action(/advertisements_status_(\w+)_(\d+)_(\d+)_(\d+)/)
+  async advertisementStatus(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const match = ctx.match as RegExpMatchArray;
+      const status = match[1] as AdvertisementStatus;
+      const ownerId = Number(match[2]);
+      const statusCount = Number(match[3]);
+      const page = Number(match[4]);
+      return await this.ownerService.advertisementStatus(
+        ctx,
+        status,
+        ownerId,
+        statusCount,
+        page,
+        lang,
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  @Action(/^advertisementList_(\d+)_(\w+)/)
+  async advertisementList(@Ctx() ctx: MyContext) {
+    try {
+      const match = ctx.match as RegExpMatchArray;
+      const ownerId = Number(match[1]);
+      const lang = match[2];
+      return await this.ownerService.advertisement(ctx, 'list', ownerId, lang);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+  @Action(/advertisementPending_(\w+)_(\d+)_(\w+)/)
+  async advertisementPending(@Ctx() ctx: MyContext) {
+    try {
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+
+      const [_, type, advertisementId, lang] =
+        ctx.callbackQuery.data.split('_');
+
+      return await this.ownerService.advertisement_checking(
+        ctx,
+        type,
+        Number(advertisementId),
+        lang,
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
 
   /////////////////////////////////////// OWNER BOOKING /////////////////////////////////////////////////////
 
@@ -1539,6 +1590,7 @@ export class BotUpdate {
                 { source: Buffer.from(qr.split(',')[1], 'base64') },
                 {
                   caption: this.i18n.translate('booking.qr_caption', { lang }),
+                  parse_mode:"HTML",
                   reply_markup: {
                     inline_keyboard: [
                       [
@@ -3035,6 +3087,53 @@ export class BotUpdate {
             }
           }
           break;
+        case 'HELP_PREMIUM': {
+          try {
+            await this.utils.safeEditHelpReplyOwner(
+              ctx,
+              this.i18n.translate('help.help.premium', { lang }),
+            );
+          } catch {
+            this.utils.errorFunction(ctx);
+          }
+          break;
+        }
+
+        case 'HELP_ADVERTISEMENT': {
+          try {
+            await this.utils.safeEditHelpReplyOwner(
+              ctx,
+              this.i18n.translate('help.help.advertisement', { lang }),
+            );
+          } catch {
+            this.utils.errorFunction(ctx);
+          }
+          break;
+        }
+
+        case 'HELP_STATISTICS': {
+          try {
+            await this.utils.safeEditHelpReplyOwner(
+              ctx,
+              this.i18n.translate('help.help.statistics', { lang }),
+            );
+          } catch {
+            this.utils.errorFunction(ctx);
+          }
+          break;
+        }
+
+        case 'HELP_FAQ': {
+          try {
+            await this.utils.safeEditHelpReplyOwner(
+              ctx,
+              this.i18n.translate('help.help.faq', { lang }),
+            );
+          } catch {
+            this.utils.errorFunction(ctx);
+          }
+          break;
+        }
 
         case 'HELP_CONTACT':
           {
@@ -4160,40 +4259,50 @@ export class BotUpdate {
             const ownerId = Number(data.id);
             await this.utils.safeEditOrReply(
               ctx,
-              `📢 <b>Reklamalar</b>
-
-Ushbu bo'lim orqali reklamalaringizni yaratishingiz, boshqarishingiz va ularning statistikasini kuzatishingiz mumkin.
-
-Quyidagi bo'limlardan birini tanlang 👇`,
+              this.i18n.translate('advertisement.advertisement.menu_title', {
+                lang,
+              }),
               {
                 inline_keyboard: [
                   [
                     {
-                      text: '➕ Reklama yaratish',
-                      callback_data: `advertisement_create_${ownerId}`,
+                      text: this.i18n.translate(
+                        'advertisement.advertisement.create',
+                        { lang },
+                      ),
+                      callback_data: `advertisement.advertisement_create_${ownerId}`,
                     },
                   ],
                   [
                     {
-                      text: '📋 Mening reklamalarim',
+                      text: this.i18n.translate(
+                        'advertisement.advertisement.my_ads',
+                        { lang },
+                      ),
                       callback_data: `advertisement_list_${ownerId}`,
                     },
                   ],
                   [
                     {
-                      text: '📊 Statistika',
+                      text: this.i18n.translate(
+                        'advertisement.advertisement.statistics',
+                        { lang },
+                      ),
                       callback_data: `advertisement_statistics_${ownerId}`,
                     },
                   ],
                   [
                     {
-                      text: "📖 Qo'llanma",
+                      text: this.i18n.translate(
+                        'advertisement.advertisement.help',
+                        { lang },
+                      ),
                       callback_data: `advertisement_help_${ownerId}`,
                     },
                   ],
                   [
                     {
-                      text: '⬅️ Orqaga',
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: JSON.stringify({
                         type: 'ownerSettings_back',
                       }),
@@ -4204,14 +4313,14 @@ Quyidagi bo'limlardan birini tanlang 👇`,
             );
             if (ctx.session.advertisements?.length) {
               await ctx.deleteMessages(ctx.session.advertisements);
-               ctx.session.advertisements = [];
+              ctx.session.advertisements = [];
             }
             ctx.session.advertisement = {
-                title:null,
-                description:null,
-                image:null,
-                stadionId:null,
-                isAllStadiums:false,
+              title: null,
+              description: null,
+              image: null,
+              stadionId: null,
+              isAllStadiums: false,
             };
             if (ctx.callbackQuery) {
               await ctx
@@ -4225,26 +4334,33 @@ Quyidagi bo'limlardan birini tanlang 👇`,
         case 'advertisement_skip_image': {
           ctx.session.advertisement.image = null;
           ctx.session.step = null;
-          if(ctx.callbackQuery){
-            await ctx.answerCbQuery().catch(()=> {})
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery().catch(() => {});
           }
           return await this.ownerService.selectAdvertisementStadium(ctx, lang);
         }
-        case "advertisement_select_stadium":{
-          ctx.session.advertisement.stadionId = data.id
+        case 'advertisement_select_stadium': {
+          ctx.session.advertisement.stadionId = data.id;
           return await this.ownerService.advertisementPreview(ctx, lang);
         }
-        case "advertisement_preview_booking":{
-          if(ctx.callbackQuery){
-            await ctx.answerCbQuery("Faqat userlar brom qila oladi")
+        case 'advertisement_preview_booking': {
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('advertisement.booking_only_users', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
           }
-          break
+          break;
         }
-        case "advertisement_confirm":{
-          if(ctx.callbackQuery){
-            await ctx.answerCbQuery()
+        case 'advertisement_confirm': {
+          if (ctx.callbackQuery) {
+            await ctx.answerCbQuery();
           }
-          return await this.ownerService.advertisement_created(ctx,lang)
+          return await this.ownerService.advertisement_created(ctx, lang);
         }
         case 'ownerSettings_back': {
           const owner = await this.prisma.owners.findUnique({

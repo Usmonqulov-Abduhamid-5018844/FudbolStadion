@@ -82,24 +82,32 @@ export class UtilisService implements OnModuleInit {
 
   async safeEditHelpReplyOwner(ctx: MyContext, text: string) {
     const lang = await this.langs(ctx);
+
     try {
-      await ctx.editMessageText(
-        text,
-        back_owner_Keyboard(this.i18n, String(lang)),
-      );
-    } catch (e) {
-      await ctx.reply(text, back_owner_Keyboard(this.i18n, String(lang)));
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...back_owner_Keyboard(this.i18n, String(lang)),
+      });
+    } catch {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...back_owner_Keyboard(this.i18n, String(lang)),
+      });
     }
   }
   async safeEditHelpReplyUser(ctx: MyContext, text: string) {
     const lang = await this.langs(ctx);
+
     try {
-      await ctx.editMessageText(
-        text,
-        back_user_Keyboard(this.i18n, String(lang)),
-      );
-    } catch (e) {
-      await ctx.reply(text, back_user_Keyboard(this.i18n, String(lang)));
+      await ctx.editMessageText(text, {
+        parse_mode: 'HTML',
+        ...back_user_Keyboard(this.i18n, String(lang)),
+      });
+    } catch {
+      await ctx.reply(text, {
+        parse_mode: 'HTML',
+        ...back_user_Keyboard(this.i18n, String(lang)),
+      });
     }
   }
 

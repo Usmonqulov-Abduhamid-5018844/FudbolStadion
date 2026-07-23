@@ -77,7 +77,7 @@
 
   "cancel_not_allowed": "⛔ O‘yinning boshlanishiga 1 soatdan kam vaqt qoldi.\nShu sababli ushbu bronni hozir bekor qilib bo‘lmaydi.\nIltimos, keyingi bronlaringizni oldindan rejalashtiring ⚽",
 
-  "qr_caption": "🎫 Sizning bron QR kodingiz\n\nStadionga borganda admin skaner qiladi",
+  "qr_caption": "🎫 <b>Sizning bron QR kodingiz</b>\n\n📍 Stadionga borganingizda ushbu QR kodni stadion egasiga ko'rsating.\n\n📱 Stadion egasi QR kodni skaner qilib broningizni tasdiqlaydi.",
   "qr_button": "📲 QR tayyorlash",
 
   "change_payment_method": "💳 To‘lov usulini o'zgartirish",

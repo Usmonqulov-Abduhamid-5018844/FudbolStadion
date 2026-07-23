@@ -7,5 +7,42 @@
     "5": "Juma",
     "6": "Shanba",
     "7": "Yakshanba"
-  }
+  },
+
+  "title": "🛠 <b>Admin boshqaruv paneli</b>\n\nKerakli bo'limni tanlang 👇",
+  "language": "🌍 Tilni o'zgartirish",
+  "statistics": "📊 Statistika",
+  "stadiums": "🏟 Stadionlarni boshqarish",
+  "bookings": "📋 Bronlarni boshqarish",
+  "premium": "⭐ Premium boshqaruvi",
+  "owners": "👤 Stadion egalari ({count})",
+  "broadcast": "📢 Ommaviy xabar yuborish",
+
+  "stadium": {
+    "title": "🏟 <b>Stadionlarni boshqarish</b>\n\nKerakli bo'limni tanlang 👇",
+    "pending": "⏳ Kutilayotgan ({count})",
+    "approved": "✅ Tasdiqlangan ({count})",
+    "rejected": "❌ Rad etilgan ({count})"
+  },
+
+  "owner": {
+    "title": "👤 <b>Ownerlarni boshqarish</b>\n\nKerakli bo'limni tanlang 👇",
+    "active": "🟢 Faol ownerlar ({count})",
+    "blocked": "🔴 Bloklangan ownerlar ({count})",
+    "search": "🔍 Owner qidirish"
+  },
+
+  "pending_empty": "⏳ Hozircha tasdiqlashni kutayotgan stadionlar mavjud emas.\n\n📋 Yangi stadion qo'shilganda u avtomatik ravishda ushbu bo'limda paydo bo'ladi.",
+
+  "pending_list": "⏳ <b>Kutilayotgan stadionlar</b>\n\nQuyidagi stadionlar administrator tasdig'ini kutmoqda.\nKo'rib chiqish uchun stadionni tanlang 👇",
+
+  "approved_empty": "✅ Hozircha tasdiqlangan stadionlar mavjud emas.\n\n📋 Administrator tomonidan tasdiqlangan stadionlar ushbu bo'limda ko'rsatiladi.",
+
+  "approved_list": "✅ <b>Tasdiqlangan stadionlar</b>\n\nQuyidagi stadionlar administrator tomonidan tasdiqlangan va tizimda faol holatda.\nKo'rish uchun stadionni tanlang 👇",
+
+  "rejected_empty": "❌ Hozircha rad etilgan stadionlar mavjud emas.\n\n📋 Administrator tomonidan rad etilgan stadionlar ushbu bo'limda ko'rsatiladi.",
+
+  "rejected_list": "❌ <b>Rad etilgan stadionlar</b>\n\nQuyidagi stadionlar administrator tomonidan rad etilgan.\nKo'rish uchun stadionni tanlang 👇",
+
+  "not_found": "❌ Stadion topilmadi.\n\nU o‘chirilgan yoki mavjud emas."
 }

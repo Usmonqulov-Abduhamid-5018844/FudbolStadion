@@ -110,8 +110,8 @@
 
   "workingStatus": {
     "alert": "⚠️ Cannot change working status!\nThere are active bookings right now 📅\n\nPlease complete or cancel them first.",
-    "on": "✅ Stadium is now active",
-    "off": "⛔ Stadium is now inactive",
+    "on": "✅ Stadium activated successfully.\n\n👥 Users can now view and book this stadium.",
+    "off": "⛔ Stadium has been temporarily disabled.\n\n🚫 Users can no longer view or book this stadium.",
     "ownerCard": "⚠️ This stadium only supports card payments.\n\nYou must add a payment card before activating the stadium."
   },
   "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first.",
