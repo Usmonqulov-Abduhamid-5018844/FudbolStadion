@@ -51,9 +51,10 @@ import { NotifikationService } from 'src/notifikation/notifikation.service';
 
 @Update()
 export class BotUpdate {
-  private readonly AdminChatid =
-    process.env.ADMIN_CHAT_ID?.split(',').map(Number) || [];
-
+  private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
   constructor(
     private readonly botService: BotService,
     private readonly i18n: I18nService,
@@ -185,6 +186,15 @@ export class BotUpdate {
       return this.botService.checket(ctx);
     }
   }
+
+  @Action(/check_required_channels/)
+  async check_required_channels(@Ctx() ctx:MyContext) {
+     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+     await ctx.answerCbQuery().catch(()=>{})
+     return this.botService.checket(ctx)
+
+  }
+
   @Action(/errorBack_(.+)$/)
   async errorBack(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -225,6 +235,31 @@ export class BotUpdate {
       ctx.answerCbQuery().catch(() => {});
     }
   }
+  @Action(/^bookingStadium_(\d+)_(\d+)_(\d+)$/)
+async bookingStadium(@Ctx() ctx: MyContext) {
+  if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+
+  const [, stadionId] = ctx.callbackQuery.data.split('_');
+
+  const lang = await this.utils.langs(ctx);
+
+  const stadion = await this.prisma.stadion.findUnique({
+    where: {
+      id: Number(stadionId),
+    },
+    include: {
+      region: true,
+      region_items: true,
+    },
+  });
+
+  if (!stadion) {
+    await this.utils.errorFunction(ctx);
+    return;
+  }
+
+  await this.userService.stadionAll_data(ctx, lang, stadion);
+}
   /////////////////////////////////////// OWNER BOOKING //////////////////////////////////////////////////////
 
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
@@ -1590,7 +1625,7 @@ export class BotUpdate {
                 { source: Buffer.from(qr.split(',')[1], 'base64') },
                 {
                   caption: this.i18n.translate('booking.qr_caption', { lang }),
-                  parse_mode:"HTML",
+                  parse_mode: 'HTML',
                   reply_markup: {
                     inline_keyboard: [
                       [
@@ -1935,7 +1970,6 @@ export class BotUpdate {
           } catch (e) {}
           ctx.session.stadionMessages = [];
         }
-        await ctx.deleteMessage();
         await this.userService.userbookingRegionItems(
           ctx,
           lang,
@@ -2904,17 +2938,12 @@ export class BotUpdate {
       Number(currentPage),
     );
   }
-  @Action(/stadiumConfirm_(rejected|approved)_(\d+)_(\d+)/)
+  @Action(/stadiumConfirm_(rejected|approved)_(\d+)/)
   async stadiumConfirm(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const [_, status, stadionId, currentPage] =
       ctx.callbackQuery.data.split('_');
-    return this.adminPaneli.stadiumConfirm(
-      ctx,
-      status,
-      Number(stadionId),
-      Number(currentPage),
-    );
+    return this.adminPaneli.stadiumConfirm(ctx, status, Number(stadionId));
   }
   @Action(/AdminPaner_Owner_(\w+)_(\d+)_(\d+)/)
   async AdminPaner_Owner(@Ctx() ctx: MyContext) {
@@ -3035,6 +3064,20 @@ export class BotUpdate {
             .then(() => {})
             .catch();
           return this.userService.userbookingRegion(ctx, lang, data.id);
+        }
+        case 'user_back_regionItems_Id': {
+          await ctx
+            .answerCbQuery()
+            .then(() => {})
+            .catch();
+                if (ctx.session.stadionMessages?.length) {
+          const messagesId = ctx.session.stadionMessages;
+          try {
+            await ctx.deleteMessages(messagesId);
+          } catch (e) {}
+          ctx.session.stadionMessages = [];
+        }
+        break
         }
         case 'HELP_ABOUT':
           {

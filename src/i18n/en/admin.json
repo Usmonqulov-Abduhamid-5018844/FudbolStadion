@@ -43,5 +43,152 @@
 
   "rejected_list": "❌ <b>Rejected Stadiums</b>\n\nThe following stadiums have been rejected by the administrator.\nSelect a stadium to view 👇",
 
-  "not_found": "❌ Stadium not found.\n\nIt may have been removed or no longer exists."
+  "not_found": "❌ Stadium not found.\n\nIt may have been removed or no longer exists.",
+
+  "stadium_list": {
+    "no_data": "Not available",
+
+    "types": {
+      "main": "Main Stadium",
+      "mini": "Mini Stadium",
+      "child": "Mini Field of Main Stadium"
+    },
+
+    "statuses": {
+      "pending": "⏳ Pending",
+      "approved": "✅ Approved",
+      "rejected": "❌ Rejected"
+    },
+
+    "buttons": {
+      "approve": "✅ Approve",
+      "reject": "❌ Reject"
+    },
+
+    "details": "🏟 <b>STADIUM DETAILS</b>\n\n━━━━━━━━━━━━━━━\n\n🆔 <b>ID:</b> {id}\n🏟 <b>Name:</b> {name}\n🏷 <b>Type:</b> {type}\n\n📍 <b>Location:</b>\n{location}\n\n👤 <b>Owner:</b> {owner}\n📞 <b>Phone:</b> {phone}\n\n💰 <b>Price:</b> {price} UZS\n📌 <b>Status:</b> {status}\n\n━━━━━━━━━━━━━━━\n\n🕒 <b>Weekly Schedule</b>\n\n{weekDays}\n\n🚫 <b>Days Off</b>\n\n{offDays}\n\n⭐ <b>Special Working Days</b>\n\n{specialDays}\n\n━━━━━━━━━━━━━━━\n\n📅 <b>Created At:</b> {createdAt}",
+
+    "approve_confirm": "✅ <b>Approve Stadium</b>\n\nAre you sure you want to approve this stadium?\n\nOnce approved, the stadium will become active in the system and users will be able to view and book it.",
+    "button": {
+      "approve": "✅ Yes, Approve"
+    },
+
+    "reject_confirm": "❌ <b>Reject Stadium</b>\n\nAre you sure you want to reject this stadium?\n\nOnce rejected, the stadium will not be visible to users and cannot be booked.",
+    "Button": {
+      "reject": "❌ Yes, Reject"
+    },
+
+    "approved_success": "✅ Stadium has been approved successfully.\n\nIt is now visible to users and available for booking.",
+    "rejected_success": "❌ Stadium has been rejected.\n\nIt is no longer visible to users and cannot be booked."
+  },
+  "active_empty": "🟢 There are currently no active owners.\n\n📋 Owners with active status will appear in this section.",
+
+  "active_list": "🟢 <b>Active Owners</b>\n\nThe following owners are currently active in the system.\nSelect an owner to view 👇",
+
+  "Previous": "⬅️ Previous",
+  "Next": "Next ➡️",
+  "Select": "Select a page",
+
+  "blocked_empty": "🔴 There are currently no blocked owners.\n\n📋 Blocked owners will appear in this section.",
+  "blocked_list": "🔴 <b>Blocked Owners</b>\n\nThe following owners are temporarily restricted from using the system.\nSelect an owner to view 👇",
+
+  "details": "👤 <b>OWNER DETAILS</b>\n\n━━━━━━━━━━━━━━━\n\n🆔 <b>ID:</b> {id}\n\n👤 <b>Full Name:</b> {fullName}\n\n📞 <b>Phone:</b> {phone}\n\n📧 <b>Email:</b> {email}\n\n🏟 <b>Total Stadiums:</b> {stadiumCount}\n\n📅 <b>Total Bookings:</b> {bookingCount}\n\n⭐ <b>Premium:</b> {premium}\n\n🟢 <b>Status:</b> {status}",
+
+  "email_empty": "Not provided",
+
+  "Premium": {
+    "active": "Active ✅",
+    "inactive": "Not Available ❌"
+  },
+
+  "status": {
+    "active": "Active",
+    "blocked": "Blocked"
+  },
+
+  "buttons": {
+    "stadiums": "🏟 Stadiums",
+    "premium": "⭐ Manage Premium",
+    "block": "🚫 Block",
+    "activate": "✅ Activate"
+  },
+
+  "confirm": {
+    "block": "🚫 <b>Block Owner</b>\n\nAre you sure you want to block <b>{fullName}</b>?\n\nOnce blocked, the owner will no longer be able to access the system or manage their stadiums.",
+    "activate": "✅ <b>Activate Owner</b>\n\nAre you sure you want to activate <b>{fullName}</b>?\n\nOnce activated, the owner will regain full access to the system.",
+
+    "buttons": {
+      "confirm_block": "🚫 Yes, Block",
+      "confirm_activate": "✅ Yes, Activate"
+    }
+  },
+
+  "status_updated": {
+    "active": "✅ {fullName} has been activated successfully.",
+    "blocked": "🚫 {fullName} has been blocked successfully."
+  },
+
+  "premiums": {
+    "details_active": "⭐ <b>Premium Management</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📌 <b>Status:</b> 🟢 Active\n\n📦 <b>Plan:</b> {plan}\n\n📅 <b>Activated:</b> {startDate}\n\n⏳ <b>Expires:</b> {endDate}\n\n_____________________________________________\n\n{statistics}\n____________________________________________\n\nChoose one of the actions below 👇",
+
+    "details_inactive": "⭐ <b>Premium Management</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📌 <b>Status:</b> 🔴 No Premium subscription\n\n━━━━━━━━━━━━━━━\n\nChoose one of the actions below 👇",
+
+    "statistics": {
+      "purchase": "<b>💳 Purchased:</b> {days} days",
+      "gift": "<b>🎁 Gift:</b> +{days} days",
+      "compensation": "<b>🤝 Compensation:</b> +{days} days",
+      "trial": "<b>🎉 Trial:</b> +{days} days"
+    },
+
+    "day": "days",
+
+    "buttons": {
+      "gift": "🎁 Gift Premium",
+      "history": "📜 Premium History"
+    }
+  },
+
+  "premium_history": {
+    "currency": "UZS",
+    "free": "Free",
+    "history": {
+      "empty": "📜 No Premium history found.\n\nThis owner has no Premium history yet.",
+      "title": "📜 <b>Premium History</b>\n\n{history}",
+      "item": "<b>{index}.</b>\n\n📦 <b>Plan:</b> {plan}\n\n🎯 <b>Reason:</b> {reason}\n\n📅 <b>Started:</b> {startDate}\n\n⏳ <b>Expired:</b> {endDate}\n\n💰 <b>Amount:</b> {amount}\n\n💳 <b>Payment:</b> {provider}"
+    },
+    "provider": {
+      "admin": "Granted by Admin",
+      "unknown": "Unknown"
+    }
+  },
+  "gift": {
+    "title": "🎁 <b>Gift Premium</b>\n\nSelect one of the following reasons for granting Premium 👇",
+    "duration": {
+      "title": "🎁 Select Premium duration",
+      "week_1": "⭐ 1 week",
+      "month_1": "⭐ 1 month",
+      "month_3": "⭐ 3 months",
+      "month_6": "⭐ 6 months",
+      "year_1": "⭐ 12 months"
+    }
+  },
+  "confirm_gift": {
+    "text": "🎁 <b>Gift Premium</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📦 <b>Premium Plan:</b> {plan}\n\n🎉 This Premium will be granted to <b>{owner}</b> as a gift.\n\n{premiumInfo}\n\n━━━━━━━━━━━━━━━\n\n❓ <b>Do you want to confirm this action?</b>",
+    "has_premium": "⚠️ <b>Attention:</b> The owner already has an active Premium.\nThe Premium period will be extended automatically.",
+    "no_premium": "ℹ️ Premium will be activated immediately.",
+    "confirm": "✅ Yes, gift Premium",
+    "cancel": "❌ Cancel"
+  },
+  "gift_success": "🎉 Premium has been gifted successfully!\n\n👤 Owner: {owner}\n📦 Plan: {plan}",
+
+  "notification": {
+    "premium_gift": {
+      "title": "🎁 Premium Gift Received",
+      "message": "Congratulations!\n\nThe administrator has gifted you Premium for {plan}.\n\n✨ All Premium features are now active.\n\nThank you!"
+    }
+  },
+  "channel": {
+    "join_required": "📢 To continue using the bot, please join the following channels.",
+    "check": "✅ Check",
+    "default_name": "📢 Channel {number}"
+  }
 }

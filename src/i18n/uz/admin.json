@@ -44,5 +44,153 @@
 
   "rejected_list": "❌ <b>Rad etilgan stadionlar</b>\n\nQuyidagi stadionlar administrator tomonidan rad etilgan.\nKo'rish uchun stadionni tanlang 👇",
 
-  "not_found": "❌ Stadion topilmadi.\n\nU o‘chirilgan yoki mavjud emas."
+  "not_found": "❌ Stadion topilmadi.\n\nU o‘chirilgan yoki mavjud emas.",
+
+  "stadium_list": {
+    "no_data": "Mavjud emas",
+
+    "types": {
+      "main": "Katta stadion",
+      "mini": "Mini stadion",
+      "child": "Katta stadionning mini bo'lagi"
+    },
+
+    "statuses": {
+      "pending": "⏳ Kutilmoqda",
+      "approved": "✅ Tasdiqlangan",
+      "rejected": "❌ Rad etilgan"
+    },
+
+    "buttons": {
+      "approve": "✅ Tasdiqlash",
+      "reject": "❌ Rad etish"
+    },
+    "details": "🏟 <b>STADION MA'LUMOTLARI</b>\n\n━━━━━━━━━━━━━━━\n\n🆔 <b>ID:</b> {id}\n🏟 <b>Nomi:</b> {name}\n🏷 <b>Turi:</b> {type}\n\n📍 <b>Manzil:</b>\n{location}\n\n👤 <b>Owner:</b> {owner}\n📞 <b>Telefon:</b> {phone}\n\n💰 <b>Narxi:</b> {price} so'm\n📌 <b>Status:</b> {status}\n\n━━━━━━━━━━━━━━━\n\n🕒 <b>Haftalik jadval</b>\n\n{weekDays}\n\n🚫 <b>Dam olish kunlari</b>\n\n{offDays}\n\n⭐ <b>Maxsus ish kunlari</b>\n\n{specialDays}\n\n━━━━━━━━━━━━━━━\n\n📅 <b>Yaratilgan:</b> {createdAt}",
+
+    "approve_confirm": "✅ <b>Stadionni tasdiqlash</b>\n\nHaqiqatan ham ushbu stadionni tasdiqlamoqchimisiz?\n\nTasdiqlangandan so'ng stadion tizimda faol bo'ladi va foydalanuvchilar uni ko'rish hamda bron qilishlari mumkin.",
+    "button": {
+      "approve": "✅ Ha, tasdiqlash"
+    },
+
+    "reject_confirm": "❌ <b>Stadionni rad etish</b>\n\nHaqiqatan ham ushbu stadionni rad etmoqchimisiz?\n\nRad etilgandan so'ng stadion foydalanuvchilarga ko'rinmaydi va bron qilish uchun mavjud bo'lmaydi.",
+    "Button": {
+      "reject": "❌ Ha, rad etish"
+    },
+
+    "approved_success": "✅ Stadion muvaffaqiyatli tasdiqlandi.\n\nEndi u foydalanuvchilarga ko'rinadi va bron qilish uchun mavjud.",
+    "rejected_success": "❌ Stadion rad etildi.\n\nU foydalanuvchilarga ko'rinmaydi va bron qilish uchun mavjud bo'lmaydi."
+  },
+
+  "active_empty": "🟢 Hozircha faol ownerlar mavjud emas.\n\n📋 Faol holatdagi ownerlar ushbu bo'limda ko'rsatiladi.",
+
+  "active_list": "🟢 <b>Faol ownerlar</b>\n\nQuyidagi ownerlar tizimdan faol foydalanmoqda.\nKo'rish uchun ownerni tanlang 👇",
+
+  "Previous": "⬅️ Oldingi",
+  "Next": "Keyingi ➡️",
+  "Select": "Sahifani tanlang",
+
+  "blocked_empty": "🔴 Hozircha bloklangan ownerlar mavjud emas.\n\n📋 Bloklangan ownerlar ushbu bo'limda ko'rsatiladi.",
+  "blocked_list": "🔴 <b>Bloklangan ownerlar</b>\n\nQuyidagi ownerlarning tizimdan foydalanishi vaqtincha cheklangan.\nKo'rish uchun ownerni tanlang 👇",
+
+  "details": "👤 <b>OWNER MA'LUMOTLARI</b>\n\n━━━━━━━━━━━━━━━\n\n🆔 <b>ID:</b> {id}\n\n👤 <b>F.I.O:</b> {fullName}\n\n📞 <b>Telefon:</b> {phone}\n\n📧 <b>Email:</b> {email}\n\n🏟 <b>Stadionlar soni:</b> {stadiumCount}\n\n📅 <b>Bronlar soni:</b> {bookingCount}\n\n⭐ <b>Premium:</b> {premium}\n\n🟢 <b>Status:</b> {status}",
+
+  "email_empty": "Kiritilmagan",
+
+  "Premium": {
+    "active": "Faol ✅",
+    "inactive": "Mavjud emas ❌"
+  },
+
+  "status": {
+    "active": "Faol",
+    "blocked": "Bloklangan"
+  },
+
+  "buttons": {
+    "stadiums": "🏟 Stadionlari",
+    "premium": "⭐ Premium boshqarish",
+    "block": "🚫 Bloklash",
+    "activate": "✅ Faollashtirish"
+  },
+
+  "confirm": {
+    "block": "🚫 <b>Ownerni bloklash</b>\n\nHaqiqatan ham <b>{fullName}</b> foydalanuvchisini bloklamoqchimisiz?\n\nBloklangandan so'ng owner tizimga kira olmaydi va stadionlarini boshqara olmaydi.",
+    "activate": "✅ <b>Ownerni faollashtirish</b>\n\nHaqiqatan ham <b>{fullName}</b> foydalanuvchisini faollashtirmoqchimisiz?\n\nFaollashtirilgandan so'ng owner tizimdan yana to'liq foydalanishi mumkin.",
+
+    "buttons": {
+      "confirm_block": "🚫 Ha, bloklash",
+      "confirm_activate": "✅ Ha, faollashtirish"
+    }
+  },
+
+  "status_updated": {
+    "active": "✅ {fullName} muvaffaqiyatli faollashtirildi.",
+    "blocked": "🚫 {fullName} muvaffaqiyatli bloklandi."
+  },
+
+  "premiums": {
+    "details_active": "⭐ <b>Premium boshqarish</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📌 <b>Holati:</b> 🟢 Faol\n\n📦 <b>Asosiy tarif:</b> {plan}\n\n📅 <b>Faollashtirilgan:</b> {startDate}\n\n⏳ <b>Amal qilish muddati:</b> {endDate}\n\n_____________________________________________\n\n{statistics}\n____________________________________________\n\nQuyidagi amallardan birini tanlang 👇",
+
+    "details_inactive": "⭐ <b>Premium boshqarish</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📌 <b>Holati:</b> 🔴 Premium mavjud emas\n\n━━━━━━━━━━━━━━━\n\nQuyidagi amallardan birini tanlang 👇",
+
+    "statistics": {
+      "purchase": "<b>💳 Sotib olingan:</b> {days} kun",
+      "gift": "<b>🎁 Sovg'a:</b> +{days} {day}",
+      "compensation": "<b>🤝 Kompensatsiya:</b> +{days} kun",
+      "trial": "<b>🎉 Sinov:</b> +{days} kun"
+    },
+
+    "day": "kun",
+
+    "buttons": {
+      "gift": "🎁 Premium sovg'a qilish",
+      "history": "📜 Premium tarixi"
+    }
+  },
+
+  "premium_history": {
+    "currency": "so'm",
+    "free": "Bepul",
+    "history": {
+      "empty": "📜 Premium tarixi mavjud emas.\n\nOwner uchun hali Premium tarixi yaratilmagan.",
+      "title": "📜 <b>Premium tarixi</b>\n\n{history}",
+      "item": "<b>{index}.</b>\n\n📦 <b>Tarif:</b> {plan}\n\n🎯 <b>Sababi:</b> {reason}\n\n📅 <b>Boshlangan:</b> {startDate}\n\n⏳ <b>Tugagan:</b> {endDate}\n\n💰 <b>Summa:</b> {amount}\n\n💳 <b>To'lov:</b> {provider}"
+    },
+    "provider": {
+      "admin": "Admin tomonidan berilgan",
+      "unknown": "Noma'lum"
+    }
+  },
+  "gift": {
+    "title": "🎁 <b>Premium sovg'a qilish</b>\n\nPremium berish sababini quyidagi variantlardan birini tanlang 👇",
+    "duration": {
+      "title": "🎁 Premium muddatini tanlang",
+      "week_1": "⭐ 1 hafta",
+      "month_1": "⭐ 1 oy",
+      "month_3": "⭐ 3 oy",
+      "month_6": "⭐ 6 oy",
+      "year_1": "⭐ 12 oy"
+    }
+  },
+  "confirm_gift": {
+    "text": "🎁 <b>Premium sovg'a qilish</b>\n\n━━━━━━━━━━━━━━━\n\n👤 <b>Owner:</b> {owner}\n\n📦 <b>Premium tarifi:</b> {plan}\n\n🎉 Ushbu Premium <b>{owner}</b> hisobiga sovg'a sifatida beriladi.\n\n{premiumInfo}\n\n━━━━━━━━━━━━━━━\n\n❓ <b>Amalni tasdiqlaysizmi?</b>",
+    "has_premium": "⚠️ <b>Diqqat:</b> Ownerda faol Premium mavjud.\nPremium muddati avtomatik ravishda uzaytiriladi.",
+    "no_premium": "ℹ️ Premium darhol faollashtiriladi.",
+    "confirm": "✅ Ha, sovg'a qilish",
+    "cancel": "❌ Bekor qilish"
+  },
+  "gift_success": "🎉 Premium muvaffaqiyatli sovg'a qilindi!\n\n👤 Owner: {owner}\n📦 Tarif: {plan}",
+
+  "notification": {
+    "premium_gift": {
+      "title": "🎁 Premium sovg'a qilindi",
+      "message": "Tabriklaymiz!\n\nAdministrator sizga {plan} muddatga Premium sovg'a qildi.\n\n✨ Premium funksiyalar endi siz uchun faol.\n\nRahmat!"
+    }
+  },
+
+  "channel": {
+    "join_required": "📢 Botdan foydalanishni davom ettirish uchun quyidagi kanallarga a'zo bo'ling.",
+    "check": "✅ Tekshirish",
+    "default_name": "📢 Kanal {number}"
+  }
 }

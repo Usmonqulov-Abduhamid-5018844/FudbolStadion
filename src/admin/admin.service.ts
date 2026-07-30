@@ -516,11 +516,11 @@ export class AdminService {
                       )}: ${s.start_time} - ${s.end_time}`,
                   )
                   .join('\n')
-              : "Yo'q";
+              : this.i18n.translate('admin.stadium_list.no_data', { lang });
 
             const offDays = offDaySchedules.length
               ? offDaySchedules.map((d) => formatDate(d.date, lang)).join('\n')
-              : "Yo'q";
+              : this.i18n.translate('admin.stadium_list.no_data', { lang });
 
             const specialDays = specialSchedules.length
               ? specialSchedules
@@ -529,68 +529,59 @@ export class AdminService {
                       `${formatDate(s.date, lang)}, ${s.start_time} - ${s.end_time}`,
                   )
                   .join('\n')
-              : "Yo'q";
+              : this.i18n.translate('admin.stadium_list.no_data', { lang });
 
             const stadionType = stadion.parent_id
-              ? 'Katta stadionning mini bo‘lagi'
+              ? this.i18n.translate('admin.stadium_list.types.child', { lang })
               : stadion.mini
-                ? 'Mini stadion'
-                : 'Katta stadion';
-
-            const text = `
-🏟 <b>STADION MA'LUMOTLARI</b>
-
-━━━━━━━━━━━━━━━
-
-🆔 <b>ID:</b> ${stadion.id}
-🏟 <b>Nomi:</b> ${stadion.name}
-🏷 <b>Turi:</b> ${stadionType}
-
-📍 <b>Manzil:</b>
-${getLocation(
-  stadion.latitude,
-  stadion.longitude,
-  stadion.region.name,
-  stadion.region_items.name,
-)}
-
-👤 <b>Owner:</b> ${stadion.owner.full_name}
-📞 <b>Telefon:</b> ${stadion.owner.phone}
-
-💰 <b>Narxi:</b> ${stadion.price?.toLocaleString()} so'm
-📌 <b>Status:</b> ${stadion.admin_status}
-
-━━━━━━━━━━━━━━━
-
-🕒 <b>Haftalik jadval</b>
-
-${weekDays}
-
-🚫 <b>Dam olish kunlari</b>
-
-${offDays}
-
-⭐ <b>Maxsus ish kunlari</b>
-
-${specialDays}
-
-━━━━━━━━━━━━━━━
-
-📅 <b>Yaratilgan:</b>
-${formatDate(stadion.createdAt, lang)}
-`.trim();
+                ? this.i18n.translate('admin.stadium_list.types.mini', { lang })
+                : this.i18n.translate('admin.stadium_list.types.main', {
+                    lang,
+                  });
+            const statusText = this.i18n.translate(
+              `admin.stadium_list.statuses.${stadion.admin_status.toLowerCase()}`,
+              { lang },
+            );
+            const text = this.i18n.translate('admin.stadium_list.details', {
+              lang,
+              args: {
+                id: stadion.id,
+                name: stadion.name,
+                type: stadionType,
+                location: getLocation(
+                  stadion.latitude,
+                  stadion.longitude,
+                  stadion.region.name,
+                  stadion.region_items.name,
+                ),
+                owner: stadion.owner.full_name,
+                phone: stadion.owner.phone,
+                price: stadion.price?.toLocaleString(),
+                status: statusText,
+                weekDays,
+                offDays,
+                specialDays,
+                createdAt: formatDate(stadion.createdAt, lang),
+              },
+            });
 
             const actionButtons: InlineKeyboardButton[][] = [];
 
             if (stadion.admin_status === 'PENDING') {
               actionButtons.push([
                 {
-                  text: '✅ Tasdiqlash',
+                  text: this.i18n.translate(
+                    'admin.stadium_list.buttons.approve',
+                    { lang },
+                  ),
                   callback_data: `stadiumChecking_approved_${stadion.id}_${currentPage}`,
                 },
 
                 {
-                  text: '❌ Rad etish',
+                  text: this.i18n.translate(
+                    'admin.stadium_list.buttons.reject',
+                    { lang },
+                  ),
                   callback_data: `stadiumChecking_rejected_${stadion.id}_${currentPage}`,
                 },
               ]);
@@ -599,7 +590,10 @@ ${formatDate(stadion.createdAt, lang)}
             if (stadion.admin_status === 'APPROVED') {
               actionButtons.push([
                 {
-                  text: '❌ Rad etish',
+                  text: this.i18n.translate(
+                    'admin.stadium_list.buttons.reject',
+                    { lang },
+                  ),
                   callback_data: `stadiumChecking_rejected_${stadion.id}_${currentPage}`,
                 },
               ]);
@@ -608,7 +602,10 @@ ${formatDate(stadion.createdAt, lang)}
             if (stadion.admin_status === 'REJECTED') {
               actionButtons.push([
                 {
-                  text: '✅ Tasdiqlash',
+                  text: this.i18n.translate(
+                    'admin.stadium_list.buttons.approve',
+                    { lang },
+                  ),
                   callback_data: `stadiumChecking_approved_${stadion.id}_${currentPage}`,
                 },
               ]);
@@ -618,7 +615,7 @@ ${formatDate(stadion.createdAt, lang)}
                 ...actionButtons,
                 [
                   {
-                    text: '🔙 Orqaga',
+                    text: this.i18n.translate('schedule.back', { lang }),
                     callback_data: `stadium_${stadion.admin_status.toLowerCase()}_${stadion.id}_${currentPage}`,
                   },
                 ],
@@ -641,6 +638,7 @@ ${formatDate(stadion.createdAt, lang)}
     page: number,
   ) {
     try {
+      const lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
       });
@@ -651,16 +649,21 @@ ${formatDate(stadion.createdAt, lang)}
           {
             await this.utils.safeEditOrReply(
               ctx,
-              'siz rosdanham tasqiqlamaochimisiz ',
+              this.i18n.translate('admin.stadium_list.approve_confirm', {
+                lang,
+              }),
               {
                 inline_keyboard: [
                   [
                     {
-                      text: '✅ Ha, tasdiqlash',
-                      callback_data: `stadiumConfirm_approved_${stadion.id}_${page}`,
+                      text: this.i18n.translate(
+                        'admin.stadium_list.button.approve',
+                        { lang },
+                      ),
+                      callback_data: `stadiumConfirm_approved_${stadion.id}`,
                     },
                     {
-                      text: 'Orqaga',
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: `stadium_view_${stadion.id}_${page}`,
                     },
                   ],
@@ -673,16 +676,21 @@ ${formatDate(stadion.createdAt, lang)}
           {
             await this.utils.safeEditOrReply(
               ctx,
-              'siz rosdanham bekor qilmaqchimisiz ',
+              this.i18n.translate('admin.stadium_list.reject_confirm', {
+                lang,
+              }),
               {
                 inline_keyboard: [
                   [
                     {
-                      text: '❌ Ha, rad etish',
-                      callback_data: `stadiumConfirm_rejected_${stadion.id}_${page}`,
+                      text: this.i18n.translate(
+                        'admin.stadium_list.Button.reject',
+                        { lang },
+                      ),
+                      callback_data: `stadiumConfirm_rejected_${stadion.id}`,
                     },
                     {
-                      text: 'Orqaga',
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: `stadium_view_${stadion.id}_${page}`,
                     },
                   ],
@@ -704,26 +712,28 @@ ${formatDate(stadion.createdAt, lang)}
         .catch();
     }
   }
-  async stadiumConfirm(
-    ctx: MyContext,
-    status: string,
-    stadionId: number,
-    page: number,
-  ) {
+  async stadiumConfirm(ctx: MyContext, status: string, stadionId: number) {
     try {
+      const lang = await this.utils.langs(ctx);
       if (status === 'approved') {
         await this.prisma.stadion.update({
           where: { id: stadionId },
           data: { admin_status: 'APPROVED' },
         });
-        await ctx.answerCbQuery('Stadion tasdiqlandi');
+        await ctx.answerCbQuery(
+          this.i18n.translate('admin.stadium_list.approved_success', { lang }),
+          { show_alert: true },
+        );
         return this.stadium_status(ctx, status, stadionId, '1');
       } else {
         await this.prisma.stadion.update({
           where: { id: stadionId },
           data: { admin_status: 'REJECTED' },
         });
-        await ctx.answerCbQuery('Stadion rad etildi');
+        await ctx.answerCbQuery(
+          this.i18n.translate('admin.stadium_list.rejected_success', { lang }),
+          { show_alert: true },
+        );
         return this.stadium_status(ctx, status, stadionId, '1');
       }
     } catch (error) {
@@ -763,7 +773,10 @@ ${formatDate(stadion.createdAt, lang)}
           ]);
 
           if (!owners.length) {
-            await ctx.answerCbQuery("Hozirda aktiv ownerlar yo'q");
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.active_empty', { lang }),
+              { show_alert: true },
+            );
             return;
           }
 
@@ -784,7 +797,7 @@ ${formatDate(stadion.createdAt, lang)}
 
           if (currentPage > 1) {
             pagination.push({
-              text: '⬅️',
+              text: this.i18n.translate('admin.Previous', { lang }),
               callback_data: `AdminPaner_Owner_active_${currentPage - 1}`,
             });
           }
@@ -796,7 +809,7 @@ ${formatDate(stadion.createdAt, lang)}
 
           if (currentPage < totalPages) {
             pagination.push({
-              text: '➡️',
+              text: this.i18n.translate('admin.Next', { lang }),
               callback_data: `AdminPaner_Owner_active_${currentPage + 1}`,
             });
           }
@@ -805,14 +818,18 @@ ${formatDate(stadion.createdAt, lang)}
 
           buttons.push([
             {
-              text: '⬅️ Orqaga',
+              text: this.i18n.translate('schedule.back', { lang }),
               callback_data: 'admins_owners',
             },
           ]);
 
-          await this.utils.safeEditOrReply(ctx, "👥 Aktiv ownerlar ro'yxati:", {
-            inline_keyboard: buttons,
-          });
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.active_list', { lang }),
+            {
+              inline_keyboard: buttons,
+            },
+          );
           break;
         }
 
@@ -836,7 +853,12 @@ ${formatDate(stadion.createdAt, lang)}
           ]);
 
           if (!owners.length) {
-            await ctx.answerCbQuery("Hozirda Bloklangan ownerlar yo'q");
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.blocked_empty', { lang }),
+              {
+                show_alert: true,
+              },
+            );
             return;
           }
 
@@ -857,7 +879,7 @@ ${formatDate(stadion.createdAt, lang)}
 
           if (currentPage > 1) {
             pagination.push({
-              text: '⬅️',
+              text: this.i18n.translate('admin.Previous', { lang }),
               callback_data: `AdminPaner_Owner_active_${currentPage - 1}`,
             });
           }
@@ -869,7 +891,7 @@ ${formatDate(stadion.createdAt, lang)}
 
           if (currentPage < totalPages) {
             pagination.push({
-              text: '➡️',
+              text: this.i18n.translate('admin.Next', { lang }),
               callback_data: `AdminPaner_Owner_active_${currentPage + 1}`,
             });
           }
@@ -878,14 +900,14 @@ ${formatDate(stadion.createdAt, lang)}
 
           buttons.push([
             {
-              text: '⬅️ Orqaga',
+              text: this.i18n.translate('schedule.back', { lang }),
               callback_data: 'admins_owners',
             },
           ]);
 
           await this.utils.safeEditOrReply(
             ctx,
-            "👥 Bloklangan ownerlar ro'yxati:",
+            this.i18n.translate('admin.blocked_list', { lang }),
             {
               inline_keyboard: buttons,
             },
@@ -929,54 +951,60 @@ ${formatDate(stadion.createdAt, lang)}
           const stadiumCount = owner._count.stadions ?? 0;
           const hasActivePremium = owner.subscriptions.length > 0;
 
-          const text = `
-👤 <b>Owner ma'lumotlari</b>
-
-━━━━━━━━━━━━━━━
-
-🆔 <b>ID:</b> ${owner.id}
-
-👤 <b>F.I.O:</b> ${owner.full_name}
-
-📞 <b>Telefon:</b> ${owner.phone}
-
-📧 <b>Email:</b> ${owner.email ?? 'Kiritilmagan'}
-
-🏟 <b>Stadionlar soni:</b> ${stadiumCount}
-
-📅 <b>Bronlar soni:</b> ${bookingCount}
-
-⭐ <b>Premium:</b> ${hasActivePremium ? 'Faol ✅' : 'Mavjud emas ❌'}
-
-🟢 <b>Status:</b> ${owner.status === 'ACTIVE' ? 'Faol' : 'Bloklangan'}
-`.trim();
+          const text = this.i18n.translate('admin.details', {
+            lang,
+            args: {
+              id: owner.id,
+              fullName: owner.full_name,
+              phone: owner.phone,
+              email:
+                owner.email ??
+                this.i18n.translate('admin.email_empty', { lang }),
+              stadiumCount,
+              bookingCount,
+              premium: this.i18n.translate(
+                hasActivePremium
+                  ? 'admin.Premium.active'
+                  : 'admin.Premium.inactive',
+                { lang },
+              ),
+              status: this.i18n.translate(
+                owner.status === 'ACTIVE'
+                  ? 'admin.status.active'
+                  : 'admin.status.blocked',
+                { lang },
+              ),
+            },
+          });
 
           await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
               [
                 {
-                  text: '🏟 Stadionlari',
+                  text: this.i18n.translate('admin.buttons.stadiums', { lang }),
                   callback_data: `AdminOwner_stadiums_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
                 {
-                  text: '⭐ Premium boshqarish',
+                  text: this.i18n.translate('admin.buttons.premium', { lang }),
                   callback_data: `AdminOwner_premium_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
                 {
-                  text:
+                  text: this.i18n.translate(
                     owner.status === 'ACTIVE'
-                      ? '🚫 Bloklash'
-                      : '✅ Faollashtirish',
+                      ? 'admin.buttons.block'
+                      : 'admin.buttons.activate',
+                    { lang },
+                  ),
                   callback_data: `AdminPaner_Owner_status_${owner.id}_${currentPage}`,
                 },
               ],
               [
                 {
-                  text: '⬅️ Orqaga',
+                  text: this.i18n.translate('schedule.back', { lang }),
                   callback_data: `AdminPaner_Owner_${owner.status.toLowerCase()}_${owner.id}_${currentPage}`,
                 },
               ],
@@ -1002,21 +1030,31 @@ ${formatDate(stadion.createdAt, lang)}
 
           const isActive = owner.status === 'ACTIVE';
 
-          const text = isActive
-            ? `🚫 Siz rostdan ham <b>${owner.full_name}</b> ni bloklamoqchimisiz?`
-            : `✅ Siz rostdan ham <b>${owner.full_name}</b> ni faollashtirmoqchimisiz?`;
-
+          const text = this.i18n.translate(
+            isActive ? 'admin.confirm.block' : 'admin.confirm.activate',
+            {
+              lang,
+              args: {
+                fullName: owner.full_name,
+              },
+            },
+          );
           await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
               [
                 {
-                  text: isActive ? '🚫 Ha, bloklash' : '✅ Ha, faollashtirish',
+                  text: this.i18n.translate(
+                    isActive
+                      ? 'admin.confirm.buttons.confirm_block'
+                      : 'admin.confirm.buttons.confirm_activate',
+                    { lang },
+                  ),
                   callback_data: `AdminPaner_Owner_confirm_${owner.id}_${currentPage}`,
                 },
               ],
               [
                 {
-                  text: '⬅️ Orqaga',
+                  text: this.i18n.translate('schedule.back', { lang }),
                   callback_data: `AdminPaner_Owner_detels_${owner.id}_${currentPage}`,
                 },
               ],
@@ -1048,9 +1086,17 @@ ${formatDate(stadion.createdAt, lang)}
           });
 
           await ctx.answerCbQuery(
-            updatedOwner.status === 'ACTIVE'
-              ? `✅ ${owner.full_name} faollashtirildi`
-              : `🚫 ${owner.full_name} bloklandi`,
+            this.i18n.translate(
+              updatedOwner.status === 'ACTIVE'
+                ? 'admin.status_updated.active'
+                : 'admin.status_updated.blocked',
+              {
+                lang,
+                args: {
+                  fullName: owner.full_name,
+                },
+              },
+            ),
           );
           return this.AdminPaner_owner(
             ctx,
@@ -1074,7 +1120,6 @@ ${formatDate(stadion.createdAt, lang)}
     ownerId: number,
     currentPage: number,
     historyPage: number,
-    lang = 'uz',
   ) {
     try {
       const limit = 5;
@@ -1115,86 +1160,105 @@ ${formatDate(stadion.createdAt, lang)}
             : [];
 
           const purchaseDays =
-            statistics.find((item) => item.reason === 'PURCHASE')?._sum
-              .duration ?? 0;
+            statistics.find((i) => i.reason === 'PURCHASE')?._sum.duration ?? 0;
 
           const giftDays =
-            statistics.find((item) => item.reason === 'GIFT')?._sum.duration ??
-            0;
+            statistics.find((i) => i.reason === 'GIFT')?._sum.duration ?? 0;
 
           const compensationDays =
-            statistics.find((item) => item.reason === 'COMPENSATION')?._sum
+            statistics.find((i) => i.reason === 'COMPENSATION')?._sum
               .duration ?? 0;
 
           const trialDays =
-            statistics.find((item) => item.reason === 'TRIAL')?._sum.duration ??
-            0;
-          const T = PREMIUM_STATISTICS;
+            statistics.find((i) => i.reason === 'TRIAL')?._sum.duration ?? 0;
+
+          const statisticsText: string[] = [];
+
+          if (purchaseDays > 0) {
+            statisticsText.push(
+              this.i18n.translate('admin.premiums.statistics.purchase', {
+                lang,
+                args: {
+                  days: purchaseDays,
+                },
+              }),
+            );
+          }
+
+          if (giftDays > 0) {
+            statisticsText.push(
+              this.i18n.translate('admin.premiums.statistics.gift', {
+                lang,
+                args: {
+                  days: giftDays,
+                },
+              }),
+            );
+          }
+
+          if (compensationDays > 0) {
+            statisticsText.push(
+              this.i18n.translate('admin.premiums.statistics.compensation', {
+                lang,
+                args: {
+                  days: compensationDays,
+                },
+              }),
+            );
+          }
+
+          if (trialDays > 0) {
+            statisticsText.push(
+              this.i18n.translate('admin.premiums.statistics.trial', {
+                lang,
+                args: {
+                  days: trialDays,
+                },
+              }),
+            );
+          }
 
           const text = premium
-            ? `
-⭐ <b>Premium boshqarish</b>
-
-━━━━━━━━━━━━━━━
-
-👤 <b>Owner:</b> ${owner.full_name}
-
-📌 <b>Holati:</b> 🟢 Faol
-
-📦 <b>Asosiy tarif:</b> ${PLAN_LABELS[lang][premium.plan]}
-
-📅 <b>Faollashtirilgan:</b> ${formatDate(premium.startDate, lang)}
-
-⏳ <b>Amal qilish muddati:</b> ${formatDate(premium.endDate, lang)}
-_____________________________________________\n
-${
-  purchaseDays > 0
-    ? `<b>${PREMIUM_STATISTICS.PURCHASE[lang]}:</b> ${purchaseDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n`
-    : ''
-}${giftDays > 0 ? `<b>${PREMIUM_STATISTICS.GIFT[lang]}:</b> +${giftDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n` : ''}${
-                compensationDays > 0
-                  ? `<b>${PREMIUM_STATISTICS.COMPENSATION[lang]}:</b> +${compensationDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n\n`
-                  : ''
-              }${
-                trialDays > 0
-                  ? `<b>${PREMIUM_STATISTICS.TRIAL[lang]}:</b> +${trialDays} ${lang === 'uz' ? 'kun' : lang === 'ru' ? 'дней' : 'days'}\n`
-                  : ''
-              }
-____________________________________________
-
-Quyidagi amallardan birini tanlang 👇
-`.trim()
-            : `
-⭐ <b>Premium boshqarish</b>
-
-━━━━━━━━━━━━━━━
-
-👤 <b>Owner:</b> ${owner.full_name}
-
-📌 <b>Holati:</b> 🔴 Premium mavjud emas
-
-━━━━━━━━━━━━━━━
-
-Quyidagi amallardan birini tanlang 👇
-`.trim();
+            ? this.i18n.translate('admin.premiums.details_active', {
+                lang,
+                args: {
+                  owner: owner.full_name,
+                  plan: PLAN_LABELS[lang][premium.plan],
+                  startDate: formatDate(premium.startDate, lang),
+                  endDate: formatDate(premium.endDate, lang),
+                  statistics: statisticsText.join('\n\n'),
+                },
+              })
+            : this.i18n.translate('admin.premiums.details_inactive', {
+                lang,
+                args: {
+                  owner: owner.full_name,
+                },
+              });
 
           await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
               [
                 {
-                  text: "🎁 Premium sovg'a qilish",
+                  text: this.i18n.translate('admin.premiums.buttons.gift', {
+                    lang,
+                  }),
                   callback_data: `AdminOwner_gift_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
                 {
-                  text: '📜 Premium tarixi',
+                  text: this.i18n.translate('admin.premiums.buttons.history', {
+                    lang,
+                  }),
                   callback_data: `AdminOwner_history_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
                 {
-                  text: '⬅️ Orqaga',
+                  text: this.i18n.translate('schedule.back', {
+                    lang,
+                  }),
                   callback_data: `AdminPaner_Owner_detels_${owner.id}_${currentPage}`,
                 },
               ],
@@ -1237,9 +1301,14 @@ Quyidagi amallardan birini tanlang 👇
           ]);
 
           if (!history.length) {
-            await ctx.answerCbQuery('Premium tarixi mavjud emas', {
-              show_alert: true,
-            });
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.premium_history.history.empty', {
+                lang,
+              }),
+              {
+                show_alert: true,
+              },
+            );
             return;
           }
 
@@ -1249,29 +1318,34 @@ Quyidagi amallardan birini tanlang 👇
             .map((item, index) => {
               const transaction = item.premiumTransactions[0];
 
-              return `
-<b>${(historyPage - 1) * limit + index + 1}.</b>
-
-📦 <b>Tarif:</b> ${PLAN_LABELS[lang][item.plan]}
-
-🎯 <b>Sababi:</b> ${getPremiumReasonText(item.reason, this.i18n, lang)}
-
-📅 <b>Boshlangan:</b> ${formatDate(item.startDate, lang)}
-
-⏳ <b>Tugagan:</b> ${formatDate(item.endDate, lang)}
-
-💰 <b>Summa:</b> ${
-                transaction
-                  ? `${transaction.amount.toLocaleString('uz-UZ')} so'm`
-                  : 'Bepul'
-              }
-
-💳 <b>To'lov:</b> ${
-                transaction.provider === 'ADMIN_GIFT'
-                  ? 'Admin tomonidan berilgan'
-                  : transaction.provider
-              }
-`.trim();
+              return this.i18n.translate('admin.premium_history.history.item', {
+                lang,
+                args: {
+                  index: (historyPage - 1) * limit + index + 1,
+                  plan: PLAN_LABELS[lang][item.plan],
+                  reason: getPremiumReasonText(item.reason, this.i18n, lang),
+                  startDate: formatDate(item.startDate, lang),
+                  endDate: formatDate(item.endDate, lang),
+                  amount: transaction
+                    ? `${transaction.amount.toLocaleString('uz-UZ')} ${this.i18n.translate('admin.premium_history.currency', { lang })}`
+                    : this.i18n.translate('admin.premium_history.free', {
+                        lang,
+                      }),
+                  provider:
+                    transaction?.provider === 'ADMIN_GIFT'
+                      ? this.i18n.translate(
+                          'admin.premium_history.provider.admin',
+                          { lang },
+                        )
+                      : (transaction?.provider ??
+                        this.i18n.translate(
+                          'admin.premium_history.provider.unknown',
+                          {
+                            lang,
+                          },
+                        )),
+                },
+              });
             })
             .join('\n\n━━━━━━━━━━━━━━━\n\n');
 
@@ -1279,7 +1353,7 @@ Quyidagi amallardan birini tanlang 👇
 
           if (historyPage > 1) {
             pagination.push({
-              text: '⬅️',
+              text: this.i18n.translate('admin.Previous', { lang }),
               callback_data: `AdminOwner_history_${ownerId}_${currentPage}_${historyPage - 1}`,
             });
           }
@@ -1291,20 +1365,25 @@ Quyidagi amallardan birini tanlang 👇
 
           if (historyPage < totalPages) {
             pagination.push({
-              text: '➡️',
+              text: this.i18n.translate('admin.Next', { lang }),
               callback_data: `AdminOwner_history_${ownerId}_${currentPage}_${historyPage + 1}`,
             });
           }
 
           await this.utils.safeEditOrReply(
             ctx,
-            `📜 <b>Premium tarixi</b>\n\n${historyText}`,
+            this.i18n.translate('admin.premium_history.history.title', {
+              lang,
+              args: {
+                history: historyText,
+              },
+            }),
             {
               inline_keyboard: [
                 ...(totalPages > 1 ? [pagination] : []),
                 [
                   {
-                    text: '⬅️ Orqaga',
+                    text: this.i18n.translate('schedule.back', { lang }),
                     callback_data: `AdminOwner_premium_${ownerId}_${currentPage}_1`,
                   },
                 ],
@@ -1337,7 +1416,7 @@ Quyidagi amallardan birini tanlang 👇
 
           await this.utils.safeEditOrReply(
             ctx,
-            `🎁 <b>Premium sovg'a qilish</b>\n\nUshbu Premiumni berish sababi quyidagilardan biri bo'lishi kerak:`,
+            this.i18n.translate('admin.gift.title', { lang }),
             {
               inline_keyboard,
             },
@@ -1352,7 +1431,6 @@ Quyidagi amallardan birini tanlang 👇
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log(error);
     }
   }
 
@@ -1363,42 +1441,57 @@ Quyidagi amallardan birini tanlang 👇
     currentPage: number,
   ) {
     try {
-      await this.utils.safeEditOrReply(ctx, `🎁 Premium muddatini tanlang`, {
-        inline_keyboard: [
-          [
-            {
-              text: '⭐ 1 hafta',
-              callback_data: `ownerPremiumGift_7_${ownerId}_${currentPage}_${reason}`,
-            },
-            {
-              text: '⭐ 1 oy',
-              callback_data: `ownerPremiumGift_30_${ownerId}_${currentPage}_${reason}`,
-            },
+      const lang = await this.utils.langs(ctx);
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('admin.gift.duration.title', { lang }),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('admin.gift.duration.week_1', {
+                  lang,
+                }),
+                callback_data: `ownerPremiumGift_7_${ownerId}_${currentPage}_${reason}`,
+              },
+              {
+                text: this.i18n.translate('admin.gift.duration.month_1', {
+                  lang,
+                }),
+                callback_data: `ownerPremiumGift_30_${ownerId}_${currentPage}_${reason}`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('admin.gift.duration.month_3', {
+                  lang,
+                }),
+                callback_data: `ownerPremiumGift_90_${ownerId}_${currentPage}_${reason}`,
+              },
+              {
+                text: this.i18n.translate('admin.gift.duration.month_6', {
+                  lang,
+                }),
+                callback_data: `ownerPremiumGift_180_${ownerId}_${currentPage}_${reason}`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('admin.gift.duration.year_1', {
+                  lang,
+                }),
+                callback_data: `ownerPremiumGift_365_${ownerId}_${currentPage}_${reason}`,
+              },
+            ],
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: `AdminOwner_gift_${ownerId}_${currentPage}_1`,
+              },
+            ],
           ],
-          [
-            {
-              text: '⭐ 3 oy',
-              callback_data: `ownerPremiumGift_90_${ownerId}_${currentPage}_${reason}`,
-            },
-            {
-              text: '⭐ 6 oy',
-              callback_data: `ownerPremiumGift_180_${ownerId}_${currentPage}_${reason}`,
-            },
-          ],
-          [
-            {
-              text: '⭐ 12 oy',
-              callback_data: `ownerPremiumGift_365_${ownerId}_${currentPage}_${reason}`,
-            },
-          ],
-          [
-            {
-              text: '⬅️ Orqaga',
-              callback_data: `AdminOwner_gift_${ownerId}_${currentPage}_1`,
-            },
-          ],
-        ],
-      });
+        },
+      );
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
@@ -1448,39 +1541,32 @@ Quyidagi amallardan birini tanlang 👇
         },
       });
       const label = PLAN_LABELS[lang][plan];
-      const text = `
-🎁 <b>Premium sovg'a qilish</b>
-
-━━━━━━━━━━━━━━━
-
-👤 <b>Owner:</b> ${owner.full_name}
-
-📦 <b>Premium tarifi:</b> ${label}
-
-🎉 Ushbu Premium <b>${owner.full_name}</b> hisobiga sovg'a sifatida beriladi.
-
-${
-  premium
-    ? '⚠️ <b>Diqqat:</b> Ownerda faol Premium mavjud.\nPremium muddati avtomatik ravishda uzaytiriladi.'
-    : 'ℹ️ Premium darhol faollashtiriladi.'
-}
-
-━━━━━━━━━━━━━━━
-
-❓ <b>Amalni tasdiqlaysizmi?</b>
-`.trim();
+      const text = this.i18n.translate('admin.confirm_gift.text', {
+        lang,
+        args: {
+          owner: owner.full_name,
+          plan: label,
+          premiumInfo: premium
+            ? this.i18n.translate('admin.confirm_gift.has_premium', { lang })
+            : this.i18n.translate('admin.confirm_gift.no_premium', { lang }),
+        },
+      });
 
       await this.utils.safeEditOrReply(ctx, text, {
         inline_keyboard: [
           [
             {
-              text: '✅ Ha, sovg‘a qilish',
+              text: this.i18n.translate('admin.confirm_gift.confirm', {
+                lang,
+              }),
               callback_data: `AdminOwnerConfirmGift_${days}_${owner.id}_${currentPage}_${reason}`,
             },
           ],
           [
             {
-              text: '❌ Bekor qilish',
+              text: this.i18n.translate('admin.confirm_gift.cancel', {
+                lang,
+              }),
               callback_data: `AdminOwner_premium_${owner.id}_${currentPage}_1`,
             },
           ],
@@ -1621,47 +1707,44 @@ ${
       });
 
       await ctx.answerCbQuery(
-        `🎉 Premium muvaffaqiyatli sovg'a qilindi!\n\n👤 Owner: ${owner.full_name}\n📦 Tarif: ${PLAN_LABELS[lang][plan]}`,
+        this.i18n.translate('admin.gift_success', {
+          lang,
+          args: {
+            owner: owner.full_name,
+            plan: PLAN_LABELS[lang][plan],
+          },
+        }),
         {
           show_alert: true,
         },
+      );
+      const translations = Object.fromEntries(
+        ['uz', 'ru', 'en'].map((lang) => [
+          lang,
+          {
+            title: this.i18n.translate(
+              'admin.notification.premium_gift.title',
+              {
+                lang,
+              },
+            ),
+            message: this.i18n.translate(
+              'admin.notification.premium_gift.message',
+              {
+                lang,
+                args: {
+                  plan: PLAN_LABELS[lang][plan],
+                },
+              },
+            ),
+          },
+        ]),
       );
       const notification = await this.prisma.notification.create({
         data: {
           ownerId,
           type: NotificationType.PREMIUM_EXPIRY,
-          translations: {
-            uz: {
-              title: "🎁 Premium sovg'a qilindi",
-              message: `Tabriklaymiz!
-
-Administrator sizga ${PLAN_LABELS.uz[plan]} muddatga Premium sovg'a qildi.
-
-✨ Premium funksiyalar endi siz uchun faol.
-
-Rahmat!`,
-            },
-            ru: {
-              title: '🎁 Вам подарили Premium',
-              message: `Поздравляем!
-
-Администратор подарил вам Premium на ${PLAN_LABELS.ru[plan]}.
-
-✨ Все Premium-возможности уже активны.
-
-Спасибо!`,
-            },
-            en: {
-              title: '🎁 Premium Gift Received',
-              message: `Congratulations!
-
-The administrator has gifted you Premium for ${PLAN_LABELS.en[plan]}.
-
-✨ All Premium features are now active.
-
-Thank you!`,
-            },
-          },
+          translations,
         },
       });
       await this.notificationService.sendNotification(

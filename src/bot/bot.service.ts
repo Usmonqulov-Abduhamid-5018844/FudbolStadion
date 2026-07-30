@@ -12,11 +12,19 @@ import { EStadion_type } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';
+import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
 
 @Injectable()
 export class BotService {
-  private readonly AdminChatid =
-    process.env.ADMIN_CHAT_ID?.split(',').map(Number) || [];
+  private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+  private readonly channels = (process.env.CHANNEL_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
@@ -27,7 +35,7 @@ export class BotService {
   async start(ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
     ctx.session = ctx.session || {};
-    ctx.reply(
+    const send = await ctx.reply(
       this.i18n.translate('common.START', { lang }),
       Markup.inlineKeyboard([
         [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
@@ -35,10 +43,63 @@ export class BotService {
         [Markup.button.callback(`🇬🇧 English`, `lang_en`)],
       ]),
     );
+    ctx.session.kalanConfirment ??= [];
+    ctx.session.kalanConfirment.push(send.message_id);
   }
 
   async checket(ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
+
+    const requiredChannels = await this.getRequiredChannels(ctx);
+
+    ctx.session.kalanConfirment ??= []
+    if (requiredChannels.length) {
+      const channels = await this.createInviteLinks(ctx, requiredChannels);
+
+      const inline_keyboard: InlineKeyboardButton[][] = [
+        ...channels.map((channel, index) => [
+          Markup.button.url(
+            channel.title ??
+              this.i18n.translate('admin.channel.default_name', {
+                lang,
+                args: { number: index + 1 },
+              }),
+            channel.inviteLink!,
+          ),
+        ]),
+        [
+          Markup.button.callback(
+            this.i18n.translate('admin.channel.check', { lang }),
+            'check_required_channels',
+          ),
+        ],
+      ];
+      if (ctx.session.kalanConfirment.length) {
+        await ctx.deleteMessages(ctx.session.kalanConfirment).catch(() => {});
+        ctx.session.kalanConfirment = [];
+      }
+
+      const send = await ctx.reply(
+        this.i18n.translate('admin.channel.join_required', { lang }),
+        { reply_markup: { inline_keyboard } },
+      );
+      ctx.session.kalanConfirment.push(send.message_id)
+      return;
+    }
+
+    if (ctx.session.linkes?.length) {
+      await Promise.allSettled(
+        ctx.session.linkes.map((link) =>
+          ctx.telegram.revokeChatInviteLink(link.channelId, link.inviteLink),
+        ),
+      );
+      ctx.session.linkes = [];
+    }
+    if (ctx.session.kalanConfirment.length) {
+      await ctx.deleteMessages(ctx.session.kalanConfirment).catch(() => {});
+      ctx.session.kalanConfirment = [];
+    }
+
     const owners = await this.prisma.owners.findUnique({
       where: { chatID: String(ctx.from?.id) },
     });
@@ -135,6 +196,65 @@ export class BotService {
         .resize()
         .oneTime(),
     );
+  }
+
+  async getRequiredChannels(ctx: MyContext): Promise<RequiredChanne[]> {
+    if (!ctx.from) return [];
+
+    const requiredChannels: RequiredChanne[] = [];
+    const userId = ctx.from.id;
+
+    for (const channelId of this.channels) {
+      try {
+        const [chat, member] = await Promise.all([
+          ctx.telegram.getChat(channelId),
+          ctx.telegram.getChatMember(channelId, userId),
+        ]);
+
+        const joined =
+          member.status === 'creator' ||
+          member.status === 'administrator' ||
+          member.status === 'member';
+
+        if (joined) continue;
+
+        requiredChannels.push({
+          id: chat.id,
+          title: 'title' in chat ? chat.title : '',
+          type: chat.type,
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    return requiredChannels;
+  }
+  async createInviteLinks(
+    ctx: MyContext,
+    channels: RequiredChanne[],
+  ): Promise<RequiredChannel[]> {
+    ctx.session.linkes = [];
+
+    const result: RequiredChannel[] = [];
+
+    for (const channel of channels) {
+      const invite = await ctx.telegram.createChatInviteLink(channel.id, {
+        expire_date: Math.floor(Date.now() / 1000) + 3600,
+      });
+
+      ctx.session.linkes.push({
+        channelId: channel.id,
+        inviteLink: invite.invite_link,
+      });
+
+      result.push({
+        ...channel,
+        inviteLink: invite.invite_link,
+      });
+    }
+
+    return result;
   }
 
   async createStadion(ctx: MyContext, type: EStadion_type) {
@@ -801,7 +921,6 @@ export class BotService {
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
 
-
       const keyMap = {
         APPROVED: 'approved',
         PENDING: 'pending',
@@ -817,7 +936,6 @@ export class BotService {
           stadion.region_items.name,
         );
       }
-
 
       const message = `
 🏟 <b>${stadion.name}</b>\n

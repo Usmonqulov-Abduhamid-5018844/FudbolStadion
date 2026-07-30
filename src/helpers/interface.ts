@@ -107,6 +107,8 @@ export const INITIAL_SESSION: ISession = {
   ownerBrons: null,
   ownerDataFilter: null,
   advertisements: [],
+  linkes: [],
+  kalanConfirment: [],
   owner_registor: {
     full_name: null,
     email: null,

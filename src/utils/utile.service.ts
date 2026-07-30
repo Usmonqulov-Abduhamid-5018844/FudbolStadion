@@ -73,7 +73,7 @@ export class UtilisService implements OnModuleInit {
         reply_markup: keyboard,
       });
     } catch (e) {
-      await ctx.reply(text, {
+      const send = await ctx.reply(text, {
         parse_mode: 'HTML',
         reply_markup: keyboard,
       });

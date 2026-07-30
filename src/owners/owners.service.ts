@@ -159,7 +159,6 @@ export class OwnersService {
               .oneTime(),
           );
         } catch (error) {
-          console.log(error);
           await this.utils.errorFunction(ctx);
         }
       }

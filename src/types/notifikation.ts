@@ -47,10 +47,10 @@ export const NotificationNames = {
   },
 
   PREMIUM_EXPIRY: {
-  uz: '⭐ Premium',
-  ru: '⭐ Premium',
-  en: '⭐ Premium',
-},
+    uz: '⭐ Premium',
+    ru: '⭐ Premium',
+    en: '⭐ Premium',
+  },
 } as const;
 
 export const NotificationLabels = {
@@ -91,7 +91,6 @@ export const NotificationLabels = {
   },
 } as const;
 
-
 export const PREMIUM_STATISTICS = {
   PURCHASE: {
     uz: '💳 Sotib olingan',
@@ -114,3 +113,15 @@ export const PREMIUM_STATISTICS = {
     en: '🎉 Trial Period',
   },
 } as const;
+
+export type RequiredChannel = {
+  id: number;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+  inviteLink: string;
+  title?: string;
+};
+export type RequiredChanne = {
+  id: number;
+  type: 'private' | 'group' | 'supergroup' | 'channel';
+  title?: string;
+};

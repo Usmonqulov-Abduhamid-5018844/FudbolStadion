@@ -19,16 +19,18 @@ export interface ISession {
   booking_step: string | null;
   ownerActiveBooking?: number[];
   advertisements?: number[];
-  ownerBrons: string  | null
-  ownerDataFilter: string | null
+  linkes?: any[];
+  kalanConfirment?: number[];
+  ownerBrons: string | null;
+  ownerDataFilter: string | null;
 
   advertisement: {
-  title: string | null;
-  description: string | null;
-  image: string | null;
-  stadionId: number | null;
-  isAllStadiums: boolean;
-};
+    title: string | null;
+    description: string | null;
+    image: string | null;
+    stadionId: number | null;
+    isAllStadiums: boolean;
+  };
 }
 export interface Stadion {
   step: number;

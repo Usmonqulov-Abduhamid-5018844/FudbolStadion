@@ -22,6 +22,7 @@ import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { PaymentProvider } from 'src/helpers/url_wrapper';
 import { Admin_S, AdminStatus } from '@prisma/client';
+import { formatDate } from 'src/helpers/dateFormat';
 @Injectable()
 export class UsersService {
   constructor(
@@ -1233,7 +1234,15 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
     page: number = 1,
   ) {
     try {
-      const limit = 4;
+      const limit = 10;
+        if (ctx.session.stadionMessages?.length) {
+          const messagesId = ctx.session.stadionMessages;
+          try {
+            await ctx.deleteMessages(messagesId);
+          } catch (e) {}
+          ctx.session.stadionMessages = [];
+        }
+
       const [stadions, total] = await Promise.all([
         this.prisma.stadion.findMany({
           where: {
@@ -1243,6 +1252,7 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
             owner: {
               status: Admin_S.ACTIVE,
             },
+
             OR: [
               {
                 stadionChedules: { some: {} },
@@ -1256,11 +1266,11 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
           },
           skip: (page - 1) * limit,
           take: limit,
-          include: {
-            region: true,
-            region_items: true,
+          orderBy: {
+            id: 'asc',
           },
         }),
+
         this.prisma.stadion.count({
           where: {
             region_item_id: itemId,
@@ -1284,42 +1294,62 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       ]);
 
       if (!stadions.length) {
-        await ctx.reply(this.i18n.translate('error.error', { lang }));
+        await this.utils.errorFunction(ctx)
         return;
       }
-      for (const stadion of stadions) {
-        await this.stadionAll_data(ctx, lang, stadion);
-      }
+
+      const inline_keyboard: InlineKeyboardButton[][] = stadions.map(
+        (stadion) => [
+          {
+            text: `🏟 ${stadion.name}`,
+            callback_data: `bookingStadium_${stadion.id}_${itemId}_${page}`,
+          },
+        ],
+      );
 
       const totalPages = Math.ceil(total / limit);
 
-      if (page === 1 && totalPages === 1) {
-        return;
-      }
+      if (totalPages > 1) {
+        const row: InlineKeyboardButton[] = [];
 
-      const row: InlineKeyboardButton[] = [];
+        if (page > 1) {
+          row.push({
+            text: this.i18n.translate('stadions.Previous', { lang }),
+            callback_data: `booking_region_page_${itemId}_${page - 1}`,
+          });
+        }
 
-      if (page > 1) {
         row.push({
-          text: this.i18n.translate('stadions.Previous', { lang }),
-          callback_data: `booking_region_page_${itemId}_${page - 1}`,
+          text: `${page}/${totalPages}`,
+          callback_data: 'ignore',
         });
-      }
 
-      row.push({
-        text: `${page} / ${totalPages}`,
-        callback_data: 'ignore',
-      });
+        if (page < totalPages) {
+          row.push({
+            text: this.i18n.translate('stadions.Next', { lang }),
+            callback_data: `booking_region_page_${itemId}_${page + 1}`,
+          });
+        }
 
-      if (page < totalPages) {
-        row.push({
-          text: this.i18n.translate('stadions.Next', { lang }),
-          callback_data: `booking_region_page_${itemId}_${page + 1}`,
-        });
+        inline_keyboard.push(row);
       }
-      await ctx.reply(this.i18n.translate('stadions.Select', { lang }), {
-        reply_markup: { inline_keyboard: [row] },
-      });
+      inline_keyboard.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: JSON.stringify({
+            type: 'user_back_regionItems',
+            id: stadions[0].region_id,
+          }),
+        },
+      ]);
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('stadions.select', { lang }),
+        {
+          inline_keyboard,
+        },
+      );
     } catch (error) {
       console.log(error);
       await this.utils.errorFunction(ctx);
@@ -1434,6 +1464,9 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
     isSeorch = false,
   ) {
     try {
+      if(ctx.callbackQuery){
+        await ctx.answerCbQuery().catch(()=>{})
+      }
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
       });
@@ -1441,18 +1474,6 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
         if (!price) return '❌';
         return new Intl.NumberFormat('uz-UZ').format(Number(price));
       };
-
-      const createdAt = formatInTimeZone(
-        stadion.createdAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
-
-      const updatedAt = formatInTimeZone(
-        stadion.updatedAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
       const statusText = stadion.working_status
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
@@ -1477,8 +1498,8 @@ ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) |
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
-${this.i18n.translate('view.creted', { lang })} <b>${createdAt}</b>
-${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
+${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt,lang)}</b>
+${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt,lang)}</b>
 `;
 
       const sendText = async () => {
@@ -1551,8 +1572,8 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
                     : {
                         text: this.i18n.translate('schedule.back', { lang }),
                         callback_data: JSON.stringify({
-                          type: 'user_back_regionItems',
-                          id: stadion.region_id,
+                          type: 'user_back_regionItems_Id',
+                          id: stadion.region_item_id,
                         }),
                       },
                 ],
@@ -1696,17 +1717,6 @@ ${this.i18n.translate('view.update', { lang })} <b>${updatedAt}</b>
         return new Intl.NumberFormat('uz-UZ').format(Number(price));
       };
 
-      const createdAt = formatInTimeZone(
-        stadion.createdAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
-
-      const updatedAt = formatInTimeZone(
-        stadion.updatedAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
       const statusText = stadion.working_status
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
@@ -1731,8 +1741,8 @@ ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${createdAt}
-${this.i18n.translate('view.update', { lang })} ${updatedAt}
+${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt,lang)}
+${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt,lang)}
 `;
 
       const sendText = async () => {
@@ -2702,9 +2712,8 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
               ],
             },
           });
-          
         } catch (error) {
-           await ctx.reply(message, {
+          await ctx.reply(message, {
             parse_mode: 'Markdown',
             reply_markup: {
               inline_keyboard: [
@@ -2974,7 +2983,7 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
     lang: string,
   ) {
     try {
-      const { total,hors } = this.utils.calculateTotalPrice(
+      const { total, hors } = this.utils.calculateTotalPrice(
         start_time,
         end_time,
         pricePerHur,
