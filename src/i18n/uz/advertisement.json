@@ -84,5 +84,8 @@
     "my_ads": "📋 Mening reklamalarim",
     "statistics": "📊 Statistika",
     "help": "📖 Qo'llanma"
-  }
+  },
+  "book_stadium": "🏟 Stadionni bron qilish",
+
+  "owner_cannot_book": "❌ <b>Stadionni bron qilib bo'lmadi</b>\n\nSiz tizimda <b>stadion egasi</b> sifatida ro'yxatdan o'tgansiz.\n\nShu sababli stadion egalari reklama orqali stadionlarni bron qila olmaydi. Ushbu imkoniyat faqat <b>foydalanuvchi akkaunti</b> uchun mavjud.\n\nAgar stadion bron qilmoqchi bo'lsangiz, foydalanuvchi akkaunti orqali tizimdan foydalanishingiz mumkin."
 }

@@ -8,7 +8,7 @@ import { getLocation } from 'src/helpers/lokationSeorch';
 import { getPremiumReasonText } from 'src/helpers/reason';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { PREMIUM_STATISTICS } from 'src/types/notifikation';
+
 import { UtilisService } from 'src/utils/utile.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 
@@ -20,7 +20,6 @@ export class AdminService {
     private readonly utils: UtilisService,
     private readonly notificationService: NotifikationService,
   ) {}
-
   async admin_paneli(ctx: MyContext, lang: string) {
     try {
       const owners = await this.prisma.owners.count();
@@ -740,7 +739,6 @@ export class AdminService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async AdminPaner_owner(
     ctx: MyContext,
     status: string,
@@ -1433,7 +1431,6 @@ export class AdminService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async ownerPremiumReason(
     ctx: MyContext,
     reason: string,
@@ -1496,7 +1493,6 @@ export class AdminService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async ownerPremiumGift(
     ctx: MyContext,
     days: number,

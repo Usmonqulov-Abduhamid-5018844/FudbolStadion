@@ -28,9 +28,8 @@ export class UsersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
-    private readonly botService: BotService,
     private readonly utils: UtilisService,
-    private readonly qrservice: QrService,
+    private readonly botService: BotService,
   ) {}
 
   async registor(ctx: MyContext, lang: string) {
@@ -75,7 +74,26 @@ export class UsersService {
             phone: String(ctx.session.user_registor.phone),
             chatID: String(ctx.from!.id),
           };
-          await this.prisma.users.create({ data: { ...data } });
+          const user = await this.prisma.users.create({ data: { ...data } });
+
+          if (ctx.session.advertisement_step === 'advertisement_register') {
+            const sesionData = await this.prisma.sesion.findUnique({
+              where: { chat_id: user.chatID },
+            });
+            const advertisement = await this.prisma.advertisement.findUnique({
+              where: { id: Number(sesionData?.advertisementId) },
+              include: {
+                stadion: { include: { region: true, region_items: true } },
+              },
+            });
+            if(!advertisement){
+                ctx.session.advertisement_step = null
+              await this.utils.errorFunction(ctx)
+              return
+            }
+            ctx.session.advertisement_step = null
+            return this.botService.advertisementBooking(ctx, lang, advertisement.stadion);
+          }
 
           await ctx.reply(
             this.i18n.translate('registor.finish', { lang }),
@@ -1235,13 +1253,13 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
   ) {
     try {
       const limit = 10;
-        if (ctx.session.stadionMessages?.length) {
-          const messagesId = ctx.session.stadionMessages;
-          try {
-            await ctx.deleteMessages(messagesId);
-          } catch (e) {}
-          ctx.session.stadionMessages = [];
-        }
+      if (ctx.session.stadionMessages?.length) {
+        const messagesId = ctx.session.stadionMessages;
+        try {
+          await ctx.deleteMessages(messagesId);
+        } catch (e) {}
+        ctx.session.stadionMessages = [];
+      }
 
       const [stadions, total] = await Promise.all([
         this.prisma.stadion.findMany({
@@ -1294,7 +1312,7 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       ]);
 
       if (!stadions.length) {
-        await this.utils.errorFunction(ctx)
+        await this.utils.errorFunction(ctx);
         return;
       }
 
@@ -1391,44 +1409,23 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
         },
       });
       if (!stadions.length) {
-        try {
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('booking.stadion.notAvailable', { lang }),
-            {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', {
-                      lang,
-                    }),
-                    callback_data: 'back_user_3',
-                  },
-                ],
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('booking.stadion.notAvailable', { lang }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.back', {
+                    lang,
+                  }),
+                  callback_data: 'back_user_3',
+                },
               ],
-            },
-          );
-          return;
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('booking.stadion.notAvailable', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', {
-                        lang,
-                      }),
-                      callback_data: 'back_user_3',
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-          return;
-        }
+            ],
+          },
+        );
+        return;
       }
       const regionId = [...new Set(stadions.map((s) => s.region_id))];
 
@@ -1464,8 +1461,8 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
     isSeorch = false,
   ) {
     try {
-      if(ctx.callbackQuery){
-        await ctx.answerCbQuery().catch(()=>{})
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => {});
       }
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
@@ -1498,8 +1495,8 @@ ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) |
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
-${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt,lang)}</b>
-${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt,lang)}</b>
+${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt, lang)}</b>
+${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt, lang)}</b>
 `;
 
       const sendText = async () => {
@@ -1741,8 +1738,8 @@ ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt,lang)}
-${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt,lang)}
+${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt, lang)}
+${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, lang)}
 `;
 
       const sendText = async () => {

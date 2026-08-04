@@ -124,5 +124,9 @@
     "approved": "✅ Admin tomonidan tasdiqlangan",
     "pending": "🔺 Tasdiqlanmagan",
     "rejected": "❌ Rad etilgan"
+  },
+
+  "blocked": {
+    "cannot_add_stadium": "🚫 Hisobingiz administrator tomonidan bloklangan.\n\nShu sababli hozir yangi stadion qo‘sha olmaysiz.\n\nQo‘shimcha ma'lumot uchun administrator bilan bog‘laning."
   }
 }

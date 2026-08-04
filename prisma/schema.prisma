@@ -56,7 +56,7 @@ model Stadion {
   stadion_mini            Boolean                    @default(false)
   owner_id                Int
   admin_status            AdminStatus                @default(PENDING)
-  working_status          Boolean                    @default(true)
+  working_status          Boolean                    @default(false)
   length                  Int
   width                   Int
   payments_type           Payments                   @default(GIBRID)
@@ -235,10 +235,12 @@ model PremiumTransaction {
 }
 
 model sesion {
-  id      Int     @id @default(autoincrement())
-  lang    String?
-  step    String?
-  chat_id String  @unique
+  id              Int     @id @default(autoincrement())
+  lang            String?
+  step            String?
+  chat_id         String  @unique
+  stadionId       Int?
+  advertisementId Int?
 }
 
 model MyFavoriteStadium {
@@ -317,6 +319,7 @@ model AdvertisementClick {
 
   clickedAt DateTime @default(now())
 
+  @@unique([advertisementId, userId])
   @@index([advertisementId])
   @@index([userId])
 }

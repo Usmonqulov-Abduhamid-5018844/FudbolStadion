@@ -84,5 +84,7 @@
     "my_ads": "📋 My Advertisements",
     "statistics": "📊 Statistics",
     "help": "📖 Guide"
-  }
+  },
+  "book_stadium": "🏟 Book the stadium",
+  "owner_cannot_book": "❌ <b>Unable to book the stadium</b>\n\nYou are registered in the system as a <b>stadium owner</b>.\n\nTherefore, stadium owners cannot book stadiums through advertisements. This feature is available only for <b>user accounts</b>.\n\nIf you would like to book a stadium, please use a user account."
 }

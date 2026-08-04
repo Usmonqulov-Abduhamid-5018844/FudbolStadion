@@ -16,11 +16,17 @@ import { Telegraf } from 'telegraf';
 
 @Injectable()
 export class CronService {
+  private readonly channels = (process.env.CHANNEL_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+
   constructor(
     @InjectBot() private readonly bot: Telegraf,
     private readonly prisma: PrismaService,
     private readonly notifikationService: NotifikationService,
     private readonly i18n: I18nService,
+    private readonly logger: Logger,
   ) {}
   private isCancelRunning = false;
   private isNoShowRunning = false;
@@ -420,7 +426,7 @@ export class CronService {
   @Cron(CronExpression.EVERY_MINUTE, {
     timeZone: 'Asia/Tashkent',
   })
-  async advertisement() {
+  async advertisement_expired() {
     try {
       const now = new Date();
 
@@ -434,12 +440,129 @@ export class CronService {
         data: {
           status: AdvertisementStatus.EXPIRED,
         },
-      });      
+      });
       if (count > 0) {
         console.log(`${count} ta reklama EXPIRED holatiga o'tkazildi.`);
       }
     } catch (error) {
       console.log('Reklama muddatini tekshirishda xatolik');
+    }
+  }
+  @Cron(CronExpression.EVERY_HOUR)
+  async advertisementSend() {
+    const now = new Date();
+
+    const MAX_SEND_PER_DAY = 2;
+    const intervalHours = 24 / MAX_SEND_PER_DAY;
+
+    const lastAllowed = new Date(
+      now.getTime() - intervalHours * 60 * 60 * 1000,
+    );
+
+    try {
+      const advertisement = await this.prisma.advertisement.findFirst({
+        where: {
+          status: 'ACTIVE',
+          expiresAt: {
+            gt: now,
+          },
+          OR: [
+            {
+              lastSentAt: null,
+            },
+            {
+              lastSentAt: {
+                lte: lastAllowed,
+              },
+            },
+          ],
+        },
+        include: {
+          stadion: true,
+          owner: true,
+        },
+        orderBy: [
+          {
+            lastSentAt: 'asc',
+          },
+          {
+            channelSentCount: 'asc',
+          },
+          {
+            createdAt: 'asc',
+          },
+        ],
+      });
+
+      if (!advertisement) {
+        return;
+      }
+
+      const ownerLang = await this.prisma.sesion.findUnique({
+        where: { chat_id: advertisement.owner.chatID },
+      });
+      const text = this.i18n.translate('advertisement.book_stadium', {
+        lang: ownerLang?.lang ? ownerLang.lang : 'uz',
+      });
+      const bookingUrl = `https://t.me/${process.env.BOT_USERNAME}?start=stadionBooking_${advertisement.id}`;
+      
+
+      const reply_markup = {
+        inline_keyboard: [
+          [
+            {
+              text,
+              url: bookingUrl,
+            },
+          ],
+        ],
+      };
+
+      const caption = `
+📢 <b>${advertisement.title}</b>
+
+${advertisement.description}
+
+🏟 <b>${advertisement.stadion.name}</b>
+`;
+
+      let successCount = 0;
+
+      for (const channelId of this.channels) {
+        try {
+          if (advertisement.image) {
+            await this.bot.telegram.sendPhoto(channelId, advertisement.image, {
+              caption,
+              parse_mode: 'HTML',
+              reply_markup,
+            });
+          } else {
+            await this.bot.telegram.sendMessage(channelId, caption, {
+              parse_mode: 'HTML',
+              reply_markup,
+            });
+          }
+
+          successCount++;
+        } catch (error) {
+          this.logger.error(`Kanal ${channelId} ga reklama yuborilmadi`, error);
+        }
+      }
+      if (successCount > 0) {
+        await this.prisma.advertisement.update({
+          where: {
+            id: advertisement.id,
+          },
+          data: {
+            lastSentAt: now,
+            channelSentCount: {
+              increment: successCount,
+            },
+          },
+        });
+      }
+    } catch (error) {
+      this.logger.error('Advertisement cron xatoligi', error);
     }
   }
 }

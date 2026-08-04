@@ -120,5 +120,9 @@
     "approved": "✅ Approved by admin",
     "pending": "🔺 Not approved",
     "rejected": "❌ Rejected"
+  },
+
+  "blocked": {
+    "cannot_add_stadium": "🚫 Your account has been blocked by an administrator.\n\nTherefore, you cannot add a new stadium at the moment.\n\nPlease contact the administrator for more information."
   }
 }

@@ -8,11 +8,13 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { UtilisService } from 'src/utils/utile.service';
-import { EStadion_type } from 'src/helpers/interface';
+import { EStadion_type, IStadion } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';
 import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
+import { formatDate } from 'src/helpers/dateFormat';
+import { AdvertisementClickSource } from '@prisma/client';
 
 @Injectable()
 export class BotService {
@@ -52,7 +54,7 @@ export class BotService {
 
     const requiredChannels = await this.getRequiredChannels(ctx);
 
-    ctx.session.kalanConfirment ??= []
+    ctx.session.kalanConfirment ??= [];
     if (requiredChannels.length) {
       const channels = await this.createInviteLinks(ctx, requiredChannels);
 
@@ -83,7 +85,7 @@ export class BotService {
         this.i18n.translate('admin.channel.join_required', { lang }),
         { reply_markup: { inline_keyboard } },
       );
-      ctx.session.kalanConfirment.push(send.message_id)
+      ctx.session.kalanConfirment.push(send.message_id);
       return;
     }
 
@@ -906,17 +908,6 @@ export class BotService {
         return new Intl.NumberFormat('uz-UZ').format(Number(price));
       };
 
-      const createdAt = formatInTimeZone(
-        stadion.createdAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
-
-      const updatedAt = formatInTimeZone(
-        stadion.updatedAt,
-        'Asia/Tashkent',
-        'yyyy-MM-dd HH:mm',
-      );
       const statusText = stadion.working_status
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
         : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
@@ -948,8 +939,8 @@ ${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '
 ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
 ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
 ${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${createdAt}
-${this.i18n.translate('view.update', { lang })} ${updatedAt}
+${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt, lang)}
+${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, lang)}
 `;
 
       if (!ctx.session.ownerStadions) {
@@ -1015,6 +1006,201 @@ ${this.i18n.translate('view.update', { lang })} ${updatedAt}
       await this.utils.errorFunction(ctx);
     } finally {
       await ctx.answerCbQuery();
+    }
+  }
+  async handlePayload(ctx: MyContext, payload: string) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const chatID = String(ctx.from!.id);
+
+      const [type, advertisementId] = payload.split('_');
+
+      if (type !== 'stadionBooking' || !advertisementId) {
+        return;
+      }
+
+      const adId = Number(advertisementId);
+
+      if (isNaN(adId)) {
+        return;
+      }
+      const [owner, user, advertisement] = await Promise.all([
+        this.prisma.owners.findUnique({ where: { chatID } }),
+        this.prisma.users.findUnique({ where: { chatID } }),
+        this.prisma.advertisement.findUnique({
+          where: { id: adId },
+          include: {
+            stadion: { include: { region: true, region_items: true } },
+          },
+        }),
+      ]);
+      if (!advertisement) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+      if (owner) {
+        await ctx.reply(
+          this.i18n.translate('advertisement.owner_cannot_book', { lang }),
+          { parse_mode: 'HTML' },
+        );
+        return;
+      }
+      if (user) {
+        const userClicked = await this.prisma.advertisementClick.findUnique({
+          where: {
+            advertisementId_userId: {
+              advertisementId: adId,
+              userId: user.id,
+            },
+          },
+        });
+
+        if (!userClicked) {
+          await this.prisma.advertisementClick.create({
+            data: {
+              advertisementId: adId,
+              userId: user.id,
+              source: AdvertisementClickSource.CHANNEL,
+            },
+          });
+
+          await this.prisma.advertisement.update({
+            where: { id: adId },
+            data: {
+              clickCount: {
+                increment: 1,
+              },
+            },
+          });
+        }
+        return this.advertisementBooking(ctx, lang, advertisement.stadion);
+      }
+      await this.prisma.sesion.upsert({
+        where: {
+          chat_id: chatID,
+        },
+        create: {
+          chat_id: chatID,
+          lang: ctx.from?.language_code,
+          advertisementId: adId,
+        },
+        update: {
+          advertisementId: adId,
+        },
+      });
+      ctx.session.advertisement_step = 'advertisement';
+      await this.start(ctx);
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async advertisementBooking(ctx: MyContext, lang: string, stadion: IStadion) {
+    try {
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => {});
+      }
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: stadion.owner_id },
+      });
+      const formatPrice = (price?: number | string) => {
+        if (!price) return '❌';
+        return new Intl.NumberFormat('uz-UZ').format(Number(price));
+      };
+      const statusText = stadion.working_status
+        ? `🟢 ${this.i18n.translate('view.active', { lang })}`
+        : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
+
+      let locationText = this.i18n.translate('view.not_available', { lang });
+      if (stadion.latitude && stadion.longitude) {
+        locationText = getLocation(
+          stadion.latitude,
+          stadion.longitude,
+          stadion.region.name,
+          stadion.region_items.name,
+        );
+      }
+
+      const message = `
+  🏟 <b>${stadion.name}</b>\n
+  ${this.i18n.translate('view.locate', { lang })} ${locationText}
+  ${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
+  ${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
+  ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
+  ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
+  ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
+  ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
+  ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
+  ${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt, lang)}</b>
+  ${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt, lang)}</b>
+  `;
+
+      const sendText = async () => {
+        const send = await ctx.reply(message, {
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('booking.stadion.favorite', {
+                    lang,
+                  }),
+                  callback_data: `booking_save_${stadion.id}`,
+                },
+              ],
+              [
+                {
+                  text: this.i18n.translate('booking.stadion.book', { lang }),
+                  callback_data: `booking_stadion_${stadion.id}`,
+                },
+              ],
+            ],
+          },
+        });
+        if (!ctx.session.stadionMessages) {
+          ctx.session.stadionMessages = [];
+        }
+        ctx.session.stadionMessages.push(send.message_id);
+      };
+
+      if (stadion.image) {
+        try {
+          const send = await ctx.replyWithPhoto(stadion.image, {
+            caption: message,
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.stadion.favorite', {
+                      lang,
+                    }),
+                    callback_data: `booking_save_${stadion.id}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('booking.stadion.book', {
+                      lang,
+                    }),
+                    callback_data: `booking_stadion_${stadion.id}`,
+                  },
+                ],
+              ],
+            },
+          });
+          if (!ctx.session.stadionMessages) {
+            ctx.session.stadionMessages = [];
+          }
+          ctx.session.stadionMessages.push(send.message_id);
+        } catch (err) {
+          await sendText();
+        }
+      } else {
+        await sendText();
+      }
+    } catch (error) {
+      await ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
 }

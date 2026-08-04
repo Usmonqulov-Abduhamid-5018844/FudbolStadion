@@ -71,6 +71,12 @@ export class BotUpdate {
   async onStart(@Ctx() ctx: any) {
     ctx.session = structuredClone(INITIAL_SESSION);
 
+    const payload = ctx.payload
+    if(payload?.startsWith("stadionBooking_")){
+      return this.botService.handlePayload(ctx, payload)
+    }
+    
+  
     const data = await this.prisma.sesion.findUnique({
       where: { chat_id: String(ctx.from?.id) },
     });
@@ -182,17 +188,21 @@ export class BotUpdate {
       }
     } else if (ctx.session.step === 'user_langs') {
       return this.userService.settings(ctx, lang);
-    } else {
+    }
+    else if(ctx.session.advertisement_step === "advertisement"){
+      ctx.session.advertisement_step = "advertisement_register"
+      return this.userService.registor(ctx,lang)
+    }
+     else {
       return this.botService.checket(ctx);
     }
   }
 
   @Action(/check_required_channels/)
-  async check_required_channels(@Ctx() ctx:MyContext) {
-     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-     await ctx.answerCbQuery().catch(()=>{})
-     return this.botService.checket(ctx)
-
+  async check_required_channels(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    await ctx.answerCbQuery().catch(() => {});
+    return this.botService.checket(ctx);
   }
 
   @Action(/errorBack_(.+)$/)
@@ -236,30 +246,30 @@ export class BotUpdate {
     }
   }
   @Action(/^bookingStadium_(\d+)_(\d+)_(\d+)$/)
-async bookingStadium(@Ctx() ctx: MyContext) {
-  if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+  async bookingStadium(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
 
-  const [, stadionId] = ctx.callbackQuery.data.split('_');
+    const [, stadionId] = ctx.callbackQuery.data.split('_');
 
-  const lang = await this.utils.langs(ctx);
+    const lang = await this.utils.langs(ctx);
 
-  const stadion = await this.prisma.stadion.findUnique({
-    where: {
-      id: Number(stadionId),
-    },
-    include: {
-      region: true,
-      region_items: true,
-    },
-  });
+    const stadion = await this.prisma.stadion.findUnique({
+      where: {
+        id: Number(stadionId),
+      },
+      include: {
+        region: true,
+        region_items: true,
+      },
+    });
 
-  if (!stadion) {
-    await this.utils.errorFunction(ctx);
-    return;
+    if (!stadion) {
+      await this.utils.errorFunction(ctx);
+      return;
+    }
+
+    await this.userService.stadionAll_data(ctx, lang, stadion);
   }
-
-  await this.userService.stadionAll_data(ctx, lang, stadion);
-}
   /////////////////////////////////////// OWNER BOOKING //////////////////////////////////////////////////////
 
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
@@ -2190,11 +2200,6 @@ async bookingStadium(@Ctx() ctx: MyContext) {
   @Action(/add_stadion/)
   async add_stadion(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
-    if (ctx.callbackQuery) {
-      try {
-        await ctx.answerCbQuery();
-      } catch {}
-    }
     try {
       const region = await this.prisma.region.findMany();
 
@@ -2204,6 +2209,20 @@ async bookingStadium(@Ctx() ctx: MyContext) {
           'regionlar hali yaratilmagan (npm run prisma) qilish kerak',
         );
 
+        return;
+      }
+      const owner = await this.prisma.owners.findUnique({
+        where: {
+          chatID: String(ctx.from?.id),
+          status: 'BLOCKED',
+        },
+      });
+
+      if (owner) {
+        await ctx.answerCbQuery(
+          this.i18n.translate('stadion.blocked.cannot_add_stadium', { lang }),
+          { show_alert: true },
+        );
         return;
       }
 
@@ -2738,7 +2757,6 @@ async bookingStadium(@Ctx() ctx: MyContext) {
             { show_alert: true },
           );
         } catch (error) {
-          console.log(error);
           await this.utils.errorFunction(ctx);
         }
       }
@@ -3070,14 +3088,14 @@ async bookingStadium(@Ctx() ctx: MyContext) {
             .answerCbQuery()
             .then(() => {})
             .catch();
-                if (ctx.session.stadionMessages?.length) {
-          const messagesId = ctx.session.stadionMessages;
-          try {
-            await ctx.deleteMessages(messagesId);
-          } catch (e) {}
-          ctx.session.stadionMessages = [];
-        }
-        break
+          if (ctx.session.stadionMessages?.length) {
+            const messagesId = ctx.session.stadionMessages;
+            try {
+              await ctx.deleteMessages(messagesId);
+            } catch (e) {}
+            ctx.session.stadionMessages = [];
+          }
+          break;
         }
         case 'HELP_ABOUT':
           {
