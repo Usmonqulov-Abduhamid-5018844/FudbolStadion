@@ -33,9 +33,10 @@
   "image": "🖼 Image",
   "delete": "🗑 Delete Stadium",
   "back": "🔙 Back",
+
   "type": {
-    "delet": "❗️ Do you want to delete this stadium?",
-    "yes": "👍 Yes, delete"
+    "delet": "⚠️ <b>Confirm Stadium Deletion</b>\n\n❗️ Are you sure you want to permanently delete this stadium from the system?\n\n📋 The stadium must not have any active bookings in order to be deleted.\n\n🗑️ After deletion, the stadium data will be removed from the system and this action cannot be undone.",
+    "yes": "🗑️ Yes, delete"
   },
   "schedule": {
     "name": "🕒 Manage your stadium's working hours and days off:",
@@ -78,6 +79,4 @@
   "schedule_deleted": "🗑 Schedule successfully deleted",
 
   "delete_yes": "✅ Yes"
-
-
 }

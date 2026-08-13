@@ -1,3 +1,0 @@
--- AlterTable
-ALTER TABLE "Advertisement" ADD COLUMN     "botViewCount" INTEGER NOT NULL DEFAULT 0,
-ALTER COLUMN "status" SET DEFAULT 'PENDING';

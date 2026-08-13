@@ -1069,6 +1069,7 @@ export class OwnersService {
               await this.utils.clearSessionMessages(ctx);
               ctx.session.ownerDataFilter = null;
               ctx.session.owner_registor.id = null;
+              return this.owner_Bron(ctx, lang);
             } catch (error) {}
           }
           break;
@@ -1082,6 +1083,11 @@ export class OwnersService {
           break;
         case '9': {
           return this.premium(ctx, Number(data), lang);
+        }
+        case '10': {
+          if (ctx.session.ownerStadions?.length) {
+            await ctx.deleteMessages(ctx.session.ownerStadions);
+          }
         }
         default: {
           break;
@@ -1489,6 +1495,8 @@ export class OwnersService {
     }
   }
 
+///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+
   async owner_Bron(ctx: MyContext, lang: string) {
     try {
       const ownerData = await this.prisma.owners.findUnique({
@@ -1625,7 +1633,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async sendBookingMessage(
     ctx: MyContext,
     booking: IBooking,
@@ -1643,7 +1650,7 @@ export class OwnersService {
         callback_data,
       );
 
-      const send = await ctx.reply(
+      const sent = await ctx.reply(
         this.i18n.translate('owner_booking.details', {
           lang,
           args: {
@@ -1660,21 +1667,20 @@ export class OwnersService {
           },
         }),
         {
-          parse_mode: 'HTML',
+          parse_mode:"HTML",
           reply_markup: {
+          
             inline_keyboard: button,
           },
         },
       );
-
-      ctx.session.ownerActiveBooking ??= [];
-      ctx.session.ownerActiveBooking.push(send.message_id);
+        ctx.session.ownerActiveBooking ??= [];
+      ctx.session.ownerActiveBooking.push(sent.message_id);
     } catch (error) {
       await this.utils.errorFunction(ctx);
       console.log(error);
     }
   }
-
   async bookingDetails(
     ctx: MyContext,
     bookingId: number,
@@ -1717,8 +1723,6 @@ export class OwnersService {
         lang,
       );
 
-      await this.utils.clearSessionMessages(ctx).catch(() => {});
-
       const message = this.i18n.translate('owner_booking.full_details', {
         lang,
         args: {
@@ -1732,7 +1736,7 @@ export class OwnersService {
               ? timeLeftText
               : this.i18n.translate('bookingHistory.time_expired', { lang }),
           user: booking.user.full_name,
-          phone: booking.user.phone,
+          phone: `+${booking.user.phone}`,
           username: booking.user.username
             ? `🔗 @${booking.user.username}`
             : '_',
@@ -1751,26 +1755,23 @@ export class OwnersService {
         },
       });
 
-      const send = await ctx.reply(message, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: `${callback_data}_${type}_${isFilterType ? booking.stadion_id : booking.stadion.owner_id}_${page}`,
-              },
-            ],
+      await this.utils.safeEditOrReply(ctx, message, {
+        inline_keyboard: [
+          [
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `${callback_data}_${type}_${isFilterType ? booking.stadion_id : booking.stadion.owner_id}_${page}`,
+            },
           ],
-        },
+        ],
       });
-
-      ctx.session.ownerActiveBooking ??= [];
-      ctx.session.ownerActiveBooking.push(send.message_id);
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
   }
+
+////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
+
 
   async owner_card(ctx: MyContext, lang: string) {
     try {

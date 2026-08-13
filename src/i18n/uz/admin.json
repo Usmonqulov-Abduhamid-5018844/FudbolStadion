@@ -27,6 +27,7 @@
 
   "owner": {
     "title": "👤 <b>Ownerlarni boshqarish</b>\n\nKerakli bo'limni tanlang 👇",
+    "pending": "⏳ Kutilayotganlar ({count})",
     "active": "🟢 Faol ownerlar ({count})",
     "blocked": "🔴 Bloklangan ownerlar ({count})",
     "search": "🔍 Owner qidirish"
@@ -81,6 +82,10 @@
     "rejected_success": "❌ Stadion rad etildi.\n\nU foydalanuvchilarga ko'rinmaydi va bron qilish uchun mavjud bo'lmaydi."
   },
 
+  "pending_empty_owner": "⏳ Hozircha tasdiqlanishini kutayotgan ownerlar mavjud emas.\n\n📋 Yangi owner arizalari ushbu bo'limda ko'rsatiladi.",
+
+  "pending_list_owner": "⏳ <b>Tasdiqlanishini kutayotgan ownerlar</b>\n\nQuyidagi ownerlarning arizalari administrator tomonidan tasdiqlanishini kutmoqda.\nKo'rish uchun ownerni tanlang 👇",
+
   "active_empty": "🟢 Hozircha faol ownerlar mavjud emas.\n\n📋 Faol holatdagi ownerlar ushbu bo'limda ko'rsatiladi.",
 
   "active_list": "🟢 <b>Faol ownerlar</b>\n\nQuyidagi ownerlar tizimdan faol foydalanmoqda.\nKo'rish uchun ownerni tanlang 👇",
@@ -103,14 +108,16 @@
 
   "status": {
     "active": "Faol",
-    "blocked": "Bloklangan"
+    "blocked": "Bloklangan",
+    "pending": "Kutilmoqda"
   },
 
   "buttons": {
     "stadiums": "🏟 Stadionlari",
     "premium": "⭐ Premium boshqarish",
     "block": "🚫 Bloklash",
-    "activate": "✅ Faollashtirish"
+    "activate": "✅ Faollashtirish",
+    "delete": "🗑️ O'chirish"
   },
 
   "confirm": {
@@ -125,7 +132,8 @@
 
   "status_updated": {
     "active": "✅ {fullName} muvaffaqiyatli faollashtirildi.",
-    "blocked": "🚫 {fullName} muvaffaqiyatli bloklandi."
+    "blocked": "🚫 {fullName} muvaffaqiyatli bloklandi.",
+    "deleted": "🗑️ {fullName} muvaffaqiyatli o‘chirildi."
   },
 
   "premiums": {
@@ -192,5 +200,10 @@
     "join_required": "📢 Botdan foydalanishni davom ettirish uchun quyidagi kanallarga a'zo bo'ling.",
     "check": "✅ Tekshirish",
     "default_name": "📢 Kanal {number}"
+  },
+
+  "delete_confirm": {
+    "message": "⚠️ <b>Ownerni o‘chirishni tasdiqlash</b>\n\n👤 <b>{fullName}</b>\n\nUshbu ownerni tizimdan butunlay o‘chirishni xohlaysizmi?\n\n❗️Bu amalni qaytarib bo‘lmaydi.",
+    "confirm": "🗑️ Ha, o‘chirish"
   }
 }

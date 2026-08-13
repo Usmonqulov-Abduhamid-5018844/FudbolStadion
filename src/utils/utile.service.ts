@@ -457,6 +457,8 @@ export class UtilisService implements OnModuleInit {
     return buttons;
   }
 
+  ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+
   buildOwnerBookingButtons(
     booking: IBooking,
     page: number,
@@ -533,16 +535,27 @@ export class UtilisService implements OnModuleInit {
         break;
     }
 
+    const filterTypes = ['7days', '30days', 'active', 'allFilter'];
+    let backCb: string;
+
+    if (filterTypes.includes(type)) {
+      const ownerId = booking.stadion.owner?.id ?? booking.stadion.owner_id;
+      backCb = `bookingAllData_STADION.${booking.stadion.id}_${ownerId}_${page}`;
+    } else if (type.startsWith('STATUS.')) {
+      backCb = `bookingAllData_status_${booking.stadion.owner_id}_${page}`;
+    } else {
+      backCb = 'back_owner_7';
+    }
+
     button.push([
       {
         text: this.i18n.translate('schedule.back', { lang }),
-        callback_data: 'back_owner_7',
+        callback_data: backCb,
       },
     ]);
 
     return button;
   }
-
   async clearSessionMessages(ctx: MyContext) {
     if (ctx.session.ownerActiveBooking?.length) {
       try {
@@ -551,7 +564,6 @@ export class UtilisService implements OnModuleInit {
       ctx.session.ownerActiveBooking = [];
     }
   }
-
   async sendPagination(
     ctx: MyContext,
     page: number,
@@ -594,6 +606,8 @@ export class UtilisService implements OnModuleInit {
     ctx.session.ownerActiveBooking ??= [];
     ctx.session.ownerActiveBooking.push(send.message_id);
   }
+
+  ////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
 
   async growthBooking(ctx: MyContext, ownerId: number, lang: string) {
     try {

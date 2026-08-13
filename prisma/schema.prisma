@@ -13,7 +13,7 @@ model Owners {
   username             String?
   chatID               String               @unique
   phone                String
-  status               Admin_S              @default(ACTIVE)
+  status               Admin_S              @default(PENDING)
   email                String               @unique
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
@@ -394,6 +394,7 @@ enum AdminStatus {
 }
 
 enum Admin_S {
+  PENDING
   ACTIVE
   BLOCKED
 }

@@ -26,6 +26,7 @@
   },
   "owner": {
     "title": "👤 <b>Owner Management</b>\n\nSelect the section you want to manage 👇",
+    "pending": "⏳ Pending approval ({count})",
     "active": "🟢 Active Owners ({count})",
     "blocked": "🔴 Blocked Owners ({count})",
     "search": "🔍 Search Owner"
@@ -80,6 +81,11 @@
     "approved_success": "✅ Stadium has been approved successfully.\n\nIt is now visible to users and available for booking.",
     "rejected_success": "❌ Stadium has been rejected.\n\nIt is no longer visible to users and cannot be booked."
   },
+
+  "pending_empty_owner": "⏳ There are currently no owners waiting for approval.\n\n📋 New owner applications will be displayed in this section.",
+
+  "pending_list_owner": "⏳ <b>Owners Awaiting Approval</b>\n\nThe following owners are waiting for their applications to be approved by an administrator.\nSelect an owner to view their details 👇",
+
   "active_empty": "🟢 There are currently no active owners.\n\n📋 Owners with active status will appear in this section.",
 
   "active_list": "🟢 <b>Active Owners</b>\n\nThe following owners are currently active in the system.\nSelect an owner to view 👇",
@@ -102,14 +108,16 @@
 
   "status": {
     "active": "Active",
-    "blocked": "Blocked"
+    "blocked": "Blocked",
+    "pending": "Pending"
   },
 
   "buttons": {
     "stadiums": "🏟 Stadiums",
     "premium": "⭐ Manage Premium",
     "block": "🚫 Block",
-    "activate": "✅ Activate"
+    "activate": "✅ Activate",
+    "delete": "🗑️ Delete"
   },
 
   "confirm": {
@@ -124,7 +132,8 @@
 
   "status_updated": {
     "active": "✅ {fullName} has been activated successfully.",
-    "blocked": "🚫 {fullName} has been blocked successfully."
+    "blocked": "🚫 {fullName} has been blocked successfully.",
+    "deleted": "🗑️ {fullName} has been successfully deleted."
   },
 
   "premiums": {
@@ -190,5 +199,10 @@
     "join_required": "📢 To continue using the bot, please join the following channels.",
     "check": "✅ Check",
     "default_name": "📢 Channel {number}"
+  },
+
+  "delete_confirm": {
+    "message": "⚠️ <b>Confirm Owner Deletion</b>\n\n👤 <b>{fullName}</b>\n\nAre you sure you want to permanently delete this owner from the system?\n\n❗️This action cannot be undone.",
+    "confirm": "🗑️ Yes, Delete"
   }
 }

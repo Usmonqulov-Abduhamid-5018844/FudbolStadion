@@ -270,8 +270,9 @@ export class BotUpdate {
 
     await this.userService.stadionAll_data(ctx, lang, stadion);
   }
-  /////////////////////////////////////// OWNER BOOKING //////////////////////////////////////////////////////
 
+
+///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
@@ -283,9 +284,7 @@ export class BotUpdate {
       const pageStr = data[3];
 
       const page = Number(pageStr);
-      const limit = 5;
-
-      await this.utils.clearSessionMessages(ctx);
+      const limit = 1;
 
       const where: Prisma.BookingWhereInput = {
         stadion: {
@@ -387,6 +386,8 @@ export class BotUpdate {
 
       await ctx.answerCbQuery(this.i18n.translate('loading.loading', { lang }));
 
+       await this.utils.clearSessionMessages(ctx);
+
       const callback_data: string = 'ownerBooking';
 
       await Promise.all(
@@ -407,7 +408,6 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
-
   @Action(/bookingChild_(.+)/)
   async bookingChild(@Ctx() ctx: MyContext) {
     try {
@@ -436,9 +436,13 @@ export class BotUpdate {
 
       if (!booking) return this.utils.errorFunction(ctx);
 
-      const backCb = `${callback_data}_${type}_${booking.stadion.owner.id}_${page}`;
-
-      await this.utils.clearSessionMessages(ctx);
+      const isFilterType = ['7days', '30days', 'active', 'allFilter'].includes(
+        type,
+      );
+      const backId = isFilterType
+        ? booking.stadion.id
+        : booking.stadion.owner.id;
+      const backCb = `${callback_data}_${type}_${backId}_${page}`;
 
       if (action === 'detail') {
         return this.ownerService.bookingDetails(
@@ -451,12 +455,12 @@ export class BotUpdate {
         );
       }
       if (action === 'checkin') {
-        const send = await ctx.reply(
+        await this.utils.safeEditOrReply(ctx,
           this.i18n.translate('owner_booking.booking.confirm_check_in', {
             lang,
           }),
           {
-            reply_markup: {
+           
               inline_keyboard: [
                 [
                   {
@@ -472,12 +476,10 @@ export class BotUpdate {
                   },
                 ],
               ],
-            },
+            
           },
         );
 
-        ctx.session.ownerActiveBooking ??= [];
-        ctx.session.ownerActiveBooking.push(send.message_id);
         return;
       }
       if (action === 'yesCheckin') {
@@ -486,12 +488,12 @@ export class BotUpdate {
           data: { check_in: true },
         });
 
-        const send = await ctx.reply(
+       await this.utils.safeEditOrReply(ctx,
           this.i18n.translate('owner_booking.booking.confirm_success', {
             lang,
           }),
           {
-            reply_markup: {
+           
               inline_keyboard: [
                 [
                   {
@@ -500,19 +502,18 @@ export class BotUpdate {
                   },
                 ],
               ],
-            },
+            
           },
         );
 
-        ctx.session.ownerActiveBooking ??= [];
-        ctx.session.ownerActiveBooking.push(send.message_id);
         return;
       }
       if (action === 'cancel') {
-        const send = await ctx.reply(
+        console.log(backCb);
+        
+        await this.utils.safeEditOrReply(ctx,
           this.i18n.translate('owner_booking.booking.confirm_cancel', { lang }),
           {
-            reply_markup: {
               inline_keyboard: [
                 [
                   {
@@ -528,12 +529,9 @@ export class BotUpdate {
                   },
                 ],
               ],
-            },
           },
         );
 
-        ctx.session.ownerActiveBooking ??= [];
-        ctx.session.ownerActiveBooking.push(send.message_id);
         return;
       }
       if (action === 'yesCancel') {
@@ -542,10 +540,10 @@ export class BotUpdate {
           data: { status: 'CANCELED' },
         });
 
-        const send = await ctx.reply(
+        await this.utils.safeEditOrReply(ctx,
           this.i18n.translate('owner_booking.booking.cancel_success', { lang }),
           {
-            reply_markup: {
+         
               inline_keyboard: [
                 [
                   {
@@ -554,12 +552,10 @@ export class BotUpdate {
                   },
                 ],
               ],
-            },
+            
           },
         );
 
-        ctx.session.ownerActiveBooking ??= [];
-        ctx.session.ownerActiveBooking.push(send.message_id);
         return;
       }
     } catch (error) {
@@ -568,7 +564,6 @@ export class BotUpdate {
       await ctx.answerCbQuery().catch(() => {});
     }
   }
-
   @Action(/bookingAllData_(.+)_(\d+)_(\d+)$/)
   async bookingAllData(@Ctx() ctx: MyContext) {
     try {
@@ -781,6 +776,7 @@ export class BotUpdate {
           );
           return;
         }
+         await this.utils.clearSessionMessages(ctx);
         const buttons: InlineKeyboardButton[][] = [
           [
             {
@@ -850,7 +846,6 @@ export class BotUpdate {
       ctx.answerCbQuery().catch(() => {});
     }
   }
-
   @Action(/^bookingFilter_(.+)_(\d+)_(\d+)$/)
   async filter(@Ctx() ctx: MyContext) {
     const match = ctx.match as RegExpMatchArray;
@@ -864,7 +859,8 @@ export class BotUpdate {
       const base = new Date(
         Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
       );
-      const callback_data: string = 'bookingFilter-' + stadionId;
+
+      const callback_data: string = 'bookingFilter';
       const callback: string = 'bookingFilter_' + action + '_' + stadionId;
 
       await this.utils.clearSessionMessages(ctx);
@@ -954,6 +950,9 @@ export class BotUpdate {
       await ctx.answerCbQuery().catch(() => {});
     }
   }
+////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
+
+
 
   @Action(/BookingOwner_statistica_(.+)_(\d+)$/)
   async statistica(@Ctx() ctx: MyContext) {
@@ -2214,16 +2213,24 @@ export class BotUpdate {
       const owner = await this.prisma.owners.findUnique({
         where: {
           chatID: String(ctx.from?.id),
-          status: 'BLOCKED',
+          status: {
+            in:["BLOCKED","PENDING"]
+          },
         },
       });
 
-      if (owner) {
+      if (owner?.status === "BLOCKED") {
         await ctx.answerCbQuery(
           this.i18n.translate('stadion.blocked.cannot_add_stadium', { lang }),
           { show_alert: true },
         );
         return;
+      }
+      if(owner?.status === "PENDING"){
+        await ctx.answerCbQuery( 
+          this.i18n.translate('stadions.pending.cannot_add_stadium', { lang }),
+          {show_alert:true})
+        return
       }
 
       const button: InlineKeyboardButton[][] = region.map((r) => [
@@ -2963,11 +2970,11 @@ export class BotUpdate {
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.stadiumConfirm(ctx, status, Number(stadionId));
   }
-  @Action(/AdminPaner_Owner_(\w+)_(\d+)_(\d+)/)
+  @Action(/AdminPanel_Owner_(\w+)_(\d+)_(\d+)/)
   async AdminPaner_Owner(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const [_, __, status, ownerId, page] = ctx.callbackQuery.data.split('_');
-    return this.adminPaneli.AdminPaner_owner(
+    return this.adminPaneli.AdminPanel_owner(
       ctx,
       status,
       Number(ownerId),

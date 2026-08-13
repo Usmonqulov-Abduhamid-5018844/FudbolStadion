@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { NotificationType, PremiumReason } from '@prisma/client';
+import { count } from 'console';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
@@ -182,9 +183,10 @@ export class AdminService {
           break;
         case 'owners':
           {
-            const [active, blocked] = await Promise.all([
+            const [active, blocked, pending] = await Promise.all([
               this.prisma.owners.count({ where: { status: 'ACTIVE' } }),
               this.prisma.owners.count({ where: { status: 'BLOCKED' } }),
+              this.prisma.owners.count({ where: { status: 'PENDING' } }),
             ]);
             await this.utils.safeEditOrReply(
               ctx,
@@ -193,11 +195,20 @@ export class AdminService {
                 inline_keyboard: [
                   [
                     {
+                      text: this.i18n.translate('admin.owner.pending', {
+                        lang,
+                        args: { count: pending },
+                      }),
+                      callback_data: 'AdminPanel_Owner_pending_0_1',
+                    },
+                  ],
+                  [
+                    {
                       text: this.i18n.translate('admin.owner.active', {
                         lang,
                         args: { count: active },
                       }),
-                      callback_data: 'AdminPaner_Owner_active_0_1',
+                      callback_data: 'AdminPanel_Owner_active_0_1',
                     },
                   ],
                   [
@@ -206,13 +217,13 @@ export class AdminService {
                         lang,
                         args: { count: blocked },
                       }),
-                      callback_data: 'AdminPaner_Owner_blocked_0_1',
+                      callback_data: 'AdminPanel_Owner_blocked_0_1',
                     },
                   ],
                   [
                     {
                       text: this.i18n.translate('admin.owner.search', { lang }),
-                      callback_data: 'AdminPaner_Owner_search_0_1',
+                      callback_data: 'AdminPanel_Owner_search_0_1',
                     },
                   ],
                   [
@@ -739,7 +750,7 @@ export class AdminService {
       await this.utils.errorFunction(ctx);
     }
   }
-  async AdminPaner_owner(
+  async AdminPanel_owner(
     ctx: MyContext,
     status: string,
     ownerId: number,
@@ -747,10 +758,89 @@ export class AdminService {
   ) {
     try {
       const lang = await this.utils.langs(ctx);
-      const limit = 1;
+      const limit = 10;
       const currentPage = Math.max(1, Number(page) || 1);
 
       switch (status) {
+        case 'pending': {
+          const [owners, total] = await Promise.all([
+            this.prisma.owners.findMany({
+              where: { status: 'PENDING' },
+              select: {
+                id: true,
+                full_name: true,
+              },
+              skip: (currentPage - 1) * limit,
+              take: limit,
+              orderBy: {
+                id: 'asc',
+              },
+            }),
+            this.prisma.owners.count({
+              where: { status: 'PENDING' },
+            }),
+          ]);
+
+          if (!owners.length) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.pending_empty_owner', { lang }),
+              { show_alert: true },
+            );
+            return;
+          }
+
+          const totalPages = Math.ceil(total / limit);
+
+          const buttons: InlineKeyboardButton[][] = [];
+
+          owners.forEach((item) => {
+            buttons.push([
+              {
+                text: `👤 ${item.full_name}`,
+                callback_data: `AdminPanel_Owner_detels_${item.id}_${currentPage}`,
+              },
+            ]);
+          });
+
+          const pagination: InlineKeyboardButton[] = [];
+
+          if (currentPage > 1) {
+            pagination.push({
+              text: this.i18n.translate('admin.Previous', { lang }),
+              callback_data: `AdminPanel_Owner_pending_${currentPage - 1}`,
+            });
+          }
+
+          pagination.push({
+            text: `📄 ${currentPage}/${totalPages}`,
+            callback_data: 'ignore',
+          });
+
+          if (currentPage < totalPages) {
+            pagination.push({
+              text: this.i18n.translate('admin.Next', { lang }),
+              callback_data: `AdminPanel_Owner_pending_${currentPage + 1}`,
+            });
+          }
+
+          buttons.push(totalPages > 1 ? pagination : []);
+
+          buttons.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'admins_owners',
+            },
+          ]);
+
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.pending_list_owner', { lang }),
+            {
+              inline_keyboard: buttons,
+            },
+          );
+          break;
+        }
         case 'active': {
           const [owners, total] = await Promise.all([
             this.prisma.owners.findMany({
@@ -786,7 +876,7 @@ export class AdminService {
             buttons.push([
               {
                 text: `👤 ${item.full_name}`,
-                callback_data: `AdminPaner_Owner_detels_${item.id}_${currentPage}`,
+                callback_data: `AdminPanel_Owner_detels_${item.id}_${currentPage}`,
               },
             ]);
           });
@@ -796,7 +886,7 @@ export class AdminService {
           if (currentPage > 1) {
             pagination.push({
               text: this.i18n.translate('admin.Previous', { lang }),
-              callback_data: `AdminPaner_Owner_active_${currentPage - 1}`,
+              callback_data: `AdminPanel_Owner_active_${currentPage - 1}`,
             });
           }
 
@@ -808,7 +898,7 @@ export class AdminService {
           if (currentPage < totalPages) {
             pagination.push({
               text: this.i18n.translate('admin.Next', { lang }),
-              callback_data: `AdminPaner_Owner_active_${currentPage + 1}`,
+              callback_data: `AdminPanel_Owner_active_${currentPage + 1}`,
             });
           }
 
@@ -830,7 +920,6 @@ export class AdminService {
           );
           break;
         }
-
         case 'blocked': {
           const [owners, total] = await Promise.all([
             this.prisma.owners.findMany({
@@ -868,7 +957,7 @@ export class AdminService {
             buttons.push([
               {
                 text: `👤 ${item.full_name}`,
-                callback_data: `AdminPaner_Owner_detels_${item.id}_${currentPage}`,
+                callback_data: `AdminPanel_Owner_detels_${item.id}_${currentPage}`,
               },
             ]);
           });
@@ -878,7 +967,7 @@ export class AdminService {
           if (currentPage > 1) {
             pagination.push({
               text: this.i18n.translate('admin.Previous', { lang }),
-              callback_data: `AdminPaner_Owner_active_${currentPage - 1}`,
+              callback_data: `AdminPanel_Owner_active_${currentPage - 1}`,
             });
           }
 
@@ -890,7 +979,7 @@ export class AdminService {
           if (currentPage < totalPages) {
             pagination.push({
               text: this.i18n.translate('admin.Next', { lang }),
-              callback_data: `AdminPaner_Owner_active_${currentPage + 1}`,
+              callback_data: `AdminPanel_Owner_active_${currentPage + 1}`,
             });
           }
 
@@ -912,7 +1001,11 @@ export class AdminService {
           );
           break;
         }
-
+        case 'search': {
+          ctx.reply('Search');
+          ctx.answerCbQuery();
+          break;
+        }
         case 'detels': {
           const [owner, bookingCount] = await Promise.all([
             this.prisma.owners.findUnique({
@@ -967,13 +1060,12 @@ export class AdminService {
                 { lang },
               ),
               status: this.i18n.translate(
-                owner.status === 'ACTIVE'
-                  ? 'admin.status.active'
-                  : 'admin.status.blocked',
+                `admin.status.${owner.status.toLowerCase()}`,
                 { lang },
               ),
             },
           });
+          const isDelete = owner.status === 'BLOCKED';
 
           await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
@@ -997,20 +1089,31 @@ export class AdminService {
                       : 'admin.buttons.activate',
                     { lang },
                   ),
-                  callback_data: `AdminPaner_Owner_status_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_status_${owner.id}_${currentPage}`,
                 },
               ],
+              ...(isDelete
+                ? [
+                    [
+                      {
+                        text: this.i18n.translate('admin.buttons.delete', {
+                          lang,
+                        }),
+                        callback_data: `AdminPanel_Owner_delete_${owner.id}_${currentPage}`,
+                      },
+                    ],
+                  ]
+                : []),
               [
                 {
                   text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: `AdminPaner_Owner_${owner.status.toLowerCase()}_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_${owner.status.toLowerCase()}_${owner.id}_${currentPage}`,
                 },
               ],
             ],
           });
           break;
         }
-
         case 'status': {
           const owner = await this.prisma.owners.findUnique({
             where: { id: ownerId },
@@ -1047,13 +1150,13 @@ export class AdminService {
                       : 'admin.confirm.buttons.confirm_activate',
                     { lang },
                   ),
-                  callback_data: `AdminPaner_Owner_confirm_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_confirm_${owner.id}_${currentPage}`,
                 },
               ],
               [
                 {
                   text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: `AdminPaner_Owner_detels_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
                 },
               ],
             ],
@@ -1096,14 +1199,77 @@ export class AdminService {
               },
             ),
           );
-          return this.AdminPaner_owner(
+          return this.AdminPanel_owner(
             ctx,
             'detels',
             updatedOwner.id,
             currentPage,
           );
         }
+        case 'delete': {
+          const owner = await this.prisma.owners.findUnique({
+            where: { id: ownerId },
+            select: { id: true, full_name: true },
+          });
+          if (!owner) {
+            await this.utils.errorFunction(ctx);
+            return;
+          }
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.delete_confirm.message', {
+              lang,
+              args: { fullName: owner.full_name },
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('admin.delete_confirm.confirm', {
+                      lang,
+                    }),
+                    callback_data: `AdminPanel_Owner_deletConfirm_${owner.id}_${currentPage}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
+                  },
+                ],
+              ],
+            },
+          );
 
+          break;
+        }
+        case 'deletConfirm': {
+          const owner = await this.prisma.owners.findUnique({
+            where: { id: ownerId },
+            select: { id: true, full_name: true },
+          });
+          if (!owner) {
+            await this.utils.errorFunction(ctx);
+            return;
+          }
+          await this.prisma.owners.delete({ where: { id: ownerId } });
+
+          await ctx.answerCbQuery(
+            this.i18n.translate('admin.status_updated.deleted', {
+              lang,
+              args: { fullName: owner.full_name },
+            }),
+          );
+          const owners = await this.prisma.owners.findMany({
+            where: { status: 'BLOCKED' },
+            select: { id: true },
+          });
+          if (owners.length) {
+            return this.AdminPanel_owner(ctx, 'blocked', 0, 1);
+          } else {
+            return this.admins_stadiums(ctx, 'owners');
+          }
+        }
         default: {
           await this.utils.errorFunction(ctx);
         }
@@ -1257,7 +1423,7 @@ export class AdminService {
                   text: this.i18n.translate('schedule.back', {
                     lang,
                   }),
-                  callback_data: `AdminPaner_Owner_detels_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
                 },
               ],
             ],

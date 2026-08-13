@@ -952,18 +952,10 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           reply_markup: {
             inline_keyboard: [
               [
-                stadion.stadion_mini
-                  ? {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `owner_miniStadion_${stadion.id}`,
-                    }
-                  : {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'stadion',
-                        id: stadion.id,
-                      }),
-                    },
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: `back_owner_10`,
+                },
               ],
             ],
           },
@@ -979,18 +971,10 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             reply_markup: {
               inline_keyboard: [
                 [
-                  stadion.stadion_mini
-                    ? {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `owner_miniStadion_${stadion.id}`,
-                      }
-                    : {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'stadion',
-                          id: stadion.id,
-                        }),
-                      },
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `back_owner_10`,
+                  },
                 ],
               ],
             },

@@ -33,10 +33,12 @@
   "image": "🖼 Rasm",
   "delete": "🗑 Stadionni o'chirish",
   "back": "🔙 Orqaga",
+
   "type": {
-    "delet": "❗️ Ushbu stadionni o'chirmoqchimisiz?",
-    "yes": "👍 Ha, o'chir"
+    "delet": "⚠️ <b>Stadionni o‘chirishni tasdiqlash</b>\n\n❗️ Ushbu stadionni tizimdan butunlay o‘chirmoqchimisiz?\n\n📋 Stadionni o‘chirish uchun unga tegishli faol bronlar bo‘lmasligi kerak.\n\n🗑️ O‘chirilgandan so‘ng stadion ma’lumotlari tizimdan olib tashlanadi va bu amalni qaytarib bo‘lmaydi.",
+    "yes": "🗑️ Ha, o‘chirish"
   },
+
   "schedule": {
     "name": "🕒 Stadioningiz ish vaqtlari va dam olish kunlarini boshqarish:",
     "one_week": "📅 1 haftalik ish jadvalini tuzish",
@@ -73,10 +75,8 @@
   "today": "Bugun",
   "tomorrow": "Ertaga",
 
-   "schedule_delete_warning": "⚠️ Diqqat!\n\nBu kun uchun allaqachon bronlar mavjud.\n\nAgar siz ushbu kunni o‘chirsangiz:\n• ❌ Yangi bronlar qabul qilinmaydi\n• ✅ Mavjud bronlar saqlanib qoladi va o‘yinlar baribir o‘tkaziladi\n\nShunga qaramay davom etasizmi?",
+  "schedule_delete_warning": "⚠️ Diqqat!\n\nBu kun uchun allaqachon bronlar mavjud.\n\nAgar siz ushbu kunni o‘chirsangiz:\n• ❌ Yangi bronlar qabul qilinmaydi\n• ✅ Mavjud bronlar saqlanib qoladi va o‘yinlar baribir o‘tkaziladi\n\nShunga qaramay davom etasizmi?",
   "schedule_deleted": "🗑 Schedule muvaffaqiyatli o‘chirildi",
 
   "delete_yes": "✅ Ha"
-
-
 }

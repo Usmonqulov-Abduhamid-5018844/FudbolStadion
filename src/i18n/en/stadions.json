@@ -117,12 +117,15 @@
   "deleteAlert": "⚠️ This stadium cannot be deleted.\n\nReason: there are active bookings for this stadium. 📅\n\nPlease wait until they are completed or cancel them first.",
 
   "stadium_status": {
-    "approved": "✅ Approved by admin",
-    "pending": "🔺 Not approved",
+    "approved": "✅ Approved",
+    "pending": "⏳ Pending approval",
     "rejected": "❌ Rejected"
   },
 
   "blocked": {
     "cannot_add_stadium": "🚫 Your account has been blocked by an administrator.\n\nTherefore, you cannot add a new stadium at the moment.\n\nPlease contact the administrator for more information."
+  },
+  "pending": {
+    "cannot_add_stadium": "⏳ Your application for stadium owner status is still under review.\n\n✅ Once approved by the administrator, you will be able to add your stadium."
   }
 }
