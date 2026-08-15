@@ -104,6 +104,7 @@ export const INITIAL_SESSION: ISession = {
   admin_messageId: null,
   maxCount: null,
   booking_step: null,
+  adminOwnerSearch:null,
   stadion_step: null,
   ownerBrons: null,
   ownerDataFilter: null,

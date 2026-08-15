@@ -112,7 +112,7 @@ export class AdminService {
         }
         case 'stats':
           {
-            ctx.reply('Statistika');
+            await ctx.reply('Statistika');
           }
           break;
         case 'stadiums':
@@ -178,7 +178,7 @@ export class AdminService {
           break;
         case 'premium':
           {
-            ctx.reply('Premium');
+            await ctx.reply('Premium');
           }
           break;
         case 'owners':
@@ -239,7 +239,7 @@ export class AdminService {
           break;
         case 'broadcast':
           {
-            ctx.reply('Habar yuborish');
+            await ctx.reply('Habar yuborish');
           }
           break;
         default: {
@@ -755,6 +755,7 @@ export class AdminService {
     status: string,
     ownerId: number,
     page: number,
+    action?: 'activate' | 'block',
   ) {
     try {
       const lang = await this.utils.langs(ctx);
@@ -967,7 +968,7 @@ export class AdminService {
           if (currentPage > 1) {
             pagination.push({
               text: this.i18n.translate('admin.Previous', { lang }),
-              callback_data: `AdminPanel_Owner_active_${currentPage - 1}`,
+              callback_data: `AdminPanel_Owner_blocked_${currentPage - 1}`,
             });
           }
 
@@ -979,7 +980,7 @@ export class AdminService {
           if (currentPage < totalPages) {
             pagination.push({
               text: this.i18n.translate('admin.Next', { lang }),
-              callback_data: `AdminPanel_Owner_active_${currentPage + 1}`,
+              callback_data: `AdminPanel_Owner_blocked_${currentPage + 1}`,
             });
           }
 
@@ -1002,8 +1003,16 @@ export class AdminService {
           break;
         }
         case 'search': {
-          ctx.reply('Search');
-          ctx.answerCbQuery();
+          const sent = await ctx.reply(
+            this.i18n.translate('admin.search_prompt', { lang }),
+          );
+
+          ctx.session.adminOwnerSearch = {
+            active: true,
+            promptMessageId: sent.message_id,
+          };
+
+          await ctx.answerCbQuery().catch(() => {});
           break;
         }
         case 'detels': {
@@ -1065,7 +1074,38 @@ export class AdminService {
               ),
             },
           });
-          const isDelete = owner.status === 'BLOCKED';
+
+          const statusButtons: InlineKeyboardButton[][] = [];
+
+          if (owner.status === 'PENDING') {
+            statusButtons.push([
+              {
+                text: this.i18n.translate('admin.buttons.activate', { lang }),
+                callback_data: `AdminPanel_Owner_status_activate_${owner.id}_${currentPage}`,
+              },
+              {
+                text: this.i18n.translate('admin.buttons.block', { lang }),
+                callback_data: `AdminPanel_Owner_status_block_${owner.id}_${currentPage}`,
+              },
+            ]);
+          } else if (owner.status === 'ACTIVE') {
+            statusButtons.push([
+              {
+                text: this.i18n.translate('admin.buttons.block', { lang }),
+                callback_data: `AdminPanel_Owner_status_block_${owner.id}_${currentPage}`,
+              },
+            ]);
+          } else if (owner.status === 'BLOCKED') {
+            statusButtons.push([
+              {
+                text: this.i18n.translate('admin.buttons.activate', { lang }),
+                callback_data: `AdminPanel_Owner_status_activate_${owner.id}_${currentPage}`,
+              },
+            ]);
+          }
+
+          const isDelete =
+            owner.status === 'BLOCKED' || owner.status === 'PENDING';
 
           await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
@@ -1081,17 +1121,7 @@ export class AdminService {
                   callback_data: `AdminOwner_premium_${owner.id}_${currentPage}_1`,
                 },
               ],
-              [
-                {
-                  text: this.i18n.translate(
-                    owner.status === 'ACTIVE'
-                      ? 'admin.buttons.block'
-                      : 'admin.buttons.activate',
-                    { lang },
-                  ),
-                  callback_data: `AdminPanel_Owner_status_${owner.id}_${currentPage}`,
-                },
-              ],
+              ...statusButtons,
               ...(isDelete
                 ? [
                     [
@@ -1129,10 +1159,10 @@ export class AdminService {
             return;
           }
 
-          const isActive = owner.status === 'ACTIVE';
-
           const text = this.i18n.translate(
-            isActive ? 'admin.confirm.block' : 'admin.confirm.activate',
+            action === 'block'
+              ? 'admin.confirm.block'
+              : 'admin.confirm.activate',
             {
               lang,
               args: {
@@ -1145,12 +1175,12 @@ export class AdminService {
               [
                 {
                   text: this.i18n.translate(
-                    isActive
+                    action === 'block'
                       ? 'admin.confirm.buttons.confirm_block'
                       : 'admin.confirm.buttons.confirm_activate',
                     { lang },
                   ),
-                  callback_data: `AdminPanel_Owner_confirm_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_confirm_${action}_${owner.id}_${currentPage}`,
                 },
               ],
               [
@@ -1182,7 +1212,7 @@ export class AdminService {
           const updatedOwner = await this.prisma.owners.update({
             where: { id: ownerId },
             data: {
-              status: owner.status === 'ACTIVE' ? 'BLOCKED' : 'ACTIVE',
+              status: action === 'block' ? 'BLOCKED' : 'ACTIVE',
             },
           });
 
@@ -1278,7 +1308,97 @@ export class AdminService {
       await this.utils.errorFunction(ctx);
     }
   }
-  async AdminOwner_premium(
+
+  async handleAdminOwnerSearchText(ctx: MyContext, rawQuery: string) {
+    try {
+      const lang = await this.utils.langs(ctx);
+
+      const query = rawQuery.trim().slice(0, 100);
+
+      if (!query) {
+        await ctx.reply(
+          this.i18n.translate('admin.owner.search_empty_query', { lang }),
+        );
+        return;
+      }
+
+      const idAsNumber = Number(query);
+      const isNumericQuery = !Number.isNaN(idAsNumber) && query !== '';
+
+      const digitsOnly = query.replace(/\D/g, '');
+      const phoneCandidates = new Set<string>();
+
+      if (digitsOnly) {
+        phoneCandidates.add(digitsOnly);
+
+        if (digitsOnly.length === 9) {
+          phoneCandidates.add('998' + digitsOnly);
+        } else if (digitsOnly.startsWith('998') && digitsOnly.length === 12) {
+          phoneCandidates.add(digitsOnly.slice(3));
+        }
+      }
+
+      const owners = await this.prisma.owners.findMany({
+        where: {
+          OR: [
+            { full_name: { contains: query, mode: 'insensitive' } },
+            { username: { contains: query, mode: 'insensitive' } },
+            ...Array.from(phoneCandidates).map((phone) => ({
+              phone: { contains: phone },
+            })),
+            ...(isNumericQuery ? [{ id: idAsNumber }] : []),
+          ],
+        },
+        select: { id: true, full_name: true, status: true },
+        take: 10,
+        orderBy: { id: 'asc' },
+      });
+
+      if (!owners.length) {
+        await ctx.reply(
+          this.i18n.translate('admin.search_not_found', {
+            lang,
+            args: { query },
+          }),
+        );
+        return;
+      }
+
+      const statusEmoji: Record<string, string> = {
+        ACTIVE: '🟢',
+        PENDING: '🟡',
+        BLOCKED: '🔴',
+      };
+
+      const buttons: InlineKeyboardButton[][] = owners.map((item) => [
+        {
+          text: `${statusEmoji[item.status] ?? '👤'} ${item.full_name}`,
+          callback_data: `AdminPanel_Owner_detels_${item.id}_1`,
+        },
+      ]);
+
+      buttons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: 'admins_owners',
+        },
+      ]);
+
+      await ctx.reply(
+        this.i18n.translate('admin.search_results', {
+          lang,
+          args: { count: owners.length },
+        }),
+        {
+          reply_markup: { inline_keyboard: buttons },
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async AdminOwner_select(
     ctx: MyContext,
     status: string,
     ownerId: number,
@@ -1585,6 +1705,93 @@ export class AdminService {
               inline_keyboard,
             },
           );
+          break;
+        }
+        case 'stadiums': {
+          const [stadions, total] = await Promise.all([
+            this.prisma.stadion.findMany({
+              where: { owner_id: ownerId },
+              select: {
+                id: true,
+                name: true,
+              },
+              orderBy: { id: 'asc' },
+              skip: (historyPage - 1) * limit,
+              take: limit,
+            }),
+            this.prisma.stadion.count({
+              where: { owner_id: ownerId },
+            }),
+          ]);
+
+          if (!stadions.length) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.owner_stadiums.empty', { lang }),
+              { show_alert: true },
+            );
+            return;
+          }
+
+          const totalPages = Math.ceil(total / limit);
+
+          const stadiumButtons: InlineKeyboardButton[][] = stadions.map(
+            (stadion) => {
+              const name =
+                stadion.name.length > 25
+                  ? `${stadion.name.slice(0, 25)}...`
+                  : stadion.name;
+
+              return [
+                {
+                  text: `🏟 ${name}`,
+                  callback_data: `AdminOwner_stadium_detail_${stadion.id}_${ownerId}_${currentPage}_${historyPage}`,
+                },
+              ];
+            },
+          );
+
+          const pagination: InlineKeyboardButton[] = [];
+
+          if (historyPage > 1) {
+            pagination.push({
+              text: this.i18n.translate('admin.Previous', { lang }),
+              callback_data: `AdminOwner_stadiums_${ownerId}_${currentPage}_${historyPage - 1}`,
+            });
+          }
+
+          pagination.push({
+            text: `${historyPage}/${totalPages}`,
+            callback_data: 'ignore',
+          });
+
+          if (historyPage < totalPages) {
+            pagination.push({
+              text: this.i18n.translate('admin.Next', { lang }),
+              callback_data: `AdminOwner_stadiums_${ownerId}_${currentPage}_${historyPage + 1}`,
+            });
+          }
+
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.owner_stadiums.title', {
+              lang,
+            }),
+            {
+              inline_keyboard: [
+                ...stadiumButtons,
+
+                ...(totalPages > 1 ? [pagination] : []),
+
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: `AdminPanel_Owner_detels_${ownerId}_${currentPage}`,
+                  },
+                ],
+              ],
+            },
+          );
+
           break;
         }
         default:
@@ -1914,7 +2121,7 @@ export class AdminService {
         notification.id,
       );
 
-      return this.AdminOwner_premium(ctx, 'premium', owner.id, currentPage, 1);
+      return this.AdminOwner_select(ctx, 'premium', owner.id, currentPage, 1);
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }

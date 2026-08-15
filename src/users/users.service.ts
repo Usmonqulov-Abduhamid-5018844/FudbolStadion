@@ -21,7 +21,7 @@ import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { PaymentProvider } from 'src/helpers/url_wrapper';
-import { Admin_S, AdminStatus } from '@prisma/client';
+import { Admin_S, AdminStatus, Prisma } from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
 @Injectable()
 export class UsersService {
@@ -1245,7 +1245,7 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       await this.utils.errorFunction(ctx);
     }
   }
-  async userbookingRegionItems(
+ async userbookingRegionItems(
     ctx: MyContext,
     lang: string,
     itemId: number,
@@ -1261,55 +1261,59 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
         ctx.session.stadionMessages = [];
       }
 
-      const [stadions, total] = await Promise.all([
-        this.prisma.stadion.findMany({
-          where: {
-            region_item_id: itemId,
-            working_status: true,
-            admin_status: AdminStatus.APPROVED,
-            owner: {
-              status: Admin_S.ACTIVE,
+      const baseWhere: Prisma.StadionWhereInput = {
+        region_item_id: itemId,
+        working_status: true,
+        admin_status: AdminStatus.APPROVED,
+        owner: {
+          status: Admin_S.ACTIVE,
+        },
+        OR: [
+          {
+            stadionChedules: { some: {} },
+          },
+          {
+            parent: {
+              stadionChedules: { some: {} },
             },
-
-            OR: [
-              {
-                stadionChedules: { some: {} },
-              },
-              {
-                parent: {
-                  stadionChedules: { some: {} },
-                },
-              },
-            ],
           },
-          skip: (page - 1) * limit,
-          take: limit,
-          orderBy: {
-            id: 'asc',
-          },
-        }),
+        ],
+      };
 
-        this.prisma.stadion.count({
-          where: {
-            region_item_id: itemId,
-            working_status: true,
-            admin_status: AdminStatus.APPROVED,
-            owner: {
-              status: Admin_S.ACTIVE,
+      const allStadions = await this.prisma.stadion.findMany({
+        where: baseWhere,
+        orderBy: {
+          id: 'asc',
+        },
+        include: {
+          owner: {
+            select: {
+              subscriptions: {
+                where: { isActive: true },
+                select: { id: true },
+                take: 1,
+              },
             },
-            OR: [
-              {
-                stadionChedules: { some: {} },
-              },
-              {
-                parent: {
-                  stadionChedules: { some: {} },
-                },
-              },
-            ],
           },
-        }),
-      ]);
+        },
+      });
+
+      if (!allStadions.length) {
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      const sorted = allStadions.sort((a, b) => {
+        const aPremium = a.owner.subscriptions.length > 0 ? 1 : 0;
+        const bPremium = b.owner.subscriptions.length > 0 ? 1 : 0;
+        if (aPremium !== bPremium) return bPremium - aPremium;
+        return a.id - b.id;
+      });
+
+      const total = sorted.length;
+      const stadions = sorted
+        .slice((page - 1) * limit, (page - 1) * limit + limit)
+        .map(({ owner, ...stadion }) => stadion);
 
       if (!stadions.length) {
         await this.utils.errorFunction(ctx);

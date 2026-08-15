@@ -204,5 +204,18 @@
   "delete_confirm": {
     "message": "⚠️ <b>Confirm Owner Deletion</b>\n\n👤 <b>{fullName}</b>\n\nAre you sure you want to permanently delete this owner from the system?\n\n❗️This action cannot be undone.",
     "confirm": "🗑️ Yes, Delete"
+  },
+
+  "search_prompt": "🔍 Enter the owner's name, phone number, or ID:",
+  "search_empty_query": "❗️ Please enter some text to search.",
+  "search_not_found": "😕 No results found for \"{query}\".",
+  "search_results": "✅ Found {count} result(s):",
+
+  "owner_stadiums": {
+    "empty": "🏟 This owner has no stadiums yet.",
+    "working": "🟢 Working",
+    "not_working": "🔴 Not working",
+    "item": "{index}. {statusIcon} <b>{name}</b>\n{working}",
+    "title": "🏟 <b>Stadium list</b>\n\n{stadiums}"
   }
 }

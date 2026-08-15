@@ -5,12 +5,16 @@ export interface ISession {
   name: string | null;
   lang: string | null;
   step: string | null;
-  advertisement_step:string | null
+  advertisement_step: string | null;
   admin_messageId: number | null;
   stadion_step: string | null;
   owner_registor: registerOwner;
   user_registor: registorUser;
   stadion: Stadion;
+  adminOwnerSearch?: {
+    active: boolean;
+    promptMessageId: number;
+  } | null;
   maxCount?: string | null;
   mini?: boolean | null;
   ownerStadions?: number[];

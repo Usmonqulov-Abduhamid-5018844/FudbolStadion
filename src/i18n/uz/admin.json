@@ -205,5 +205,18 @@
   "delete_confirm": {
     "message": "⚠️ <b>Ownerni o‘chirishni tasdiqlash</b>\n\n👤 <b>{fullName}</b>\n\nUshbu ownerni tizimdan butunlay o‘chirishni xohlaysizmi?\n\n❗️Bu amalni qaytarib bo‘lmaydi.",
     "confirm": "🗑️ Ha, o‘chirish"
+  },
+
+  "search_prompt": "🔍 Owner ismi, telefon raqami yoki ID sini kiriting:",
+  "search_empty_query": "❗️ Iltimos, biror matn kiriting.",
+  "search_not_found": "😕 \"{query}\" bo'yicha hech kim topilmadi.",
+  "search_results": "✅ {count} ta natija topildi:",
+
+  "owner_stadiums": {
+    "empty": "🏟 Bu owner'da hali stadion yo'q.",
+    "working": "🟢 Ishlayapti",
+    "not_working": "🔴 Ishlamayapti",
+    "item": "{index}. {statusIcon} <b>{name}</b>\n{working}",
+    "title": "🏟 <b>Stadionlar ro'yxati</b>\n\n{stadiums}"
   }
 }

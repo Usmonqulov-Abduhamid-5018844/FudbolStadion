@@ -71,12 +71,11 @@ export class BotUpdate {
   async onStart(@Ctx() ctx: any) {
     ctx.session = structuredClone(INITIAL_SESSION);
 
-    const payload = ctx.payload
-    if(payload?.startsWith("stadionBooking_")){
-      return this.botService.handlePayload(ctx, payload)
+    const payload = ctx.payload;
+    if (payload?.startsWith('stadionBooking_')) {
+      return this.botService.handlePayload(ctx, payload);
     }
-    
-  
+
     const data = await this.prisma.sesion.findUnique({
       where: { chat_id: String(ctx.from?.id) },
     });
@@ -188,12 +187,10 @@ export class BotUpdate {
       }
     } else if (ctx.session.step === 'user_langs') {
       return this.userService.settings(ctx, lang);
-    }
-    else if(ctx.session.advertisement_step === "advertisement"){
-      ctx.session.advertisement_step = "advertisement_register"
-      return this.userService.registor(ctx,lang)
-    }
-     else {
+    } else if (ctx.session.advertisement_step === 'advertisement') {
+      ctx.session.advertisement_step = 'advertisement_register';
+      return this.userService.registor(ctx, lang);
+    } else {
       return this.botService.checket(ctx);
     }
   }
@@ -271,8 +268,7 @@ export class BotUpdate {
     await this.userService.stadionAll_data(ctx, lang, stadion);
   }
 
-
-///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+  ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
@@ -386,7 +382,7 @@ export class BotUpdate {
 
       await ctx.answerCbQuery(this.i18n.translate('loading.loading', { lang }));
 
-       await this.utils.clearSessionMessages(ctx);
+      await this.utils.clearSessionMessages(ctx);
 
       const callback_data: string = 'ownerBooking';
 
@@ -436,9 +432,7 @@ export class BotUpdate {
 
       if (!booking) return this.utils.errorFunction(ctx);
 
-      const isFilterType = ['7days', '30days', 'active', 'allFilter'].includes(
-        type,
-      );
+      const isFilterType = ['7days', '30days', 'allFilter'].includes(type);
       const backId = isFilterType
         ? booking.stadion.id
         : booking.stadion.owner.id;
@@ -455,28 +449,27 @@ export class BotUpdate {
         );
       }
       if (action === 'checkin') {
-        await this.utils.safeEditOrReply(ctx,
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('owner_booking.booking.confirm_check_in', {
             lang,
           }),
           {
-           
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate(
-                      'owner_booking.booking.confirm_yes',
-                      { lang },
-                    ),
-                    callback_data: `bookingChild_yesCheckin_${booking.id}_${page}_${type}_${callback_data}`,
-                  },
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: backCb,
-                  },
-                ],
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate(
+                    'owner_booking.booking.confirm_yes',
+                    { lang },
+                  ),
+                  callback_data: `bookingChild_yesCheckin_${booking.id}_${page}_${type}_${callback_data}`,
+                },
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: backCb,
+                },
               ],
-            
+            ],
           },
         );
 
@@ -488,21 +481,20 @@ export class BotUpdate {
           data: { check_in: true },
         });
 
-       await this.utils.safeEditOrReply(ctx,
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('owner_booking.booking.confirm_success', {
             lang,
           }),
           {
-           
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: backCb,
-                  },
-                ],
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: backCb,
+                },
               ],
-            
+            ],
           },
         );
 
@@ -510,25 +502,26 @@ export class BotUpdate {
       }
       if (action === 'cancel') {
         console.log(backCb);
-        
-        await this.utils.safeEditOrReply(ctx,
+
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('owner_booking.booking.confirm_cancel', { lang }),
           {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate(
-                      'owner_booking.buttons.confirm_cancel',
-                      { lang },
-                    ),
-                    callback_data: `bookingChild_yesCancel_${booking.id}_${page}_${type}_${callback_data}`,
-                  },
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: backCb,
-                  },
-                ],
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate(
+                    'owner_booking.buttons.confirm_cancel',
+                    { lang },
+                  ),
+                  callback_data: `bookingChild_yesCancel_${booking.id}_${page}_${type}_${callback_data}`,
+                },
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: backCb,
+                },
               ],
+            ],
           },
         );
 
@@ -540,19 +533,18 @@ export class BotUpdate {
           data: { status: 'CANCELED' },
         });
 
-        await this.utils.safeEditOrReply(ctx,
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('owner_booking.booking.cancel_success', { lang }),
           {
-         
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: backCb,
-                  },
-                ],
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+                  callback_data: backCb,
+                },
               ],
-            
+            ],
           },
         );
 
@@ -776,7 +768,7 @@ export class BotUpdate {
           );
           return;
         }
-         await this.utils.clearSessionMessages(ctx);
+        await this.utils.clearSessionMessages(ctx);
         const buttons: InlineKeyboardButton[][] = [
           [
             {
@@ -950,9 +942,7 @@ export class BotUpdate {
       await ctx.answerCbQuery().catch(() => {});
     }
   }
-////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
-
-
+  ////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
 
   @Action(/BookingOwner_statistica_(.+)_(\d+)$/)
   async statistica(@Ctx() ctx: MyContext) {
@@ -2214,23 +2204,24 @@ export class BotUpdate {
         where: {
           chatID: String(ctx.from?.id),
           status: {
-            in:["BLOCKED","PENDING"]
+            in: ['BLOCKED', 'PENDING'],
           },
         },
       });
 
-      if (owner?.status === "BLOCKED") {
+      if (owner?.status === 'BLOCKED') {
         await ctx.answerCbQuery(
-          this.i18n.translate('stadion.blocked.cannot_add_stadium', { lang }),
+          this.i18n.translate('stadions.blocked.cannot_add_stadium', { lang }),
           { show_alert: true },
         );
         return;
       }
-      if(owner?.status === "PENDING"){
-        await ctx.answerCbQuery( 
+      if (owner?.status === 'PENDING') {
+        await ctx.answerCbQuery(
           this.i18n.translate('stadions.pending.cannot_add_stadium', { lang }),
-          {show_alert:true})
-        return
+          { show_alert: true },
+        );
+        return;
       }
 
       const button: InlineKeyboardButton[][] = region.map((r) => [
@@ -2252,6 +2243,7 @@ export class BotUpdate {
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
+      console.log(error.message);
     }
   }
   @Action(/region_(.+)/)
@@ -2973,12 +2965,20 @@ export class BotUpdate {
   @Action(/AdminPanel_Owner_(\w+)_(\d+)_(\d+)/)
   async AdminPaner_Owner(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-    const [_, __, status, ownerId, page] = ctx.callbackQuery.data.split('_');
+
+    const parts = ctx.callbackQuery.data.split('_');
+    const page = parts[parts.length - 1];
+    const ownerId = parts[parts.length - 2];
+    const status = parts[2];
+    const action =
+      parts.length > 5 ? (parts[3] as 'activate' | 'block') : undefined;
+
     return this.adminPaneli.AdminPanel_owner(
       ctx,
       status,
       Number(ownerId),
       Number(page),
+      action,
     );
   }
   @Action(/AdminOwner_(\w+)_(\d+)_(\d+)_(\d+)/)
@@ -2986,7 +2986,7 @@ export class BotUpdate {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const [_, status, ownerId, currentPage, historyPage] =
       ctx.callbackQuery.data.split('_');
-    return this.adminPaneli.AdminOwner_premium(
+    return this.adminPaneli.AdminOwner_select(
       ctx,
       status,
       Number(ownerId),
@@ -5608,6 +5608,24 @@ export class BotUpdate {
 
       if (ctx.session.step === 'price') {
         return this.ownerService.handlePrice(ctx, lang, text);
+      }
+      if (ctx.session.adminOwnerSearch) {
+        const searchState = ctx.session.adminOwnerSearch;
+
+        if (searchState.active) {
+          const promptMessageId = searchState.promptMessageId;
+          const searchText = ctx.message.text;
+
+          ctx.session.adminOwnerSearch = undefined;
+
+          try {
+            await ctx.deleteMessages([promptMessageId, ctx.message.message_id]);
+          } catch {
+          }
+
+          await this.adminPaneli.handleAdminOwnerSearchText(ctx, searchText);
+          return;
+        }
       }
 
       ctx.reply(this.i18n.translate('error.else', { lang, args: { text } }));

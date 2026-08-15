@@ -1069,7 +1069,6 @@ export class OwnersService {
               await this.utils.clearSessionMessages(ctx);
               ctx.session.ownerDataFilter = null;
               ctx.session.owner_registor.id = null;
-              return this.owner_Bron(ctx, lang);
             } catch (error) {}
           }
           break;

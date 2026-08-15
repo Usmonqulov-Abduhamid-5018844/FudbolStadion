@@ -535,7 +535,7 @@ export class UtilisService implements OnModuleInit {
         break;
     }
 
-    const filterTypes = ['7days', '30days', 'active', 'allFilter'];
+    const filterTypes = ['7days', '30days', 'allFilter'];
     let backCb: string;
 
     if (filterTypes.includes(type)) {
