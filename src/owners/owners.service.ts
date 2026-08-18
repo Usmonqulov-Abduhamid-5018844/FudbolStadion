@@ -724,7 +724,6 @@ export class OwnersService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      console.log('ERROR', error);
     }
     ctx.session.step = null;
     ctx.session.stadion.schedule_day = null;

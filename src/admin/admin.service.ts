@@ -15,6 +15,15 @@ import { InlineKeyboardButton } from 'telegraf/types';
 
 @Injectable()
 export class AdminService {
+  private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+  private readonly SupperAdmin = (process.env.SUPPER_ADMIN ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+
   constructor(
     private readonly i18n: I18nService,
     private readonly prisma: PrismaService,
@@ -76,9 +85,8 @@ export class AdminService {
       }
     } catch (error) {}
   }
-  async admins_stadiums(ctx: MyContext, type: string) {
+  async admins_stadiums(ctx: MyContext, type: string, lang: string) {
     try {
-      const lang = await this.utils.langs(ctx);
       switch (type) {
         case 'lang': {
           await this.utils.safeEditOrReply(
@@ -648,6 +656,16 @@ export class AdminService {
     page: number,
   ) {
     try {
+      let isCkecked = false;
+      if (
+        ctx.session.admin_step === 'owner_stadion_details' &&
+        ctx.session.admin_messageId &&
+        ctx.session.ownerId &&
+        ctx.session.currentPage
+      ) {
+        isCkecked = true;
+        await ctx.deleteMessage(ctx.session.admin_messageId).catch(() => {});
+      }
       const lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
@@ -657,56 +675,114 @@ export class AdminService {
       switch (status) {
         case 'approved':
           {
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('admin.stadium_list.approve_confirm', {
-                lang,
-              }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'admin.stadium_list.button.approve',
-                        { lang },
-                      ),
-                      callback_data: `stadiumConfirm_approved_${stadion.id}`,
-                    },
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `stadium_view_${stadion.id}_${page}`,
-                    },
+            if (isCkecked) {
+              const sent = await ctx.reply(
+                this.i18n.translate('admin.stadium_list.approve_confirm', {
+                  lang,
+                }),
+                {
+                  parse_mode: 'HTML',
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate(
+                            'admin.stadium_list.button.approve',
+                            { lang },
+                          ),
+                          callback_data: `stadiumConfirm_approved_${stadion.id}`,
+                        },
+                        {
+                          text: this.i18n.translate('schedule.back', { lang }),
+                          callback_data: `AdminOwnerStadium_detail_${stadionId}_${ctx.session.ownerId}_${ctx.session.currentPage}_${page}`,
+                        },
+                      ],
+                    ],
+                  },
+                },
+              );
+              ctx.session.confirment_messageId = sent.message_id;
+            } else {
+              await this.utils.safeEditOrReply(
+                ctx,
+                this.i18n.translate('admin.stadium_list.approve_confirm', {
+                  lang,
+                }),
+                {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate(
+                          'admin.stadium_list.button.approve',
+                          { lang },
+                        ),
+                        callback_data: `stadiumConfirm_approved_${stadion.id}`,
+                      },
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: `stadium_view_${stadion.id}_${page}`,
+                      },
+                    ],
                   ],
-                ],
-              },
-            );
+                },
+              );
+            }
           }
           break;
         case 'rejected':
           {
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('admin.stadium_list.reject_confirm', {
-                lang,
-              }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'admin.stadium_list.Button.reject',
-                        { lang },
-                      ),
-                      callback_data: `stadiumConfirm_rejected_${stadion.id}`,
-                    },
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `stadium_view_${stadion.id}_${page}`,
-                    },
+            if (isCkecked) {
+              const sent = await ctx.reply(
+                this.i18n.translate('admin.stadium_list.reject_confirm', {
+                  lang,
+                }),
+                {
+                  parse_mode: 'HTML',
+                  reply_markup: {
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate(
+                            'admin.stadium_list.Button.reject',
+                            { lang },
+                          ),
+                          callback_data: `stadiumConfirm_rejected_${stadion.id}`,
+                        },
+                        {
+                          text: this.i18n.translate('schedule.back', { lang }),
+                          callback_data: `AdminOwnerStadium_detail_${stadionId}_${ctx.session.ownerId}_${ctx.session.currentPage}_${page}`,
+                        },
+                      ],
+                    ],
+                  },
+                },
+              );
+              ctx.session.confirment_messageId = sent.message_id;
+            } else {
+              await this.utils.safeEditOrReply(
+                ctx,
+                this.i18n.translate('admin.stadium_list.reject_confirm', {
+                  lang,
+                }),
+                {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate(
+                          'admin.stadium_list.Button.reject',
+                          { lang },
+                        ),
+                        callback_data: `stadiumConfirm_rejected_${stadion.id}`,
+                      },
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: `stadium_view_${stadion.id}_${page}`,
+                      },
+                    ],
                   ],
-                ],
-              },
-            );
+                },
+              );
+            }
           }
           break;
         default: {
@@ -734,6 +810,26 @@ export class AdminService {
           this.i18n.translate('admin.stadium_list.approved_success', { lang }),
           { show_alert: true },
         );
+        if (
+          ctx.session.admin_step === 'owner_stadion_details' &&
+          ctx.session.admin_messageId &&
+          ctx.session.ownerId &&
+          ctx.session.currentPage &&
+          ctx.session.historyPage &&
+          ctx.session.confirment_messageId
+        ) {
+          await ctx
+            .deleteMessage(ctx.session.confirment_messageId)
+            .catch(() => {});
+          ctx.session.confirment_messageId = null;
+          return this.admin_stadions_details(
+            ctx,
+            stadionId,
+            ctx.session.ownerId,
+            ctx.session.currentPage,
+            ctx.session.historyPage,
+          );
+        }
         return this.stadium_status(ctx, status, stadionId, '1');
       } else {
         await this.prisma.stadion.update({
@@ -744,6 +840,24 @@ export class AdminService {
           this.i18n.translate('admin.stadium_list.rejected_success', { lang }),
           { show_alert: true },
         );
+        if (
+          ctx.session.admin_step === 'owner_stadion_details' &&
+          ctx.session.admin_messageId &&
+          ctx.session.ownerId &&
+          ctx.session.currentPage &&
+          ctx.session.historyPage &&
+          ctx.session.confirment_messageId
+        ) {
+          ctx.deleteMessage(ctx.session.confirment_messageId).catch(() => {});
+          ctx.session.confirment_messageId = null;
+          return this.admin_stadions_details(
+            ctx,
+            stadionId,
+            ctx.session.ownerId,
+            ctx.session.currentPage,
+            ctx.session.historyPage,
+          );
+        }
         return this.stadium_status(ctx, status, stadionId, '1');
       }
     } catch (error) {
@@ -1297,7 +1411,7 @@ export class AdminService {
           if (owners.length) {
             return this.AdminPanel_owner(ctx, 'blocked', 0, 1);
           } else {
-            return this.admins_stadiums(ctx, 'owners');
+            return this.admins_stadiums(ctx, 'owners', lang);
           }
         }
         default: {
@@ -1744,7 +1858,7 @@ export class AdminService {
               return [
                 {
                   text: `🏟 ${name}`,
-                  callback_data: `AdminOwner_stadium_detail_${stadion.id}_${ownerId}_${currentPage}_${historyPage}`,
+                  callback_data: `AdminOwnerStadium_detail_${stadion.id}_${ownerId}_${currentPage}_${historyPage}`,
                 },
               ];
             },
@@ -1802,6 +1916,7 @@ export class AdminService {
       }
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     }
   }
   async ownerPremiumReason(
@@ -2124,6 +2239,229 @@ export class AdminService {
       return this.AdminOwner_select(ctx, 'premium', owner.id, currentPage, 1);
     } catch (error) {
       await this.utils.errorFunction(ctx);
+    }
+  }
+
+  async admin_stadions_details(
+    ctx: MyContext,
+    stadionId: number,
+    ownerId: number,
+    currentPage: string,
+    historyPage: string,
+  ) {
+    try {
+      const lang = await this.utils.langs(ctx);
+
+      const stadion = await this.prisma.stadion.findFirst({
+        where: {
+          id: stadionId,
+          owner_id: ownerId,
+        },
+        include: {
+          owner: true,
+          region: true,
+          region_items: true,
+          stadionChedules: true,
+          stadionOffDays: true,
+          stadionSpecialSchedules: true,
+          parent: {
+            include: {
+              stadionChedules: true,
+              stadionOffDays: true,
+              stadionSpecialSchedules: true,
+            },
+          },
+        },
+      });
+
+      if (!stadion) {
+        await ctx.answerCbQuery(
+          this.i18n.translate('admin.not_found', { lang }),
+          {
+            show_alert: true,
+          },
+        );
+        return;
+      }
+
+      const schedules =
+        stadion.stadionChedules.length > 0
+          ? stadion.stadionChedules
+          : (stadion.parent?.stadionChedules ?? []);
+
+      const offDaySchedules =
+        stadion.stadionOffDays.length > 0
+          ? stadion.stadionOffDays
+          : (stadion.parent?.stadionOffDays ?? []);
+
+      const specialSchedules =
+        stadion.stadionSpecialSchedules.length > 0
+          ? stadion.stadionSpecialSchedules
+          : (stadion.parent?.stadionSpecialSchedules ?? []);
+
+      const weekDays = schedules.length
+        ? schedules
+            .map(
+              (s) =>
+                `${this.i18n.translate(`admin.week_days.${s.day_of_week}`, {
+                  lang,
+                })}: ${s.start_time} - ${s.end_time}`,
+            )
+            .join('\n')
+        : this.i18n.translate('admin.stadium_list.no_data', { lang });
+
+      const offDays = offDaySchedules.length
+        ? offDaySchedules.map((d) => formatDate(d.date, lang)).join('\n')
+        : this.i18n.translate('admin.stadium_list.no_data', { lang });
+
+      const specialDays = specialSchedules.length
+        ? specialSchedules
+            .map(
+              (s) =>
+                `${formatDate(s.date, lang)}, ${s.start_time} - ${s.end_time}`,
+            )
+            .join('\n')
+        : this.i18n.translate('admin.stadium_list.no_data', { lang });
+
+      const stadionType = stadion.parent_id
+        ? this.i18n.translate('admin.stadium_list.types.child', { lang })
+        : stadion.mini
+          ? this.i18n.translate('admin.stadium_list.types.mini', { lang })
+          : this.i18n.translate('admin.stadium_list.types.main', { lang });
+
+      const statusText = this.i18n.translate(
+        `admin.stadium_list.statuses.${stadion.admin_status.toLowerCase()}`,
+        { lang },
+      );
+
+      const workingStatus = stadion.working_status
+        ? this.i18n.translate('admin.stadium_list.working_status.active', {
+            lang,
+          })
+        : this.i18n.translate('admin.stadium_list.working_status.inactive', {
+            lang,
+          });
+
+      const miniStatus = stadion.mini
+        ? this.i18n.translate('admin.stadium_list.yes', { lang })
+        : this.i18n.translate('admin.stadium_list.no', { lang });
+
+      const stadionMiniStatus = stadion.stadion_mini
+        ? this.i18n.translate('admin.stadium_list.yes', { lang })
+        : this.i18n.translate('admin.stadium_list.no', { lang });
+
+      const text = this.i18n.translate('admin.stadium_list.details', {
+        lang,
+        args: {
+          id: stadion.id,
+          name: stadion.name,
+          type: stadionType,
+
+          location: getLocation(
+            stadion.latitude,
+            stadion.longitude,
+            stadion.region.name,
+            stadion.region_items.name,
+          ),
+
+          owner: stadion.owner.full_name,
+          phone: stadion.owner.phone,
+
+          price: stadion.price.toLocaleString(),
+          maxCount: stadion.max_count,
+
+          length: stadion.length,
+          width: stadion.width,
+          area: stadion.length * stadion.width,
+
+          paymentType: stadion.payments_type,
+
+          mini: miniStatus,
+          stadionMini: stadionMiniStatus,
+
+          workingStatus,
+          status: statusText,
+
+          latitude: stadion.latitude,
+          longitude: stadion.longitude,
+
+          weekDays,
+          offDays,
+          specialDays,
+
+          createdAt: formatDate(stadion.createdAt, lang),
+          updatedAt: formatDate(stadion.updatedAt, lang),
+        },
+      });
+
+      const actionButtons: InlineKeyboardButton[][] = [];
+
+      if (stadion.admin_status === 'PENDING') {
+        actionButtons.push([
+          {
+            text: this.i18n.translate('admin.stadium_list.buttons.approve', {
+              lang,
+            }),
+            callback_data: `stadiumChecking_approved_${stadion.id}_${historyPage}`,
+          },
+          {
+            text: this.i18n.translate('admin.stadium_list.buttons.reject', {
+              lang,
+            }),
+            callback_data: `stadiumChecking_rejected_${stadion.id}_${historyPage}`,
+          },
+        ]);
+      }
+
+      if (stadion.admin_status === 'APPROVED') {
+        actionButtons.push([
+          {
+            text: this.i18n.translate('admin.stadium_list.buttons.reject', {
+              lang,
+            }),
+            callback_data: `stadiumChecking_rejected_${stadion.id}_${historyPage}`,
+          },
+        ]);
+      }
+
+      if (stadion.admin_status === 'REJECTED') {
+        actionButtons.push([
+          {
+            text: this.i18n.translate('admin.stadium_list.buttons.approve', {
+              lang,
+            }),
+            callback_data: `stadiumChecking_approved_${stadion.id}_${historyPage}`,
+          },
+        ]);
+      }
+
+      actionButtons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: `admin_back_2`,
+        },
+      ]);
+
+      const sent = await ctx.replyWithPhoto(stadion.image, {
+        caption: text,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: actionButtons,
+        },
+      });
+
+      ctx.session.admin_messageId = sent.message_id;
+      ctx.session.admin_step = 'owner_stadion_details';
+      ctx.session.ownerId = ownerId;
+      ctx.session.currentPage = currentPage;
+      ctx.session.historyPage = historyPage;
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    } finally {
+      if (ctx.session.confirment_messageId) {
+        ctx.deleteMessage(ctx.session.confirment_messageId).catch(() => {});
+      }
+      await ctx.answerCbQuery().catch(() => {});
     }
   }
 }

@@ -214,9 +214,8 @@
 
   "owner_stadiums": {
     "empty": "🏟 Bu owner'da hali stadion yo'q.",
-    "working": "🟢 Ishlayapti",
-    "not_working": "🔴 Ishlamayapti",
-    "item": "{index}. {statusIcon} <b>{name}</b>\n{working}",
-    "title": "🏟 <b>Stadionlar ro'yxati</b>\n\n{stadiums}"
-  }
+    "title": "🏟 <b>Stadionlar ro'yxati</b>"
+  },
+
+  "admin_only": "⛔ Bu bo‘lim faqat administratorlar uchun!\n\n🔐 Sizda ushbu bo‘limdan foydalanish uchun yetarli huquqlar mavjud emas. Agar siz administrator bo‘lishingiz kerak deb hisoblasangiz, tizim administratori bilan bog‘laning."
 }

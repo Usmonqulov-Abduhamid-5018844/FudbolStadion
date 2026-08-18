@@ -5,7 +5,12 @@ export interface ISession {
   name: string | null;
   lang: string | null;
   step: string | null;
+  ownerId: number | null;
+  currentPage: string | null;
+  historyPage: string | null;
   advertisement_step: string | null;
+  admin_step: string | null;
+  confirment_messageId: number | null;
   admin_messageId: number | null;
   stadion_step: string | null;
   owner_registor: registerOwner;

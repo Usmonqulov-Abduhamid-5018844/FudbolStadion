@@ -2934,18 +2934,45 @@ export class BotUpdate {
   @Action(/admins_(.+)/)
   async stadiumMenu(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const type = ctx.callbackQuery.data.split('_')[1];
-    return this.adminPaneli.admins_stadiums(ctx, type);
+    return this.adminPaneli.admins_stadiums(ctx, type, lang);
   }
   @Action(/stadium_(.+)_(\d+)_(\d+)/)
   async status(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, status, Id, page] = ctx.callbackQuery.data.split('_');
     return this.adminPaneli.stadium_status(ctx, status, Number(Id), page);
   }
   @Action(/stadiumChecking_(approved|rejected)_(\d+)_(\d+)/)
   async stadiumChecking(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, status, stadionId, currentPage] =
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.status_Checking(
@@ -2958,6 +2985,15 @@ export class BotUpdate {
   @Action(/stadiumConfirm_(rejected|approved)_(\d+)/)
   async stadiumConfirm(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, status, stadionId, currentPage] =
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.stadiumConfirm(ctx, status, Number(stadionId));
@@ -2965,6 +3001,15 @@ export class BotUpdate {
   @Action(/AdminPanel_Owner_(\w+)_(\d+)_(\d+)/)
   async AdminPaner_Owner(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
 
     const parts = ctx.callbackQuery.data.split('_');
     const page = parts[parts.length - 1];
@@ -2984,6 +3029,15 @@ export class BotUpdate {
   @Action(/AdminOwner_(\w+)_(\d+)_(\d+)_(\d+)/)
   async AdminOwner(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, status, ownerId, currentPage, historyPage] =
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.AdminOwner_select(
@@ -2997,6 +3051,15 @@ export class BotUpdate {
   @Action(/ownerPremiumReason_(\w+)_(\d+)_(\d+)/)
   async ownerPremiumReason(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, reason, ownerId, currentPage] = ctx.callbackQuery.data.split('_');
     return this.adminPaneli.ownerPremiumReason(
       ctx,
@@ -3008,6 +3071,15 @@ export class BotUpdate {
   @Action(/ownerPremiumGift_(\d+)_(\d+)_(\d+)_(\w+)/)
   async ownerPremiumGift(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, days, ownerId, currentPage, reason] =
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.ownerPremiumGift(
@@ -3021,6 +3093,15 @@ export class BotUpdate {
   @Action(/AdminOwnerConfirmGift_(\d+)_(\d+)_(\d+)_(\w+)/)
   async AdminOwnerConfirmGift(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+    const userId = ctx.from?.id;
+    if (!userId || !this.AdminChatid.includes(Number(userId))) {
+      await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+        parse_mode: 'HTML',
+      });
+      ctx.answerCbQuery().catch(() => {});
+      return;
+    }
     const [_, days, ownerId, currentPage, reason] =
       ctx.callbackQuery.data.split('_');
     return this.adminPaneli.AdminOwnerConfirmGift(
@@ -3031,6 +3112,35 @@ export class BotUpdate {
       reason as PremiumReason,
     );
   }
+  @Action(/AdminOwnerStadium_detail_(\d+)_(\d+)_(\d+)_(\d+)/)
+  async AdminOwner_stadium_detail(@Ctx() ctx: MyContext) {
+    try {
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      const lang = await this.utils.langs(ctx);
+
+      const userId = ctx.from?.id;
+      if (!userId || !this.AdminChatid.includes(Number(userId))) {
+        await ctx.reply(this.i18n.translate('admin.admin_only', { lang }), {
+          parse_mode: 'HTML',
+        });
+        ctx.answerCbQuery().catch(() => {});
+        return;
+      }
+
+      const [_, __, stadionId, ownerId, currentPage, historyPage] =
+        ctx.callbackQuery.data.split('_');
+
+      return this.adminPaneli.admin_stadions_details(
+        ctx,
+        Number(stadionId),
+        Number(ownerId),
+        currentPage,
+        historyPage,
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+    }
+  }
 
   @Action(/admin_back_(\d+)/)
   async adminBack(@Ctx() ctx: MyContext) {
@@ -3040,6 +3150,17 @@ export class BotUpdate {
     switch (step) {
       case '1': {
         return this.adminPaneli.admin_paneli(ctx, lang);
+      }
+      case '2': {
+        if (ctx.session.admin_messageId) {
+          await ctx.deleteMessage(ctx.session.admin_messageId).catch(() => {});
+          ctx.session.admin_messageId = null;
+          ctx.session.admin_step = null;
+          ctx.session.ownerId = null;
+          ctx.session.currentPage = null;
+          ctx.session.historyPage = null;
+          ctx.session.confirment_messageId = null
+        }
       }
     }
   }
@@ -5620,8 +5741,7 @@ export class BotUpdate {
 
           try {
             await ctx.deleteMessages([promptMessageId, ctx.message.message_id]);
-          } catch {
-          }
+          } catch {}
 
           await this.adminPaneli.handleAdminOwnerSearchText(ctx, searchText);
           return;

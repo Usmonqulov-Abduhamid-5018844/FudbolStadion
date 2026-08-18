@@ -213,9 +213,7 @@
 
   "owner_stadiums": {
     "empty": "🏟 This owner has no stadiums yet.",
-    "working": "🟢 Working",
-    "not_working": "🔴 Not working",
-    "item": "{index}. {statusIcon} <b>{name}</b>\n{working}",
-    "title": "🏟 <b>Stadium list</b>\n\n{stadiums}"
-  }
+    "title": "🏟 <b>Stadium list</b>"
+  },
+  "admin_only": "⛔ This section is for administrators only!\n\n🔐 You do not have sufficient permissions to access this section. If you believe you should have administrator access, please contact the system administrator."
 }
