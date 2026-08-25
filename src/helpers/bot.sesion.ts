@@ -10,6 +10,9 @@ export interface ISession {
   historyPage: string | null;
   advertisement_step: string | null;
   admin_step: string | null;
+  admin_bron_name: string | null,
+  admin_bron_phone: string | null,
+  admin_booking_messages:number[] | null;
   confirment_messageId: number | null;
   admin_messageId: number | null;
   stadion_step: string | null;

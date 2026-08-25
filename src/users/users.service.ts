@@ -1828,7 +1828,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     try {
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
-        include: { parent: true },
+        include: { parent: true, owner: { select: { id: true } } },
       });
 
       if (!stadion) {
@@ -1938,16 +1938,24 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           },
         ];
       });
-
-      buttons.push([
-        {
-          text: this.i18n.translate('schedule.back', { lang }),
-          callback_data: JSON.stringify({
-            type: 'Continue_back_stadion',
-            id: stadion.region_item_id,
-          }),
-        },
-      ]);
+      if (ctx.session.admin_step === 'NewBooking_owners') {
+        buttons.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: `Newbooking_firstName_${stadion.owner.id}_${lang}`,
+          },
+        ]);
+      } else {
+        buttons.push([
+          {
+            text: this.i18n.translate('schedule.back', { lang }),
+            callback_data: JSON.stringify({
+              type: 'Continue_back_stadion',
+              id: stadion.region_item_id,
+            }),
+          },
+        ]);
+      }
 
       await this.utils.safeEditOrReply(
         ctx,
@@ -2557,7 +2565,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       const referenceStart =
         specialRow?.start_time ?? scheduleRow?.start_time ?? start_time;
 
-
       const toMinutes = (time: string) => {
         const [hour, minute] = time.split(':').map(Number);
 
@@ -2584,6 +2591,67 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         end_time,
         referenceStart,
       );
+      const days = this.utils.formatCalendarDate(bookingDate);
+
+      if (ctx.session.admin_step === 'NewBooking_owners') {
+        const { total, price, hors } = this.utils.calculateTotalPrice_Admins(
+          start_time,
+          end_time,
+          stadion.price,
+        );
+
+        const booking = await this.prisma.booking.create({
+          data: {
+            stadion_id: stadion.id,
+            date: bookingDate,
+            start_time,
+            end_time,
+            customer_name: ctx.session.admin_bron_name,
+            customer_phone:ctx.session.admin_bron_phone,
+            startAt,
+            endAt,
+            status:"CONFIRMED",
+            total_price: total,
+            payment_method: 'CASH',
+            expires_at: new Date(Date.now() + 15 * 60 * 1000),
+          },
+        });
+        ctx.session.admin_bron_name = null,
+        ctx.session.admin_bron_phone = null
+        if(ctx.session.admin_booking_messages?.length){
+          await ctx.deleteMessages(ctx.session.admin_booking_messages).catch(()=>{})
+        }
+
+        const buttons: InlineKeyboardButton[][] = [
+          [
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'back_owner_11',
+            },
+          ],
+        ];
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('admin.new_booking.success', {
+            lang,
+            args: {
+              stadion: stadion.name,
+              date: formatDate(bookingDate,lang),
+              start_time,
+              end_time,
+              hours: hors,
+              total_price: total,
+              status: statusMap(booking.status, this.i18n, lang),
+            },
+          }),
+          {
+            inline_keyboard: buttons,
+          },
+        );
+        ctx.session.admin_step = null;
+        return;
+      }
 
       const cardId = stadion.owner?.ownerCard?.id;
       const hasCard = !!cardId;
@@ -2608,9 +2676,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           },
         },
       });
-
-
-      const days = this.utils.formatCalendarDate(bookingDate);
 
 
       const paymentTextMap = {
@@ -2683,7 +2748,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
           args: {
             warning,
-            date: days,
+             date: formatDate(bookingDate,lang),
             start_time,
             end_time,
             hours: hors,
@@ -2754,7 +2819,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
           args: {
             warning,
-            date: days,
+             date: formatDate(bookingDate,lang),
             start_time,
             end_time,
             hours: hors,
@@ -2774,10 +2839,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 : '',
           },
         });
-
-        /**
-         * BOOKING
-         */
 
         const booking = await this.prisma.booking.create({
           data: {
@@ -2912,7 +2973,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
             args: {
               warning,
-              date: days,
+              date: formatDate(bookingDate,lang),
               start_time,
               end_time,
               hours: hors,
@@ -2975,7 +3036,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
               args: {
                 warning,
-                date: days,
+                 date: formatDate(bookingDate,lang),
                 start_time,
                 end_time,
                 hours: hors,
@@ -3062,7 +3123,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
               args: {
                 warning,
-                date: days,
+                 date: formatDate(bookingDate,lang),
                 start_time,
                 end_time,
                 hours: hors,
@@ -3119,12 +3180,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           return;
         }
 
-        /**
-         * ---------------------------------------------------------
-         * 10.4. CARD + CASH TANLASH
-         * ---------------------------------------------------------
-         */
-
         const shortDate = bookingDate.toISOString().split('T')[0];
 
         await this.utils.safeEditOrReply(
@@ -3168,7 +3223,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     }
   }
 
-  async bookingPayments( 
+  async bookingPayments(
     ctx: MyContext,
     type: string,
     days: string,
@@ -3249,7 +3304,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 lang,
                 args: {
                   warning,
-                  date: days,
+                  date: formatDate(date,lang),
                   start_time,
                   end_time,
                   hours: hors,
@@ -3335,7 +3390,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               lang,
               args: {
                 warning: warning,
-                date: dayss,
+                date: formatDate(date,lang),
                 start_time,
                 end_time,
                 hours: hors,

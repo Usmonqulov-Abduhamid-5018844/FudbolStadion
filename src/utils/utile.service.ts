@@ -473,6 +473,7 @@ export class UtilisService implements OnModuleInit {
       ctx.session.ownerActiveBooking = [];
     }
   }
+
   async sendPagination(
     ctx: MyContext,
     page: number,
@@ -810,6 +811,24 @@ export class UtilisService implements OnModuleInit {
     return {
       total,
       penalty,
+      price: durationHours * pricePerHour,
+      hors: durationHours,
+    };
+  }
+
+  calculateTotalPrice_Admins(
+    start: string,
+    end: string,
+    pricePerHour: number,
+  ) {
+    const { endRel: durationMinutes } = this.normalizeRange(start, end);
+    const durationHours = durationMinutes / 60;
+
+    let total = durationHours * pricePerHour;
+    
+
+    return {
+      total,
       price: durationHours * pricePerHour,
       hors: durationHours,
     };

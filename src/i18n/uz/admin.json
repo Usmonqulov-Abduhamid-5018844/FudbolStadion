@@ -218,11 +218,20 @@
   },
 
   "admin_only": "⛔ Bu bo‘lim faqat administratorlar uchun!\n\n🔐 Sizda ushbu bo‘limdan foydalanish uchun yetarli huquqlar mavjud emas. Agar siz administrator bo‘lishingiz kerak deb hisoblasangiz, tizim administratori bilan bog‘laning.",
-  
-  "bron": "📞 Bronni qo‘lda kiritish",
-  
-  "access_denied":  "🚫 Bu bo‘limdan foydalanish huquqingiz yo‘q.",
-  
-  "select_stadium": "🏟 Qo‘ng‘iroq orqali olingan bronni qaysi stadionga kiritmoqchisiz?"
 
+  "bron": "📞 Bronni qo‘lda kiritish",
+
+  "access_denied": "🚫 Bu bo‘limdan foydalanish huquqingiz yo‘q.",
+
+  "select_stadium": "🏟 Qo‘ng‘iroq orqali olingan bronni qaysi stadionga kiritmoqchisiz?",
+
+  "new_booking": {
+    "success": "✅ Bron muvaffaqiyatli yaratildi!\n\n🏟 <b>Stadion:</b> {stadion}\n\n📅 <b>Sana:</b> {date}\n\n⏰ <b>Vaqt:</b> {start_time} — {end_time}\n\n⌛ <b>Davomiyligi:</b> {hours} soat\n\n💰 <b>Jami summa:</b> {total_price}\n\n💳 <b>To‘lov turi:</b> Naqd\n\n🟢 Bron holati: <b>{status}</b>"
+  },
+
+  "booking": {
+    "invalid_name": "❌ Mijoz ismini to‘g‘ri kiriting.\n\nIsm 2 dan 50 tagacha belgidan iborat bo‘lishi kerak.",
+    "enter_name": "🏟 Stadion bron qilmoqchi bo‘lgan mijozning ismini kiriting...",
+    "enter_phone": "📞 Mijozning telefon raqamini kiriting..."
+  }
 }

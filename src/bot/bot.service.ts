@@ -8,7 +8,7 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { UtilisService } from 'src/utils/utile.service';
-import { EStadion_type, IStadion } from 'src/helpers/interface';
+import { EStadion_type, INITIAL_SESSION, IStadion } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';

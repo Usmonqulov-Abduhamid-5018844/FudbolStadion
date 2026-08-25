@@ -204,6 +204,7 @@ export class BotUpdate {
 
   @Action(/errorBack_(.+)$/)
   async errorBack(@Ctx() ctx: MyContext) {
+    ctx.session = structuredClone(INITIAL_SESSION);
     if (ctx.callbackQuery) {
       try {
         await ctx.answerCbQuery();
@@ -268,65 +269,93 @@ export class BotUpdate {
     await this.userService.stadionAll_data(ctx, lang, stadion);
   }
 
-  ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+  ////////////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
 
   @Action(/Newbooking_(\w+)_(\d+)_(\w+)$/)
   async Newbooking(@Ctx() ctx: MyContext) {
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
       const [_, type, Id, lang] = ctx.callbackQuery.data.split('_');
-      switch(type){
-        case "owners":
-          {
-               const owner = await this.prisma.owners.findUnique({
-          where: { id: Number(Id) },
-        });
-        if (!owner || String(ctx.from?.id) !== owner.chatID) {
-          await ctx.answerCbQuery(
-            this.i18n.translate('admin.access_denied', { lang }),
-            { show_alert: true },
+      switch (type) {
+        case 'owners': {
+          const owner = await this.prisma.owners.findUnique({
+            where: { id: Number(Id) },
+          });
+          if (!owner || String(ctx.from?.id) !== owner.chatID) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('admin.access_denied', { lang }),
+              { show_alert: true },
+            );
+            return;
+          }
+          try {
+            await ctx.editMessageText(
+                this.i18n.translate("admin.booking.enter_name",{lang}),
+              );
+            } catch (error) {
+           const sent = await ctx.reply(this.i18n.translate("admin.booking.enter_name",{lang}))
+           ctx.session.admin_booking_messages ??= []
+           ctx.session.admin_booking_messages.push(sent.message_id)
+          }
+          ctx.session.admin_step = 'admin_bron_name';
+          ctx.session.admin_bron_name = null;
+          ctx.session.admin_bron_phone = null;
+
+          break;
+        }
+        case 'firstName': {
+          const owner = await this.prisma.owners.findUnique({
+            where: { id: Number(Id) },
+          });
+
+          if (!owner) {
+            await this.utils.errorFunction(ctx);
+            return;
+          }
+          const stadions = await this.prisma.stadion.findMany({
+            where: { owner_id: Number(Id) },
+          });
+          if (!stadions.length) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('stadions.not_fount', { lang }),
+            );
+            return;
+          }
+          const buttons: InlineKeyboardButton[][] = stadions.map((item) => [
+            {
+              text:
+                item.name.length > 20
+                  ? `🏟  ${item.name.slice(0, 20)}...`
+                  : `🏟  ` + item.name,
+              callback_data: `Newbooking_stadions_${item.id}_${lang}`,
+            },
+          ]);
+          buttons.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'back_owner_11',
+            },
+          ]);
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.select_stadium', { lang }),
+            { inline_keyboard: buttons },
           );
-          return;
+
+          break;
         }
-        const stadions = await this.prisma.stadion.findMany({
-          where: { owner_id: Number(Id) },
-        });
-        if (!stadions.length) {
-          await ctx.answerCbQuery(
-            this.i18n.translate('stadions.not_fount', { lang }),
-          );
-          return;
+        case 'stadions': {
+          ctx.session.admin_step = 'NewBooking_owners';
+          return this.userService.userbookingStadion(ctx, lang, Number(Id));
         }
-        const buttons: InlineKeyboardButton[][] = stadions.map((item) => [
-          {
-            text:
-              item.name.length > 20
-                ? `${item.name.slice(0, 20)}...`
-                : item.name,
-            callback_data: `Newbooking_stadions_${item.id}_${lang}`,
-          },
-        ]);
-        await this.utils.safeEditOrReply(ctx,this.i18n.translate("admin.select_stadium",{lang}),buttons)
-        
-        break;
-      }
-      case "stadions":
-        {
-            ctx.session.admin_step = 'NewBooking_owners';
-            return this.userService.userbookingStadion(ctx,lang,Number(Id))
-        }
-        default:{
-          await this.utils.errorFunction(ctx)
+        default: {
+          await this.utils.errorFunction(ctx);
           break;
         }
       }
-      
-
-      ctx.answerCbQuery().catch(() => {});
     } catch (error) {
       await this.utils.errorFunction(ctx);
       console.log(error);
-      
     }
   }
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
@@ -5794,6 +5823,95 @@ export class BotUpdate {
 
           await this.adminPaneli.handleAdminOwnerSearchText(ctx, searchText);
           return;
+        }
+        return;
+      }
+      if (ctx.session.admin_step === 'admin_bron_name') {
+        const name = text.trim();
+
+        if (!name || name.length < 2 || name.length > 50) {
+          const sent = await ctx.reply(
+            this.i18n.translate('admin.booking.invalid_name', { lang }),
+          );
+          ctx.session.admin_booking_messages ??= [];
+          ctx.session.admin_booking_messages.push(sent.message_id);
+          return;
+        }
+        ctx.session.admin_bron_name = text;
+        try {
+          await ctx.editMessageText(this.i18n.translate("admin.booking.enter_phone",{lang}));
+          
+        } catch (error) {
+          const sent = await ctx.reply(this.i18n.translate("admin.booking.enter_phone",{lang}))
+          ctx.session.admin_booking_messages ??= []
+          ctx.session.admin_booking_messages.push(sent.message_id)
+        }
+        ctx.session.admin_step = 'admin_bron_phone';
+        return;
+      }
+      if (ctx.session.admin_step === 'admin_bron_phone') {
+        try {
+          const phone = text;
+
+          const phoneRegex = /^(?:\+998|998)?[0-9]{9}$/;
+
+          if (!phone || !phoneRegex.test(phone)) {
+            const sent = await ctx.reply(
+              this.i18n.translate('error.phone_invalid', { lang }),
+            );
+            ctx.session.admin_booking_messages ??= [];
+            ctx.session.admin_booking_messages.push(sent.message_id);
+            return;
+          }
+
+          let normalizedPhone = phone;
+
+          if (phone.length === 9) {
+            normalizedPhone = `+998${phone}`;
+          } else if (phone.startsWith('998')) {
+            normalizedPhone = `+${phone}`;
+          }
+          ctx.session.admin_bron_phone = phone;
+          const owner = await this.prisma.owners.findUnique({
+            where: { chatID: String(ctx.from?.id) },
+          });
+          if (!owner) {
+            await this.utils.errorFunction(ctx);
+            return;
+          }
+          const stadions = await this.prisma.stadion.findMany({
+            where: { owner_id: owner.id },
+          });
+          if (!stadions.length) {
+            await ctx.answerCbQuery(
+              this.i18n.translate('stadions.not_fount', { lang }),
+            );
+            return;
+          }
+          const buttons: InlineKeyboardButton[][] = stadions.map((item) => [
+            {
+              text:
+                item.name.length > 20
+                  ? `🏟  ${item.name.slice(0, 20)}...`
+                  : `🏟  ` + item.name,
+              callback_data: `Newbooking_stadions_${item.id}_${lang}`,
+            },
+          ]);
+          buttons.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'back_owner_11',
+            },
+          ]);
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('admin.select_stadium', { lang }),
+            { inline_keyboard: buttons },
+          );
+
+          return;
+        } catch (error) {
+          await this.utils.errorFunction(ctx);
         }
       }
 

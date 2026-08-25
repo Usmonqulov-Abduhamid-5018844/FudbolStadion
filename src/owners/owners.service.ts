@@ -1197,6 +1197,10 @@ export class OwnersService {
           if (ctx.session.ownerStadions?.length) {
             await ctx.deleteMessages(ctx.session.ownerStadions);
           }
+          break;
+        }
+        case '11':{
+          return this.owner_Bron(ctx, lang)
         }
         default: {
           break;
@@ -1770,7 +1774,7 @@ export class OwnersService {
           lang,
           args: {
             id: booking.id,
-            date: format(new Date(booking.date), 'dd.MM.yyyy'),
+            date: formatDate(booking.date,lang),
             time: `${booking.start_time} - ${booking.end_time}`,
             stadium: booking.stadion.name,
             region: booking.stadion.region.name,
@@ -1850,7 +1854,7 @@ export class OwnersService {
               ? timeLeftText
               : this.i18n.translate('bookingHistory.time_expired', { lang }),
           user: booking.user ? booking.user.full_name: booking.customer_name,
-          phone: `+${booking.user ? booking.user.phone : booking.customer_phone}`,
+          phone: `${booking.user ? `+${booking.user.phone}` : booking.customer_phone}`,
           username: booking.user?.username
             ? `🔗 @${booking.user.username}`
             : '_',

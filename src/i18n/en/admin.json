@@ -218,11 +218,18 @@
   "admin_only": "⛔ This section is for administrators only!\n\n🔐 You do not have sufficient permissions to access this section. If you believe you should have administrator access, please contact the system administrator.",
 
   "bron": "📞 Enter booking manually",
-  
-  "access_denied": "🚫 You do not have access to this section.",
-  
-  "select_stadium": "🏟 Which stadium should the phone booking be added to?"
-  
 
-  
+  "access_denied": "🚫 You do not have access to this section.",
+
+  "select_stadium": "🏟 Which stadium should the phone booking be added to?",
+
+  "new_booking": {
+    "success": "✅ Booking successfully created!\n\n🏟 <b>Stadium:</b> {stadion}\n📅 <b>Date:</b> {date}\n⏰ <b>Time:</b> {start_time} — {end_time}\n⌛ <b>Duration:</b> {hours} hours\n💰 <b>Total price:</b> {total_price}\n💳 <b>Payment method:</b> Cash\n\n🟢 Booking status: <b>{status}</b>"
+  },
+
+  "booking": {
+    "invalid_name": "❌ Please enter the customer's name correctly.\n\nThe name must contain between 2 and 50 characters.",
+    "enter_name": "🏟 Enter the name of the customer who wants to book the stadium...",
+    "enter_phone": "📞 Enter the customer's phone number..."
+  }
 }
