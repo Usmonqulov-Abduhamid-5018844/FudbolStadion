@@ -86,13 +86,17 @@ export class UsersService {
                 stadion: { include: { region: true, region_items: true } },
               },
             });
-            if(!advertisement){
-                ctx.session.advertisement_step = null
-              await this.utils.errorFunction(ctx)
-              return
+            if (!advertisement) {
+              ctx.session.advertisement_step = null;
+              await this.utils.errorFunction(ctx);
+              return;
             }
-            ctx.session.advertisement_step = null
-            return this.botService.advertisementBooking(ctx, lang, advertisement.stadion);
+            ctx.session.advertisement_step = null;
+            return this.botService.advertisementBooking(
+              ctx,
+              lang,
+              advertisement.stadion,
+            );
           }
 
           await ctx.reply(
@@ -472,16 +476,11 @@ export class UsersService {
                 );
               } catch (error) {}
 
-              const Time = (
-                data: Date,
-                start_time: string,
-                end_time: string,
-                lang: string,
-              ) => {
+              const Time = (startAt: Date, andAt: Date, lang: string) => {
                 const { timeLeftText, totalMinutes } =
-                  this.utils.bookingTimeCalculate(data, start_time, lang);
+                  this.utils.bookingTimeCalculate(startAt, lang);
                 const { totalMinutes: endMinutes } =
-                  this.utils.bookingTimeCalculate(data, end_time, lang);
+                  this.utils.bookingTimeCalculate(andAt, lang);
 
                 if (totalMinutes <= 0 && endMinutes > 0) {
                   return this.i18n.translate('booking.game_started', { lang });
@@ -519,7 +518,7 @@ ${this.i18n.translate('bookingHistory.booking.date', { lang })}: ${format(item.d
 
 ${this.i18n.translate('bookingHistory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
 
-${this.i18n.translate('bookingHistory.booking.remaining_time', { lang })}: ${Time(item.date, item.start_time, item.end_time, lang)}
+${this.i18n.translate('bookingHistory.booking.remaining_time', { lang })}: ${Time(item.startAt, item.endAt, lang)}
 
 ${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}
 
@@ -538,6 +537,8 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   item.date,
                   item.start_time,
                   item.end_time,
+                  item.startAt,
+                  item.endAt,
                   Number(item.total_price),
                   item.tranzaktions?.id,
                   page,
@@ -1245,7 +1246,7 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       await this.utils.errorFunction(ctx);
     }
   }
- async userbookingRegionItems(
+  async userbookingRegionItems(
     ctx: MyContext,
     lang: string,
     itemId: number,
@@ -1373,7 +1374,6 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
         },
       );
     } catch (error) {
-      console.log(error);
       await this.utils.errorFunction(ctx);
     }
   }
@@ -1980,97 +1980,84 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       }
 
       const stadionIds = getStadionIds(stadion);
-
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
-      const tzOffset = 5 * 60;
-      const now = new Date();
-      const tzNow = new Date(
-        now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60000,
+      const referenceStart = special.start_time;
+
+      const startOfDay = this.utils.buildCalendarDate(
+        special.date.getUTCFullYear(),
+        special.date.getUTCMonth() + 1,
+        special.date.getUTCDate(),
       );
+
       let scheduleStart = special.start_time;
-      const time = this.utils.roundUpToNextHour(tzNow);
-      const currentTime = time.toTimeString().slice(0, 5);
+      const currentTime = this.utils.currentTashkentTimeRoundedUp();
+
+      const nowInstant = new Date();
+      const isSameCalendarDay = this.utils.isSameTashkentDay(
+        startOfDay,
+        nowInstant,
+      );
 
       if (
-        special.date.getFullYear() === tzNow.getFullYear() &&
-        special.date.getMonth() === tzNow.getMonth() &&
-        special.date.getDate() === tzNow.getDate()
+        isSameCalendarDay &&
+        this.utils.isCurrentTimeAfter(
+          currentTime,
+          scheduleStart,
+          referenceStart,
+        )
       ) {
-        if (currentTime > scheduleStart) {
-          scheduleStart = currentTime;
-        }
+        scheduleStart = currentTime;
       }
+
       const allSlots = await this.utils.generateSlots(
         scheduleStart,
         special.end_time,
       );
-      const startOfDay = new Date(
-        special.date.getFullYear(),
-        special.date.getMonth() + 1,
-        special.date.getDate(),
+
+      const windowStart = this.utils.combineDateAndTime(
+        startOfDay,
+        scheduleStart,
+        referenceStart,
+      );
+      const windowEnd = this.utils.combineDateAndTime(
+        startOfDay,
+        special.end_time,
+        referenceStart,
       );
 
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: { in: stadionIds },
-          date: startOfDay,
-          status: {
-            in: ['CONFIRMED', 'PAID', 'PENDING'],
-          },
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+          startAt: { lt: windowEnd },
+          endAt: { gt: windowStart },
         },
       });
-      if (bookings.length) {
-        const freeSlots = allSlots.filter((slot) =>
-          this.utils.isSlotFree(slot, bookings),
+
+      const freeSlots = allSlots.filter((slot) => {
+        const slotStart = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.start,
+          referenceStart,
         );
-        if (freeSlots.length) {
-          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-            const row: InlineKeyboardButton[] = [];
-            for (let j = 0; j < slotsPerKeyboard; j++) {
-              if (freeSlots[i + j]) {
-                row.push({
-                  text: freeSlots[i + j].start,
-                  callback_data: `booking_special_${freeSlots[i + j].start}_${special.id}_${stadionId}`,
-                });
-              }
-            }
-            button.push(row);
-          }
-        } else {
-          try {
-            await ctx.answerCbQuery(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              { show_alert: true },
-            );
-            return;
-          } catch (error) {
-            await ctx.reply(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_back_${stadionId}`,
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-          }
-        }
-      } else {
-        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+        const slotEnd = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.end,
+          referenceStart,
+        );
+        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
+      });
+
+      if (freeSlots.length) {
+        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
           const row: InlineKeyboardButton[] = [];
           for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (allSlots[i + j]) {
+            if (freeSlots[i + j]) {
               row.push({
-                text: allSlots[i + j].start,
-                callback_data: `booking_special_${allSlots[i + j].start}_${special.id}_${stadionId}`,
+                text: freeSlots[i + j].start,
+                callback_data: `booking_special_${freeSlots[i + j].start}_${special.id}_${stadionId}`,
               });
             }
           }
@@ -2082,13 +2069,36 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             callback_data: `booking_back_${stadionId}`,
           },
         ]);
+      } else {
+        try {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            { show_alert: true },
+          );
+          return;
+        } catch (error) {
+          await ctx.reply(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: `booking_back_${stadionId}`,
+                    },
+                  ],
+                ],
+              },
+            },
+          );
+        }
       }
+
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('booking.stadion.selectTime', { lang }),
-        {
-          inline_keyboard: button,
-        },
+        { inline_keyboard: button },
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
@@ -2116,84 +2126,65 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         await this.utils.errorFunction(ctx);
         return;
       }
+
       const stadionsIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
+
+      const referenceStart = special.start_time;
+
       const allSlots = await this.utils.generateSlots(
         start_time,
         special.end_time,
       );
-      const startOfDay = new Date(
-        special.date.getFullYear(),
-        special.date.getMonth() + 1,
-        special.date.getDate(),
+
+      const startOfDay = this.utils.buildCalendarDate(
+        special.date.getUTCFullYear(),
+        special.date.getUTCMonth() + 1,
+        special.date.getUTCDate(),
+      );
+      const windowStart = this.utils.combineDateAndTime(
+        startOfDay,
+        start_time,
+        referenceStart,
+      );
+      const windowEnd = this.utils.combineDateAndTime(
+        startOfDay,
+        special.end_time,
+        referenceStart,
       );
 
-      const booking = await this.prisma.booking.findMany({
+      const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: { in: stadionsIds },
-          date: startOfDay,
-          status: {
-            in: ['CONFIRMED', 'PAID', 'PENDING'],
-          },
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+          startAt: { lt: windowEnd },
+          endAt: { gt: windowStart },
         },
       });
-      if (booking.length) {
-        const freeSlots = allSlots.filter((slot) =>
-          this.utils.isSlotFree(slot, booking),
+
+      const freeSlots = allSlots.filter((slot) => {
+        const slotStart = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.start,
+          referenceStart,
         );
-        if (freeSlots.length) {
-          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-            const row: InlineKeyboardButton[] = [];
-            for (let j = 0; j < slotsPerKeyboard; j++) {
-              if (freeSlots[i + j]) {
-                row.push({
-                  text: freeSlots[i + j].end,
-                  callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${stadionId}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
-                });
-              }
-            }
-            button.push(row);
-          }
-          button.push([
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_specialBack_${special.id}_${stadionId}`,
-            },
-          ]);
-        } else {
-          try {
-            await ctx.answerCbQuery(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              { show_alert: true },
-            );
-            return;
-          } catch (error) {
-            await ctx.reply(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_specialBack_${special.id}_${stadionId}`,
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-          }
-        }
-      } else {
-        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+        const slotEnd = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.end,
+          referenceStart,
+        );
+        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
+      });
+
+      if (freeSlots.length) {
+        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
           const row: InlineKeyboardButton[] = [];
           for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (allSlots[i + j]) {
+            if (freeSlots[i + j]) {
               row.push({
-                text: allSlots[i + j].end,
-                callback_data: `booking_specialEnd_${start_time}_${allSlots[i + j].end}_${stadionId}_${special.date.getFullYear()}_${special.date.getMonth() + 1}_${special.date.getDate()}`,
+                text: freeSlots[i + j].end,
+                callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${stadionId}_${special.date.getUTCFullYear()}_${special.date.getUTCMonth() + 1}_${special.date.getUTCDate()}`,
               });
             }
           }
@@ -2205,13 +2196,36 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             callback_data: `booking_specialBack_${special.id}_${stadionId}`,
           },
         ]);
+      } else {
+        try {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            { show_alert: true },
+          );
+          return;
+        } catch (error) {
+          await ctx.reply(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: `booking_specialBack_${special.id}_${stadionId}`,
+                    },
+                  ],
+                ],
+              },
+            },
+          );
+        }
       }
+
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('booking.stadion.selectEndTime', { lang }),
-        {
-          inline_keyboard: button,
-        },
+        { inline_keyboard: button },
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
@@ -2242,36 +2256,35 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         this.utils.errorFunction(ctx);
         return;
       }
+
       const stadionsIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
-      const tz = 'Asia/Tashkent';
-      const year = new Date().getFullYear();
-      const tzOffset = 5 * 60;
-
-      const startOfDay = new Date(
-        Date.UTC(year, Number(monthNumber) - 1, Number(day)),
+      const referenceStart = scheduleDate.start_time;
+      const startOfDay = this.utils.buildCalendarDate(
+        Number(years),
+        Number(monthNumber),
+        Number(day),
       );
 
-      const now = new Date();
-      const tzNow = new Date(
-        now.getTime() + (tzOffset + now.getTimezoneOffset()) * 60000,
-      );
-
+      const currentTime = this.utils.currentTashkentTimeRoundedUp();
       let scheduleStart = scheduleDate.start_time;
 
-      const time = this.utils.roundUpToNextHour(tzNow);
-      const currentTime = time.toTimeString().slice(0, 5);
+      const isSameCalendarDay = this.utils.isSameTashkentDay(
+        startOfDay,
+        new Date(),
+      );
 
       if (
-        startOfDay.getFullYear() === tzNow.getFullYear() &&
-        startOfDay.getMonth() === tzNow.getMonth() &&
-        startOfDay.getDate() === tzNow.getDate()
+        isSameCalendarDay &&
+        this.utils.isCurrentTimeAfter(
+          currentTime,
+          scheduleStart,
+          referenceStart,
+        )
       ) {
-        if (currentTime > scheduleStart) {
-          scheduleStart = currentTime;
-        }
+        scheduleStart = currentTime;
       }
 
       const allSlots = await this.utils.generateSlots(
@@ -2279,73 +2292,48 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         scheduleDate.end_time,
       );
 
+      const windowStart = this.utils.combineDateAndTime(
+        startOfDay,
+        scheduleStart,
+        referenceStart,
+      );
+      const windowEnd = this.utils.combineDateAndTime(
+        startOfDay,
+        scheduleDate.end_time,
+        referenceStart,
+      );
+
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: { in: stadionsIds },
-          date: startOfDay,
-          status: {
-            in: ['CONFIRMED', 'PAID', 'PENDING'],
-          },
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+          startAt: { lt: windowEnd },
+          endAt: { gt: windowStart },
         },
       });
 
-      if (bookings.length) {
-        const freeSlots = allSlots.filter((slot) => {
-          return this.utils.isSlotFree(slot, bookings);
-        });
+      const freeSlots = allSlots.filter((slot) => {
+        const slotStart = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.start,
+          referenceStart,
+        );
+        const slotEnd = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.end,
+          referenceStart,
+        );
+        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
+      });
 
-        if (freeSlots.length) {
-          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-            const row: InlineKeyboardButton[] = [];
-            for (let j = 0; j < slotsPerKeyboard; j++) {
-              if (freeSlots[i + j]) {
-                row.push({
-                  text: freeSlots[i + j].start,
-                  callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-                });
-              }
-            }
-            button.push(row);
-          }
-          button.push([
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_back_${stadionId}`,
-            },
-          ]);
-        } else {
-          try {
-            await ctx.answerCbQuery(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              { show_alert: true },
-            );
-            return;
-          } catch (error) {
-            await ctx.reply(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_back_${stadionId}`,
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-          }
-        }
-      } else {
-        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+      if (freeSlots.length) {
+        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
           const row: InlineKeyboardButton[] = [];
           for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (allSlots[i + j]) {
+            if (freeSlots[i + j]) {
               row.push({
-                text: allSlots[i + j].start,
-                callback_data: `booking_timeStart_${allSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
+                text: freeSlots[i + j].start,
+                callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
               });
             }
           }
@@ -2357,20 +2345,42 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             callback_data: `booking_back_${stadionId}`,
           },
         ]);
+      } else {
+        try {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            { show_alert: true },
+          );
+          return;
+        } catch (error) {
+          await ctx.reply(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: `booking_back_${stadionId}`,
+                    },
+                  ],
+                ],
+              },
+            },
+          );
+        }
       }
+
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('booking.stadion.selectTime', { lang }),
-        {
-          inline_keyboard: button,
-        },
+        { inline_keyboard: button },
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
       console.log(error);
     }
   }
-
   async bookingSchedule_end(
     ctx: MyContext,
     years: string,
@@ -2395,15 +2405,17 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         this.utils.errorFunction(ctx);
         return;
       }
+
       const stadionIds = getStadionIds(stadion);
       const button: InlineKeyboardButton[][] = [];
       const slotsPerKeyboard = 2;
 
-      const tz = 'Asia/Tashkent';
-      const year = new Date().getFullYear();
+      const referenceStart = scheduleDate.start_time;
 
-      const startOfDay = new Date(
-        Date.UTC(year, Number(monthNumber) - 1, Number(day)),
+      const startOfDay = this.utils.buildCalendarDate(
+        Number(years),
+        Number(monthNumber),
+        Number(day),
       );
 
       const allSlots = await this.utils.generateSlots(
@@ -2411,73 +2423,48 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         scheduleDate.end_time,
       );
 
+      const windowStart = this.utils.combineDateAndTime(
+        startOfDay,
+        start_time,
+        referenceStart,
+      );
+      const windowEnd = this.utils.combineDateAndTime(
+        startOfDay,
+        scheduleDate.end_time,
+        referenceStart,
+      );
+
       const bookings = await this.prisma.booking.findMany({
         where: {
           stadion_id: { in: stadionIds },
-          date: startOfDay,
-          status: {
-            in: ['CONFIRMED', 'PAID', 'PENDING'],
-          },
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+          startAt: { lt: windowEnd },
+          endAt: { gt: windowStart },
         },
       });
 
-      if (bookings.length) {
-        const freeSlots = allSlots.filter((slot) =>
-          this.utils.isSlotFree(slot, bookings),
+      const freeSlots = allSlots.filter((slot) => {
+        const slotStart = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.start,
+          referenceStart,
         );
+        const slotEnd = this.utils.combineDateAndTime(
+          startOfDay,
+          slot.end,
+          referenceStart,
+        );
+        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
+      });
 
-        if (freeSlots.length) {
-          for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-            const row: InlineKeyboardButton[] = [];
-            for (let j = 0; j < slotsPerKeyboard; j++) {
-              if (freeSlots[i + j]) {
-                row.push({
-                  text: freeSlots[i + j].end,
-                  callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}`,
-                });
-              }
-            }
-            button.push(row);
-          }
-          button.push([
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-            },
-          ]);
-        } else {
-          try {
-            await ctx.answerCbQuery(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              { show_alert: true },
-            );
-            return;
-          } catch (error) {
-            await ctx.reply(
-              this.i18n.translate('booking.no_free_slots', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-          }
-        }
-      } else {
-        for (let i = 0; i < allSlots.length; i += slotsPerKeyboard) {
+      if (freeSlots.length) {
+        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
           const row: InlineKeyboardButton[] = [];
           for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (allSlots[i + j]) {
+            if (freeSlots[i + j]) {
               row.push({
-                text: allSlots[i + j].end,
-                callback_data: `booking_timeEnd_${start_time}_${allSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}`,
+                text: freeSlots[i + j].end,
+                callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}`,
               });
             }
           }
@@ -2489,19 +2476,41 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
           },
         ]);
+      } else {
+        try {
+          await ctx.answerCbQuery(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            { show_alert: true },
+          );
+          return;
+        } catch (error) {
+          await ctx.reply(
+            this.i18n.translate('booking.no_free_slots', { lang }),
+            {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    {
+                      text: this.i18n.translate('schedule.back', { lang }),
+                      callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
+                    },
+                  ],
+                ],
+              },
+            },
+          );
+        }
       }
+
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('booking.stadion.selectEndTime', { lang }),
-        {
-          inline_keyboard: button,
-        },
+        { inline_keyboard: button },
       );
     } catch (error) {
       this.utils.errorFunction(ctx);
     }
   }
-
   async bookingScheduleFinish(
     ctx: MyContext,
     start_time: string,
@@ -2511,202 +2520,301 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     stadionId: number,
   ) {
     try {
-      const startAt = new Date(
-        `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
-      );
-      const endAt = new Date(`${format(date, 'yyyy-MM-dd')}T${end_time}:00`);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
-          owner: {
-            include: {
-              ownerCard: true,
-            },
-          },
+          owner: { include: { ownerCard: true } },
           children: true,
           parent: true,
         },
       });
+
       if (!stadion) {
         await this.utils.errorFunction(ctx);
         return;
       }
-      const cardId = stadion?.owner?.ownerCard?.id;
+
+      const targetStadionId = stadion.parent_id ?? stadion.id;
+
+      const dayOfWeek = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+
+      const [scheduleRow, specialRow] = await Promise.all([
+        this.prisma.stadion_chedule.findFirst({
+          where: {
+            stadion_id: targetStadionId,
+            day_of_week: dayOfWeek,
+          },
+        }),
+
+        this.prisma.stadion_special_schedule.findFirst({
+          where: {
+            stadion_id: targetStadionId,
+            date,
+          },
+        }),
+      ]);
+
+      const referenceStart =
+        specialRow?.start_time ?? scheduleRow?.start_time ?? start_time;
+
+
+      const toMinutes = (time: string) => {
+        const [hour, minute] = time.split(':').map(Number);
+
+        return hour * 60 + minute;
+      };
+
+      const startMinutes = toMinutes(start_time);
+      const referenceMinutes = toMinutes(referenceStart);
+
+      const bookingDate = new Date(date);
+
+      if (startMinutes < referenceMinutes) {
+        bookingDate.setUTCDate(bookingDate.getUTCDate() + 1);
+      }
+
+      const startAt = this.utils.combineDateAndTime(
+        date,
+        start_time,
+        referenceStart,
+      );
+
+      const endAt = this.utils.combineDateAndTime(
+        date,
+        end_time,
+        referenceStart,
+      );
+
+      const cardId = stadion.owner?.ownerCard?.id;
       const hasCard = !!cardId;
 
       const user = await this.prisma.users.findUnique({
-        where: { chatID: String(ctx.from?.id) },
+        where: {
+          chatID: String(ctx.from?.id),
+        },
       });
+
       if (!user) {
         await this.utils.errorFunction(ctx);
         return;
       }
+
       const noshowCount = await this.prisma.booking.count({
         where: {
           user_id: user.id,
           stadion_id: stadion.id,
-          status: { in: ['NOSHOW', 'REFUNDED'] },
+          status: {
+            in: ['NOSHOW', 'REFUNDED'],
+          },
         },
       });
+
+
+      const days = this.utils.formatCalendarDate(bookingDate);
+
+
+      const paymentTextMap = {
+        CARD: this.i18n.translate('peyments.card', { lang }),
+        CASH: this.i18n.translate('peyments.cash', { lang }),
+      };
 
       if (stadion.payments_type === 'CARD') {
         if (!hasCard) {
           await this.utils.errorFunction(ctx);
           return;
         }
+
         const { penalty, total, hors } = this.utils.calculateTotalPrice(
           start_time,
           end_time,
           stadion.price,
           noshowCount,
         );
+
         let warning = '';
+
         if (noshowCount === 1) {
           warning = this.i18n.translate('booking.no_show_warning', { lang });
         } else if (noshowCount >= 2) {
           warning = this.i18n.translate('booking.penalty', { lang });
         }
+
         const booking = await this.prisma.booking.create({
           data: {
             stadion_id: stadion.id,
             user_id: user.id,
-            date: date,
+
+            date: bookingDate,
+
             start_time,
             end_time,
+
             startAt,
             endAt,
+
             total_price: total,
             payment_method: 'CARD',
             expires_at: new Date(Date.now() + 15 * 60 * 1000),
           },
         });
+
         const transaction = await this.prisma.tranzaktion.create({
           data: {
-            user_id: booking.user_id,
+            user_id: booking.user_id!,
             booking_id: booking.id,
+
             systeam_fee: 0,
             owner_amount: total,
+
             provider: PaymentProvider.CLICK,
+
             owner_card_id: cardId,
+
             amount_received: 0,
           },
         });
-        const days = format(date, 'dd.MM.yyyy');
 
-        const paymentTextMap = {
-          CARD: this.i18n.translate('peyments.card', { lang }),
-          CASH: this.i18n.translate('peyments.cash', { lang }),
-        };
-        const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
+        const paymentMethodText = paymentTextMap.CARD || 'CARD';
 
         const clickUrl = getPaymentClickUrl(total, transaction.id);
 
         const message = this.i18n.translate('booking.message_template', {
           lang,
+
           args: {
             warning,
             date: days,
             start_time,
             end_time,
             hours: hors,
+
             total: total.toLocaleString(),
+
             payment_method: paymentMethodText,
+
             penalty_block:
               penalty > 0
                 ? this.i18n.translate('booking.penalty_block', {
                     lang,
-                    args: { penalty: penalty.toLocaleString() },
+                    args: {
+                      penalty: penalty.toLocaleString(),
+                    },
                   })
                 : '',
           },
         });
+
         await ctx.editMessageText(message, {
           parse_mode: 'Markdown',
+
           reply_markup: {
             inline_keyboard: [
               [
                 {
                   text: this.i18n.translate('booking.pay_by_card', { lang }),
+
                   url: clickUrl,
                 },
               ],
+
               [
                 {
                   text: this.i18n.translate('booking.cancel', { lang }),
+
                   callback_data: `booking_confirm_no_${booking.id}`,
                 },
               ],
             ],
           },
         });
-      } else if (stadion.payments_type === 'CASH') {
-        const { price, penalty, total, hors } = this.utils.calculateTotalPrice(
+
+        return;
+      }
+
+      if (stadion.payments_type === 'CASH') {
+        const { penalty, total, hors } = this.utils.calculateTotalPrice(
           start_time,
           end_time,
           stadion.price,
           noshowCount,
         );
 
-        const days = format(date, 'dd.MM.yyyy');
-        const paymentTextMap = {
-          CARD: this.i18n.translate('peyments.card', { lang }),
-          CASH: this.i18n.translate('peyments.cash', { lang }),
-        };
-
-        const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
-
         let warning = '';
+
         if (noshowCount === 1) {
           warning = this.i18n.translate('booking.no_show_warning', { lang });
         } else if (noshowCount >= 2) {
           warning = this.i18n.translate('booking.penalty', { lang });
         }
 
+        const paymentMethodText = paymentTextMap.CASH || 'CASH';
+
         const message = this.i18n.translate('booking.booking_confirm', {
           lang,
+
           args: {
             warning,
             date: days,
             start_time,
             end_time,
             hours: hors,
+
             total: total.toLocaleString(),
+
             payment_method: paymentMethodText,
+
             penalty_block:
               penalty > 0
                 ? this.i18n.translate('booking.penalty_block', {
                     lang,
-                    args: { penalty: penalty.toLocaleString() },
+                    args: {
+                      penalty: penalty.toLocaleString(),
+                    },
                   })
                 : '',
           },
         });
+
+        /**
+         * BOOKING
+         */
+
         const booking = await this.prisma.booking.create({
           data: {
             stadion_id: stadion.id,
             user_id: user.id,
-            date: date,
+
+            date: bookingDate,
+
             start_time,
             end_time,
+
             startAt,
             endAt,
+
             total_price: total,
             payment_method: 'CASH',
+
             expires_at: new Date(Date.now() + 15 * 60 * 1000),
           },
         });
+
         try {
           await ctx.editMessageText(message, {
             parse_mode: 'Markdown',
+
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.confirm', { lang }),
+
                     callback_data: `booking_confirm_yes_${booking.id}`,
                   },
+
                   {
                     text: this.i18n.translate('booking.cancel', { lang }),
+
                     callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
@@ -2716,15 +2824,19 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         } catch (error) {
           await ctx.reply(message, {
             parse_mode: 'Markdown',
+
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.confirm', { lang }),
+
                     callback_data: `booking_confirm_yes_${booking.id}`,
                   },
+
                   {
                     text: this.i18n.translate('booking.cancel', { lang }),
+
                     callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
@@ -2732,90 +2844,124 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             },
           });
         }
-      } else if (stadion.payments_type === 'GIBRID') {
-        const { price, penalty, hors, total } = this.utils.calculateTotalPrice(
+
+        return;
+      }
+
+      if (stadion.payments_type === 'GIBRID') {
+        const { penalty, hors, total } = this.utils.calculateTotalPrice(
           start_time,
           end_time,
           stadion.price,
           noshowCount,
         );
-        const paymentTextMap = {
+
+        const paymentMethodTextMap = {
           CARD: this.i18n.translate('peyments.card', { lang }),
+
           CASH: this.i18n.translate('peyments.cash', { lang }),
         };
-        const days = format(date, 'dd.MM.yyyy');
+
         if (noshowCount >= 2 && hasCard) {
           const booking = await this.prisma.booking.create({
             data: {
               stadion_id: stadion.id,
               user_id: user.id,
-              date: date,
+
+              date: bookingDate,
+
               start_time,
               end_time,
+
               startAt,
               endAt,
+
               total_price: total,
               payment_method: 'CARD',
+
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
             },
           });
+
           const transaction = await this.prisma.tranzaktion.create({
             data: {
-              user_id: booking.user_id,
+              user_id: booking.user_id!,
               booking_id: booking.id,
+
               systeam_fee: 0,
               owner_amount: total,
+
               provider: PaymentProvider.CLICK,
+
               status: 'PENDING',
+
               owner_card_id: cardId,
+
               amount_received: 0,
             },
           });
-          const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
+
+          const paymentMethodText = paymentMethodTextMap.CARD || 'CARD';
 
           const clickUrl = getPaymentClickUrl(total, transaction.id);
+
           const warning = this.i18n.translate('booking.warning', { lang });
 
           const message = this.i18n.translate('booking.message_template', {
             lang,
+
             args: {
               warning,
               date: days,
               start_time,
               end_time,
               hours: hors,
+
               total: total.toLocaleString(),
+
               payment_method: paymentMethodText,
+
               penalty_block:
                 penalty > 0
                   ? this.i18n.translate('booking.penalty_block', {
                       lang,
-                      args: { penalty: penalty.toLocaleString() },
+                      args: {
+                        penalty: penalty.toLocaleString(),
+                      },
                     })
                   : '',
             },
           });
+
           await ctx.editMessageText(message, {
             parse_mode: 'Markdown',
+
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.pay_by_card', { lang }),
+
                     url: clickUrl,
                   },
                 ],
+
                 [
                   {
                     text: this.i18n.translate('booking.cancel', { lang }),
+
                     callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
               ],
             },
           });
-        } else if (noshowCount >= 2) {
-          const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+          return;
+        }
+
+        if (noshowCount >= 2) {
+          const paymentMethodText = paymentMethodTextMap.CASH || 'CASH';
 
           const warning = this.i18n.translate(
             'booking.booking_penalty_notice.warning',
@@ -2826,19 +2972,25 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             'booking.booking_penalty_notice.message_template',
             {
               lang,
+
               args: {
                 warning,
                 date: days,
                 start_time,
                 end_time,
                 hours: hors,
+
                 total: total.toLocaleString(),
+
                 payment_method: paymentMethodText,
+
                 penalty_block:
                   penalty > 0
                     ? this.i18n.translate('booking.penalty_block', {
                         lang,
-                        args: { penalty: penalty.toLocaleString() },
+                        args: {
+                          penalty: penalty.toLocaleString(),
+                        },
                       })
                     : '',
               },
@@ -2849,39 +3001,53 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             data: {
               stadion_id: stadion.id,
               user_id: user.id,
-              date: date,
+
+              date: bookingDate,
+
               start_time,
               end_time,
+
               startAt,
               endAt,
+
               total_price: total,
               payment_method: 'CASH',
+
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
             },
           });
 
           await ctx.editMessageText(message, {
             parse_mode: 'Markdown',
+
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.confirm', { lang }),
+
                     callback_data: `booking_confirm_yes_${booking.id}`,
                   },
+
                   {
                     text: this.i18n.translate('booking.cancel', { lang }),
+
                     callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
               ],
             },
           });
-        } else if (!hasCard) {
-          const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
+
+          return;
+        }
+
+        if (!hasCard) {
+          const paymentMethodText = paymentMethodTextMap.CASH || 'CASH';
 
           let warning = '';
-          if (noshowCount == 1) {
+
+          if (noshowCount === 1) {
             warning = this.i18n.translate('booking.booking_warning.warning', {
               lang,
             });
@@ -2893,86 +3059,116 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             'booking.booking_warning.message_template',
             {
               lang,
+
               args: {
                 warning,
                 date: days,
                 start_time,
                 end_time,
                 hours: hors,
+
                 total: total.toLocaleString(),
+
                 payment_method: paymentMethodText,
               },
             },
           );
+
           const booking = await this.prisma.booking.create({
             data: {
-              stadion_id: stadionId,
+              stadion_id: stadion.id,
               user_id: user.id,
-              date: date,
+
+              date: bookingDate,
+
               start_time,
               end_time,
+
               startAt,
               endAt,
+
               total_price: total,
               payment_method: 'CASH',
+
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
             },
           });
 
           await ctx.editMessageText(message, {
             parse_mode: 'Markdown',
+
             reply_markup: {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.confirm', { lang }),
+
                     callback_data: `booking_confirm_yes_${booking.id}`,
                   },
+
                   {
                     text: this.i18n.translate('booking.cancel', { lang }),
+
                     callback_data: `booking_confirm_no_${booking.id}`,
                   },
                 ],
               ],
             },
           });
-        } else {
-          const shortDate = date.toISOString().split('T')[0];
 
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('booking.select_payment_method', { lang }),
-            {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('peyments.cash', { lang }),
-                    callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('peyments.card', { lang }),
-                    callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: `booking_back_${stadionId}`,
-                  },
-                ],
-              ],
-            },
-          );
+          return;
         }
+
+        /**
+         * ---------------------------------------------------------
+         * 10.4. CARD + CASH TANLASH
+         * ---------------------------------------------------------
+         */
+
+        const shortDate = bookingDate.toISOString().split('T')[0];
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('booking.select_payment_method', { lang }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: this.i18n.translate('peyments.cash', { lang }),
+
+                  callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                },
+              ],
+
+              [
+                {
+                  text: this.i18n.translate('peyments.card', { lang }),
+
+                  callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}`,
+                },
+              ],
+
+              [
+                {
+                  text: this.i18n.translate('schedule.back', { lang }),
+
+                  callback_data: `booking_back_${stadionId}`,
+                },
+              ],
+            ],
+          },
+        );
+
+        return;
       }
     } catch (error) {
+      console.error('bookingScheduleFinish error:', error);
+
       await this.utils.errorFunction(ctx);
     }
   }
 
-  async bookingPayments(
+  async bookingPayments( 
     ctx: MyContext,
     type: string,
     days: string,
@@ -3115,7 +3311,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             });
             const transaction = await this.prisma.tranzaktion.create({
               data: {
-                user_id: booking.user_id,
+                user_id: booking.user_id!,
                 booking_id: booking.id,
                 systeam_fee: 0,
                 owner_amount: total,
@@ -3426,7 +3622,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         },
       );
     } catch (error) {
-      console.log(error);
       await this.utils.errorFunction(ctx);
     } finally {
       await ctx.answerCbQuery().catch(() => {});

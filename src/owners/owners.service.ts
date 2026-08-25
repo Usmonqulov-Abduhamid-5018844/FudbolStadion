@@ -637,102 +637,213 @@ export class OwnersService {
   }
 
   async handleSchedule(ctx: MyContext, lang: string, text: string) {
-    const timePattern =
-      /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
-    const match = text.match(timePattern);
+  const timePattern =
+    /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
 
-    if (!match) {
-      ctx.reply(this.i18n.translate('schedule.schedules.format', { lang }));
-      return;
+  const match = text.match(timePattern);
+
+  if (!match) {
+    await ctx.reply(
+      this.i18n.translate('schedule.schedules.format', { lang }),
+    );
+    return;
+  }
+
+  const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
+  const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
+
+  const toMinutes = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number);
+    return hour * 60 + minute;
+  };
+
+  const startMinutes = toMinutes(startTime);
+  const endMinutes = toMinutes(endTime);
+
+  if (startMinutes === endMinutes) {
+    await ctx.reply(
+      this.i18n.translate('schedule.schedules.error', { lang }),
+    );
+    return;
+  }
+
+  try {
+
+    if (ctx.session.step === 'special_time') {
+      await this.prisma.stadion_special_schedule.create({
+        data: {
+          date: new Date(ctx.session.stadion.special),
+          start_time: startTime,
+          end_time: endTime,
+          stadion_id: Number(ctx.session.stadion.id),
+        },
+      });
+
+      await ctx.reply(
+        this.i18n.translate('schedule.off_day.succses', { lang }),
+      );
+
+      ctx.session.step = null;
+
+      return this.botService.stadion_special(
+        ctx,
+        Number(ctx.session.stadion.id),
+      );
     }
+    if (ctx.session.step === 'special_time_edit') {
+      await this.prisma.stadion_special_schedule.update({
+        where: {
+          id: Number(ctx.session.stadion.schedule_id),
+        },
+        data: {
+          stadion_id: Number(ctx.session.stadion.id),
+          start_time: startTime,
+          end_time: endTime,
+          date: new Date(ctx.session.stadion.special),
+        },
+      });
 
-    const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
-    const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
+      await ctx.reply(
+        this.i18n.translate('schedule.off_day.update', { lang }),
+      );
 
-    const toMinutes = (t: string) => {
-      const [h, m] = t.split(':').map(Number);
-      return h * 60 + m;
+      ctx.session.step = null;
+
+      return this.botService.stadion_special(
+        ctx,
+        Number(ctx.session.stadion.id),
+      );
+    }
+    const stadionId = Number(ctx.session.stadion.id);
+
+    const currentDay = Number(ctx.session.stadion.schedule_day);
+
+    const schedules = await this.prisma.stadion_chedule.findMany({
+      where: {
+        stadion_id: stadionId,
+
+        ...(ctx.session.step === 'edit_schedule_time'
+          ? {
+              id: {
+                not: Number(ctx.session.stadion.schedule_id),
+              },
+            }
+          : {}),
+      },
+    });
+
+    const MINUTES_IN_DAY = 24 * 60;
+    const MINUTES_IN_WEEK = 7 * MINUTES_IN_DAY;
+
+    const createInterval = (
+      day: number,
+      start: number,
+      end: number,
+    ): [number, number] => {
+      const startAbsolute =
+        (day - 1) * MINUTES_IN_DAY + start;
+
+      let endAbsolute =
+        (day - 1) * MINUTES_IN_DAY + end;
+
+      if (end <= start) {
+        endAbsolute += MINUTES_IN_DAY;
+      }
+
+      return [startAbsolute, endAbsolute];
     };
 
-    if (toMinutes(startTime) >= toMinutes(endTime)) {
-      ctx.reply(this.i18n.translate('schedule.schedules.error', { lang }));
+    const [newStart, newEnd] = createInterval(
+      currentDay,
+      startMinutes,
+      endMinutes,
+    );
+
+    const hasOverlap = schedules.some((schedule) => {
+      const existingDay = Number(schedule.day_of_week);
+
+      const existingStart = toMinutes(schedule.start_time);
+      const existingEnd = toMinutes(schedule.end_time);
+
+      const [oldStart, oldEnd] = createInterval(
+        existingDay,
+        existingStart,
+        existingEnd,
+      );
+      const oldIntervals = [
+        [oldStart, oldEnd],
+        [oldStart - MINUTES_IN_WEEK, oldEnd - MINUTES_IN_WEEK],
+        [oldStart + MINUTES_IN_WEEK, oldEnd + MINUTES_IN_WEEK],
+      ];
+
+      const newIntervals = [
+        [newStart, newEnd],
+        [newStart - MINUTES_IN_WEEK, newEnd - MINUTES_IN_WEEK],
+        [newStart + MINUTES_IN_WEEK, newEnd + MINUTES_IN_WEEK],
+      ];
+
+      return newIntervals.some(([ns, ne]) =>
+        oldIntervals.some(([os, oe]) => {
+          return ns < oe && ne > os;
+        }),
+      );
+    });
+
+
+    if (hasOverlap) {
+      await ctx.reply(
+        this.i18n.translate('schedule.schedules.overlap', { lang }),
+      );
+
       return;
     }
 
-    try {
-      if (ctx.session.step === 'special_time') {
-        await this.prisma.stadion_special_schedule.create({
-          data: {
-            date: new Date(ctx.session.stadion.special),
-            start_time: startTime,
-            end_time: endTime,
-            stadion_id: Number(ctx.session.stadion.id),
-          },
-        });
-        await ctx.reply(
-          this.i18n.translate('schedule.off_day.succses', { lang }),
-        );
-        ctx.session.step = null;
-        return this.botService.stadion_special(
-          ctx,
-          Number(ctx.session.stadion.id),
-        );
-      }
-      if (ctx.session.step === 'special_time_edit') {
-        await this.prisma.stadion_special_schedule.update({
-          where: {
-            id: Number(ctx.session.stadion.schedule_id),
-          },
-          data: {
-            stadion_id: Number(ctx.session.stadion.id),
-            start_time: startTime,
-            end_time: endTime,
-            date: ctx.session.stadion.special,
-          },
-        });
-        await ctx.reply(
-          this.i18n.translate('schedule.off_day.update', { lang }),
-        );
-        ctx.session.step = null;
-        return this.botService.stadion_special(
-          ctx,
-          Number(ctx.session.stadion.id),
-        );
-      }
-      if (ctx.session.step === 'edit_schedule_time') {
-        await this.prisma.stadion_chedule.update({
-          where: { id: Number(ctx.session.stadion.schedule_id) },
-          data: { start_time: startTime, end_time: endTime },
-        });
+    if (ctx.session.step === 'edit_schedule_time') {
+      await this.prisma.stadion_chedule.update({
+        where: {
+          id: Number(ctx.session.stadion.schedule_id),
+        },
 
-        await ctx.reply(
-          this.i18n.translate('schedule.schedules.updated', { lang }),
-        );
-      } else {
-        await this.prisma.stadion_chedule.create({
-          data: {
-            stadion_id: Number(ctx.session.stadion.id),
-            day_of_week: Number(ctx.session.stadion.schedule_day),
-            start_time: startTime,
-            end_time: endTime,
-          },
-        });
+        data: {
+          start_time: startTime,
+          end_time: endTime,
+        },
+      });
 
-        await ctx.reply(
-          this.i18n.translate('schedule.schedules.creat', { lang }),
-        );
-      }
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await ctx.reply(
+        this.i18n.translate('schedule.schedules.updated', { lang }),
+      );
     }
-    ctx.session.step = null;
-    ctx.session.stadion.schedule_day = null;
 
-    return this.botService.renderScheduleMenu(
-      ctx,
-      Number(ctx.session.stadion.id),
-    );
+    else {
+      await this.prisma.stadion_chedule.create({
+        data: {
+          stadion_id: stadionId,
+          day_of_week: currentDay,
+          start_time: startTime,
+          end_time: endTime,
+        },
+      });
+
+      await ctx.reply(
+        this.i18n.translate('schedule.schedules.creat', { lang }),
+      );
+    }
+  } catch (error) {
+    console.error('handleSchedule error:', error);
+
+    await this.utils.errorFunction(ctx);
   }
+
+  ctx.session.step = null;
+  ctx.session.stadion.schedule_day = null;
+
+  return this.botService.renderScheduleMenu(
+    ctx,
+    Number(ctx.session.stadion.id),
+  );
+}
+
   async handlePrice(ctx: MyContext, lang: string, text: string) {
     const price = Number(text);
 
@@ -1540,6 +1651,12 @@ export class OwnersService {
           inline_keyboard: [
             [
               {
+                text: this.i18n.translate("admin.bron",{lang}),
+                callback_data:`Newbooking_owners_${ownerData.id}_${lang}`
+              }
+            ],
+            [
+              {
                 text: this.i18n.translate(
                   'owner_booking.booking_menu.buttons.active',
                   { lang },
@@ -1657,7 +1774,7 @@ export class OwnersService {
             time: `${booking.start_time} - ${booking.end_time}`,
             stadium: booking.stadion.name,
             region: booking.stadion.region.name,
-            user: booking.user.full_name,
+            user: booking.user ? booking.user.full_name : booking.customer_name,
             status: statusMap(booking.status, this.i18n, lang),
             check_in: booking.check_in
               ? this.i18n.translate('owner_booking.check_in', { lang })
@@ -1716,8 +1833,7 @@ export class OwnersService {
 
       if (!booking) return this.utils.errorFunction(ctx);
       const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
-        booking.date,
-        booking.start_time,
+        booking.startAt,
         lang,
       );
 
@@ -1733,9 +1849,9 @@ export class OwnersService {
             totalMinutes > 0
               ? timeLeftText
               : this.i18n.translate('bookingHistory.time_expired', { lang }),
-          user: booking.user.full_name,
-          phone: `+${booking.user.phone}`,
-          username: booking.user.username
+          user: booking.user ? booking.user.full_name: booking.customer_name,
+          phone: `+${booking.user ? booking.user.phone : booking.customer_phone}`,
+          username: booking.user?.username
             ? `🔗 @${booking.user.username}`
             : '_',
           price: new Intl.NumberFormat('uz-UZ').format(
@@ -3220,7 +3336,6 @@ ${this.i18n.translate('advertisement.preview.confirm_question', { lang })}
 
           const result = this.utils.bookingTimeCalculate(
             expires,
-            `${String(expires.getHours()).padStart(2, '0')}:${String(expires.getMinutes()).padStart(2, '0')}`,
             lang,
           );
 

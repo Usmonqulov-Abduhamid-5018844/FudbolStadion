@@ -47,7 +47,8 @@
   },
   "schedules": {
     "format": "❌ Format xato. To'g'ri format: 09:00-18:00",
-    "error": "❌ Xato: boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak.",
+    "error":  "❌ Xato: boshlanish va tugash vaqtlarini bir xil kiritish mumkin emas. Tungi ish vaqti uchun, masalan, 08:00 - 03:00 ko‘rinishida kiriting.",
+    "overlap": "⚠️ Kiritilgan ish vaqti mavjud ish vaqti bilan to‘qnashmoqda. Iltimos, boshqa vaqt oralig‘ini kiriting.",
     "updated": "✅ Ma'lumot muvaffaqiyatli yangilandi.",
     "creat": "👌 Ma'lumot muvaffaqiyatli yaratildi.",
     "creat_error": "❌ Bazaga yozishda xatolik yuz berdi.",

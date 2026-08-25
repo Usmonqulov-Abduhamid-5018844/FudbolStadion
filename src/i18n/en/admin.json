@@ -215,5 +215,14 @@
     "empty": "🏟 This owner has no stadiums yet.",
     "title": "🏟 <b>Stadium list</b>"
   },
-  "admin_only": "⛔ This section is for administrators only!\n\n🔐 You do not have sufficient permissions to access this section. If you believe you should have administrator access, please contact the system administrator."
+  "admin_only": "⛔ This section is for administrators only!\n\n🔐 You do not have sufficient permissions to access this section. If you believe you should have administrator access, please contact the system administrator.",
+
+  "bron": "📞 Enter booking manually",
+  
+  "access_denied": "🚫 You do not have access to this section.",
+  
+  "select_stadium": "🏟 Which stadium should the phone booking be added to?"
+  
+
+  
 }

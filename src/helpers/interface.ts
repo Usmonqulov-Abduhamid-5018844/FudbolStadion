@@ -55,8 +55,10 @@ export interface IStadion {
 
 export interface IBooking {
   id: number;
-  user_id: number;
+  user_id: number | null;
   stadion_id: number;
+  customer_name: String | null;
+  customer_phone: String | null;
   date: Date;
   start_time: string;
   end_time: string;
@@ -72,7 +74,7 @@ export interface IBooking {
   status_pay_later: boolean;
 
   stadion: IStadion;
-  user: IUser;
+  user: IUser | null;
 }
 export interface IUser {
   id: number;

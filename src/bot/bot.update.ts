@@ -269,6 +269,66 @@ export class BotUpdate {
   }
 
   ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+
+  @Action(/Newbooking_(\w+)_(\d+)_(\w+)$/)
+  async Newbooking(@Ctx() ctx: MyContext) {
+    try {
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      const [_, type, Id, lang] = ctx.callbackQuery.data.split('_');
+      switch(type){
+        case "owners":
+          {
+               const owner = await this.prisma.owners.findUnique({
+          where: { id: Number(Id) },
+        });
+        if (!owner || String(ctx.from?.id) !== owner.chatID) {
+          await ctx.answerCbQuery(
+            this.i18n.translate('admin.access_denied', { lang }),
+            { show_alert: true },
+          );
+          return;
+        }
+        const stadions = await this.prisma.stadion.findMany({
+          where: { owner_id: Number(Id) },
+        });
+        if (!stadions.length) {
+          await ctx.answerCbQuery(
+            this.i18n.translate('stadions.not_fount', { lang }),
+          );
+          return;
+        }
+        const buttons: InlineKeyboardButton[][] = stadions.map((item) => [
+          {
+            text:
+              item.name.length > 20
+                ? `${item.name.slice(0, 20)}...`
+                : item.name,
+            callback_data: `Newbooking_stadions_${item.id}_${lang}`,
+          },
+        ]);
+        await this.utils.safeEditOrReply(ctx,this.i18n.translate("admin.select_stadium",{lang}),buttons)
+        
+        break;
+      }
+      case "stadions":
+        {
+            ctx.session.admin_step = 'NewBooking_owners';
+            return this.userService.userbookingStadion(ctx,lang,Number(Id))
+        }
+        default:{
+          await this.utils.errorFunction(ctx)
+          break;
+        }
+      }
+      
+
+      ctx.answerCbQuery().catch(() => {});
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+      console.log(error);
+      
+    }
+  }
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
@@ -1276,11 +1336,7 @@ export class BotUpdate {
                 return;
               }
               const { timeLeftText, totalMinutes } =
-                this.utils.bookingTimeCalculate(
-                  booking.date,
-                  booking.start_time,
-                  lang,
-                );
+                this.utils.bookingTimeCalculate(booking.startAt, lang);
 
               if (totalMinutes < 60) {
                 await ctx.answerCbQuery(
@@ -1538,8 +1594,7 @@ export class BotUpdate {
                   return;
                 }
                 const { totalMinutes } = this.utils.bookingTimeCalculate(
-                  booking.date,
-                  booking.start_time,
+                  booking.startAt,
                   lang,
                 );
                 if (totalMinutes < 0) {
@@ -1566,11 +1621,11 @@ export class BotUpdate {
 
                   this.prisma.tranzaktion.create({
                     data: {
-                      user_id: booking.user_id,
+                      user_id: booking.user_id!,
                       booking_id: booking.id,
                       systeam_fee: 0,
                       owner_amount: Number(booking.total_price),
-                      provider: 'Click',
+                      provider: PaymentProvider.CLICK,
                       provider_transactionId: '',
                       owner_card_id: cardId,
                       amount_received: 0,
@@ -3159,7 +3214,7 @@ export class BotUpdate {
           ctx.session.ownerId = null;
           ctx.session.currentPage = null;
           ctx.session.historyPage = null;
-          ctx.session.confirment_messageId = null
+          ctx.session.confirment_messageId = null;
         }
       }
     }
@@ -5444,12 +5499,6 @@ export class BotUpdate {
       }
       if (ctx.session.stadion.name === 'SeorchName') {
         try {
-          const isValidName = /^[a-zA-Zа-яА-ЯёЁ0-9\s'’-]+$/.test(text);
-
-          if (!isValidName) {
-            ctx.reply(this.i18n.translate('booking.stadions.format', { lang }));
-            return;
-          }
           const searchName = text.trim();
           const stadion = await this.prisma.stadion.findMany({
             where: {

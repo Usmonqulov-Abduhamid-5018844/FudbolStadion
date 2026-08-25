@@ -139,8 +139,10 @@ model Owner_card {
 
 model Booking {
   id               Int            @id @default(autoincrement())
-  user_id          Int
+  user_id          Int?
   stadion_id       Int
+  customer_name    String?
+  customer_phone   String?
   date             DateTime       @db.Date
   start_time       String
   end_time         String
@@ -155,7 +157,7 @@ model Booking {
   expires_at       DateTime?
   status_pay_later Boolean        @default(false)
   stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
-  user             Users          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user             Users?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
   tranzaktions     Tranzaktion?
   notifications    Notification[]
 

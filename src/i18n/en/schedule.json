@@ -46,7 +46,8 @@
   },
   "schedules": {
     "format": "❌ Invalid format. Correct format: 09:00-18:00",
-    "error": "❌ Error: start time must be before end time.",
+    "error": "❌ Error: the start and end times cannot be the same. For overnight hours, for example, enter 08:00 - 03:00.",
+    "overlap": "⚠️ The entered working hours overlap with an existing working period. Please enter a different time range.",
     "updated": "✅ Data successfully updated.",
     "creat": "👌 Data successfully created.",
     "creat_error": "❌ Error occurred while writing to the database.",

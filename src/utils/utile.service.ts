@@ -19,6 +19,14 @@ import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+
+export const APP_TZ = 'Asia/Tashkent';
+
+export interface TimeSlot {
+  start: string;
+  end: string;
+}
 
 @Injectable()
 export class UtilisService implements OnModuleInit {
@@ -134,138 +142,17 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async generateSlots(start: string, end: string, intervalMinutes = 60) {
-    const slots: { start: string; end: string }[] = [];
-
-    const [startH, startM] = start.split(':').map(Number);
-    const [endH, endM] = end.split(':').map(Number);
-
-    let current = startH * 60 + startM;
-    const finish = endH * 60 + endM;
-
-    while (current + intervalMinutes <= finish) {
-      const fromH = Math.floor(current / 60);
-      const fromM = current % 60;
-
-      const to = current + intervalMinutes;
-      const toH = Math.floor(to / 60);
-      const toM = to % 60;
-
-      slots.push({
-        start: `${fromH.toString().padStart(2, '0')}:${fromM
-          .toString()
-          .padStart(2, '0')}`,
-        end: `${toH.toString().padStart(2, '0')}:${toM
-          .toString()
-          .padStart(2, '0')}`,
-      });
-
-      current += intervalMinutes;
-    }
-
-    return slots;
-  }
-
-  isSlotFree(slot: { start: string; end: string }, bookings: any[]) {
-    const slotStart = this.toMinutes(slot.start);
-    const slotEnd = this.toMinutes(slot.end);
-
-    for (const b of bookings) {
-      const bookingStart = this.toMinutes(b.start_time);
-      const bookingEnd = this.toMinutes(b.end_time);
-
-      if (bookingStart < slotEnd && bookingEnd > slotStart) {
-        return false;
-      }
-    }
-    return true;
-  }
-
-  toMinutes(time: string) {
+  toMinutesRaw(time: string): number {
     const [h, m] = time.split(':').map(Number);
     return h * 60 + m;
   }
-
-  async errorFunction(ctx: MyContext) {
-    const lang = await this.langs(ctx);
-    await ctx.reply(this.i18n.translate('error.error', { lang }), {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: 'errorBack_1',
-            },
-          ],
-        ],
-      },
-    });
-    if (ctx.callbackQuery) {
-      await ctx
-        .answerCbQuery()
-        .then(() => {})
-        .catch();
-    }
-
-    console.log('Error occurred');
+  toMinutes(time: string): number {
+    return this.toMinutesRaw(time);
   }
 
-  roundUpToNextHour(date: Date) {
-    const rounded = new Date(date);
-    if (
-      rounded.getMinutes() > 0 ||
-      rounded.getSeconds() > 0 ||
-      rounded.getMilliseconds() > 0
-    ) {
-      rounded.setHours(rounded.getHours() + 1);
-      rounded.setMinutes(0, 0, 0);
-    }
-
-    return rounded;
-  }
-
-  calculateTotalPrice(
-    start: string,
-    end: string,
-    pricePerHour: number,
-    noshowCount: number,
-  ) {
-    const [startHour, startMin] = start.split(':').map(Number);
-    const [endHour, endMin] = end.split(':').map(Number);
-
-    const startTotalMinutes = startHour * 60 + startMin;
-    const endTotalMinutes = endHour * 60 + endMin;
-
-    const durationHours = (endTotalMinutes - startTotalMinutes) / 60;
-    let penalty = 0;
-    let total = 0;
-    if (noshowCount >= 2) {
-      penalty = (noshowCount - 1) * 20000;
-      total = durationHours * pricePerHour + penalty;
-    } else {
-      total = durationHours * pricePerHour;
-    }
-
-    return {
-      total,
-      penalty,
-      price: durationHours * pricePerHour,
-      hors: durationHours,
-    };
-  }
-  bookingTimeCalculate(date: Date, start_time: string, lang: string = 'ru') {
-    const bookingDate = new Date(date);
-    const [hours, minutes] = start_time.split(':').map(Number);
-
-    bookingDate.setHours(hours, minutes, 0, 0);
-    const now = new Date();
-    const diffMs = bookingDate.getTime() - now.getTime();
-
-    const totalMinutes = Math.floor(diffMs / 60000);
-
-    const daysLeft = Math.floor(totalMinutes / 1440);
-    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
-    const minutesLeft = totalMinutes % 60;
+  bookingTimeCalculate(startAt: Date, lang: string = 'ru') {
+    const { totalMinutes, daysLeft, hoursLeft, minutesLeft } =
+      this.timeUntil(startAt);
 
     let timeLeftText = '';
 
@@ -300,6 +187,7 @@ export class UtilisService implements OnModuleInit {
 
     return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
+
   premium_End_time(end_time: Date, lang: string = 'ru') {
     const entTime = new Date(end_time);
 
@@ -354,6 +242,8 @@ export class UtilisService implements OnModuleInit {
     data: Date,
     start_time: string,
     end_time: string,
+    startAt:Date,
+    endAt:Date,
     price: number,
     transaction_id: number | undefined,
     page: number,
@@ -366,13 +256,11 @@ export class UtilisService implements OnModuleInit {
     const isSinglePage = page === 1 && Math.ceil(total / limit) === 1;
 
     const { totalMinutes, timeLeftText } = this.bookingTimeCalculate(
-      data,
-      start_time,
+      startAt,
       lang,
     );
     const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
-      data,
-      end_time,
+      endAt,
       lang,
     );
 
@@ -456,6 +344,29 @@ export class UtilisService implements OnModuleInit {
 
     return buttons;
   }
+  async errorFunction(ctx: MyContext) {
+    const lang = await this.langs(ctx);
+    await ctx.reply(this.i18n.translate('error.error', { lang }), {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: 'errorBack_1',
+            },
+          ],
+        ],
+      },
+    });
+    if (ctx.callbackQuery) {
+      await ctx
+        .answerCbQuery()
+        .then(() => {})
+        .catch();
+    }
+
+    console.log('Error occurred');
+  }
 
   ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
 
@@ -471,14 +382,12 @@ export class UtilisService implements OnModuleInit {
       `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
 
     const { totalMinutes } = this.bookingTimeCalculate(
-      booking.date,
-      booking.start_time,
+      booking.startAt,
       lang,
     );
 
     const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
-      booking.date,
-      booking.end_time,
+      booking.endAt,
       lang,
     );
 
@@ -777,4 +686,230 @@ export class UtilisService implements OnModuleInit {
 
     return `${p.price.toLocaleString()} ${currency}`;
   };
+  //////////////////////////////////////////////////////////////////////
+
+  relativeMinutes(time: string, referenceStart: string): number {
+    const ref = this.toMinutesRaw(referenceStart);
+    let t = this.toMinutesRaw(time);
+    if (t < ref) t += 24 * 60;
+    return t - ref;
+  }
+
+  private minutesToTimeStr(totalMinutes: number): string {
+    const m = ((totalMinutes % 1440) + 1440) % 1440;
+    const h = Math.floor(m / 60);
+    const mm = m % 60;
+    return `${h.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}`;
+  }
+
+  private normalizeRange(start: string, end: string) {
+    const startRel = 0;
+    const endRel = this.relativeMinutes(end, start);
+    const fixedEndRel = endRel === 0 ? 1440 : endRel;
+    return { startRel, endRel: fixedEndRel };
+  }
+
+  async generateSlots(
+    start: string,
+    end: string,
+    intervalMinutes = 60,
+  ): Promise<TimeSlot[]> {
+    const slots: TimeSlot[] = [];
+    const { endRel: finish } = this.normalizeRange(start, end);
+
+    let current = 0;
+
+    while (current + intervalMinutes <= finish) {
+      const to = current + intervalMinutes;
+
+      slots.push({
+        start: this.minutesToTimeStr(this.toMinutesRaw(start) + current),
+        end: this.minutesToTimeStr(this.toMinutesRaw(start) + to),
+      });
+
+      current += intervalMinutes;
+    }
+
+    return slots;
+  }
+
+  isSlotFree(
+    slot: TimeSlot,
+    bookings: { start_time: string; end_time: string }[],
+    referenceStart: string,
+  ): boolean {
+    const slotStart = this.relativeMinutes(slot.start, referenceStart);
+    let slotEnd = this.relativeMinutes(slot.end, referenceStart);
+    if (slotEnd <= slotStart) slotEnd += 1440;
+
+    for (const b of bookings) {
+      const bookingStart = this.relativeMinutes(b.start_time, referenceStart);
+      let bookingEnd = this.relativeMinutes(b.end_time, referenceStart);
+      if (bookingEnd <= bookingStart) bookingEnd += 1440;
+
+      if (bookingStart < slotEnd && bookingEnd > slotStart) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  isCurrentTimeAfter(
+    currentTime: string,
+    scheduleStart: string,
+    referenceStart: string,
+  ): boolean {
+    const cur = this.relativeMinutes(currentTime, referenceStart);
+    const sched = this.relativeMinutes(scheduleStart, referenceStart);
+    return cur > sched;
+  }
+
+  roundUpToNextHour(date: Date): Date {
+    const rounded = new Date(date);
+    if (
+      rounded.getMinutes() > 0 ||
+      rounded.getSeconds() > 0 ||
+      rounded.getMilliseconds() > 0
+    ) {
+      rounded.setHours(rounded.getHours() + 1);
+      rounded.setMinutes(0, 0, 0);
+    }
+    return rounded;
+  }
+
+  currentTashkentTimeRoundedUp(): string {
+    const z = toZonedTime(new Date(), APP_TZ);
+    let h = z.getHours();
+    const m = z.getMinutes();
+    const s = z.getSeconds();
+    if (m > 0 || s > 0) {
+      h += 1;
+    }
+    h = h % 24;
+    return `${String(h).padStart(2, '0')}:00`;
+  }
+
+  calculateTotalPrice(
+    start: string,
+    end: string,
+    pricePerHour: number,
+    noshowCount: number,
+  ) {
+    const { endRel: durationMinutes } = this.normalizeRange(start, end);
+    const durationHours = durationMinutes / 60;
+
+    let penalty = 0;
+    let total = 0;
+    if (noshowCount >= 2) {
+      penalty = (noshowCount - 1) * 20000;
+      total = durationHours * pricePerHour + penalty;
+    } else {
+      total = durationHours * pricePerHour;
+    }
+
+    return {
+      total,
+      penalty,
+      price: durationHours * pricePerHour,
+      hors: durationHours,
+    };
+  }
+
+
+  combineDateAndTime(
+    baseDate: Date,
+    time: string,
+    referenceStart: string,
+  ): Date {
+    const year = baseDate.getUTCFullYear();
+    const month = baseDate.getUTCMonth();
+    const day = baseDate.getUTCDate();
+
+    const [refH, refM] = referenceStart.split(':').map(Number);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const isoLocal = `${year}-${pad(month + 1)}-${pad(day)}T${pad(refH)}:${pad(refM)}:00`;
+    const referenceInstant = fromZonedTime(isoLocal, APP_TZ);
+
+    const relMinutes = this.relativeMinutes(time, referenceStart);
+    return new Date(referenceInstant.getTime() + relMinutes * 60000);
+  }
+
+  tashkentInstant(baseDate: Date, time: string): Date {
+    const year = baseDate.getUTCFullYear();
+    const month = baseDate.getUTCMonth();
+    const day = baseDate.getUTCDate();
+    const [h, m] = time.split(':').map(Number);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const isoLocal = `${year}-${pad(month + 1)}-${pad(day)}T${pad(h)}:${pad(m)}:00`;
+    return fromZonedTime(isoLocal, APP_TZ);
+  }
+
+  isSameTashkentDay(a: Date, b: Date): boolean {
+    const za = toZonedTime(a, APP_TZ);
+    const zb = toZonedTime(b, APP_TZ);
+    return (
+      za.getFullYear() === zb.getFullYear() &&
+      za.getMonth() === zb.getMonth() &&
+      za.getDate() === zb.getDate()
+    );
+  }
+  currentTashkentTime(): string {
+    const z = toZonedTime(new Date(), APP_TZ);
+    return `${String(z.getHours()).padStart(2, '0')}:${String(z.getMinutes()).padStart(2, '0')}`;
+  }
+
+
+  buildCalendarDate(year: number, month1to12: number, day: number): Date {
+    return new Date(Date.UTC(year, month1to12 - 1, day));
+  }
+
+  isRangeFree(
+    slotStart: Date,
+    slotEnd: Date,
+    bookings: { startAt: Date; endAt: Date }[],
+  ): boolean {
+    for (const b of bookings) {
+      if (b.startAt < slotEnd && b.endAt > slotStart) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  formatCalendarDate(date: Date): string {
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const y = date.getUTCFullYear();
+    return `${d}.${m}.${y}`;
+  }
+
+  bookingTimeCalculateRaw(date: Date, start_time: string) {
+    const bookingDate = new Date(date);
+    const [hours, minutes] = start_time.split(':').map(Number);
+
+    bookingDate.setHours(hours, minutes, 0, 0);
+    const now = new Date();
+    const diffMs = bookingDate.getTime() - now.getTime();
+
+    const totalMinutes = Math.floor(diffMs / 60000);
+
+    const daysLeft = Math.floor(totalMinutes / 1440);
+    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
+    const minutesLeft = totalMinutes % 60;
+
+    return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
+  }
+
+
+  timeUntil(startAt: Date) {
+    const now = new Date();
+    const diffMs = startAt.getTime() - now.getTime();
+    const totalMinutes = Math.floor(diffMs / 60000);
+
+    const daysLeft = Math.floor(totalMinutes / 1440);
+    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
+    const minutesLeft = totalMinutes % 60;
+
+    return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
+  }
 }
