@@ -167,7 +167,7 @@ model Booking {
 }
 
 model Tranzaktion {
-  id                     Int                @id @default(autoincrement())
+  id                     String @id @default(uuid()) @db.Uuid
   user_id                Int
   booking_id             Int                @unique
   systeam_fee            Int
@@ -208,7 +208,7 @@ model Subscription {
 }
 
 model PremiumTransaction {
-  id Int @id @default(autoincrement())
+  id  String @id @default(uuid()) @db.Uuid
 
   owner_id Int
   owner    Owners @relation(fields: [owner_id], references: [id], onDelete: Cascade)
@@ -222,6 +222,7 @@ model PremiumTransaction {
 
   amount Int
 
+
   reason PremiumReason @default(PURCHASE)
 
   provider String
@@ -229,6 +230,13 @@ model PremiumTransaction {
   provider_transactionId String?
 
   status TransactionStatus @default(PENDING)
+
+  octo_payment_UUID String?
+  paid_at           DateTime?
+  transfer_sum Int?
+
+  refunded_sum Int?
+
 
   createdAt DateTime @default(now())
 

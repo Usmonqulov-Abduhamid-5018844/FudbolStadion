@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 
 export const getPremiumPaymentPaymeUrl = (
   amount: number,
-  transactionId: number,
+  transactionId: string,
   plan: string,
   fullName: string,
   lang: string,

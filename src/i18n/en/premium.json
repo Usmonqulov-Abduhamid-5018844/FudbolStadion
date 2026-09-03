@@ -28,21 +28,39 @@
       "click": "Click",
       "payme": "Payme",
       "paynet": "Paynet",
-      "uzum": "Uzum Bank"
+      "uzum": "Uzum Bank",
+      "octo": "Octo Bank"
     },
     "button": "💳 Pay",
-    "pay_now": "💳 Click the button below to complete the payment"
+    "pay_now": "💳 Click the button below to complete the payment",
+
+    "checking": "⏳ <b>Your payment is being checked...</b>\n\nPlease wait a moment.",
+    "not_found": "❌ <b>Payment not found.</b>\n\nTransaction information is unavailable.",
+    "pending": "⏳ <b>Payment has not been confirmed yet.</b>\n\nIf you have already completed the payment, please wait a moment. Premium will be activated automatically after confirmation.",
+    "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Payment amount: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!"
   },
   "premium_active": {
     "active": {
-      "text": "⭐ <b>Your Premium subscription is active</b>\n\n\n📦 <b>Plan:</b> {plan}\n\n🎁 <b>Subscription type:</b> {reason}\n\n📅 <b>Start date:</b> {start_date}\n\n⏳ <b>End date:</b> {end_date}\n\n{statistics}\n__________________________________________________________\n\n🗓 <b>Days remaining:</b> {days_left} days"
+      "text": "⭐ <b>Your Premium subscription is active</b>\n\n📦 <b>Plan:</b> {plan}\n\n🎁 <b>Subscription type:</b> {reason}\n\n📅 <b>Start date:</b> {start_date}\n\n⏳ <b>End date:</b> {end_date}\n\n📊 <b>Premium history:</b>\n\n{statistics}\n\n━━━━━━━━━━━━━━━━━━\n\n🗓 <b>Remaining:</b> {days_left} days"
     },
+
+    "history": {
+      "purchase": "Purchased",
+      "extend": "Premium extended",
+      "gift": "Gift from administrator",
+      "compensation": "Compensation",
+      "trial": "Free Premium trial"
+    },
+
+    "no_history": "No Premium history available",
+
     "reason": {
       "trial": "🎉 Free trial subscription",
-      "purchase": "💳 Purchased Premium subscription",
-      "gift": "🎁 Premium subscription gifted by the administrator",
-      "compensation": "🤝 Premium subscription provided as compensation"
+      "purchase": "💳 Purchased Premium",
+      "gift": "🎁 Premium gifted by administrator",
+      "compensation": "🤝 Premium provided as compensation"
     },
+
     "extend": "🔄 Extend subscription",
     "day": "days"
   }

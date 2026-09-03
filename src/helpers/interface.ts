@@ -197,6 +197,21 @@ export const PLAN_LABELS = {
   },
 } as const;
 
+export const getPremiumPaymentDescription = (
+  plan: PremiumPlan,
+  lang: string,
+): string => {
+  const planLabel = PLAN_LABELS[lang][plan];
+
+  const titles = {
+    uz: '💎  Premium obunasi uchun to‘lov',
+    ru: '💎 Оплата Premium подписки',
+    en: '💎 Payment for Premium subscription',
+  };
+
+  return `${titles[lang]} — ${planLabel}`;
+};
+
 export enum Premium_price {
   MONTH_1 = '39k',
   MONTH_3 = '99k',

@@ -8,7 +8,13 @@ import { InlineKeyboardButton } from 'telegraf/types';
 import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { UtilisService } from 'src/utils/utile.service';
-import { EStadion_type, INITIAL_SESSION, IStadion } from 'src/helpers/interface';
+import {
+  EStadion_type,
+  INITIAL_SESSION,
+  IStadion,
+  PLAN_LABELS,
+  PREMIUM_PLANS,
+} from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';
@@ -1185,6 +1191,64 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       }
     } catch (error) {
       await ctx.reply(this.i18n.translate('error.error', { lang }));
+    }
+  }
+
+  async handlePayloadSucces(ctx: MyContext, payload: string) {
+    try {
+      const [_, __, transactionId] = payload.split('_');
+
+      const lang = await this.utils.langs(ctx);
+
+      const transaction = await this.prisma.premiumTransaction.findUnique({
+        where: {
+          id: transactionId,
+        },
+        include: {
+          owner: true,
+        },
+      });
+
+      if (!transaction) {
+        await this.utils.safeEditOrReply(ctx,
+          this.i18n.translate('premium.payment.not_found', {
+            lang,
+          }),
+        );
+
+        return;
+      }
+
+      if (transaction.status !== 'SUCCESS') {
+        await this.utils.safeEditOrReply(ctx,
+          this.i18n.translate('premium.payment.pending', {
+            lang,
+          }),
+        );
+
+        return;
+      }
+
+
+      const planLabel = PLAN_LABELS[lang][transaction.plan];
+
+      const price = PREMIUM_PLANS[transaction.plan].price
+      
+      
+
+      await this.utils.safeEditOrReply(ctx,
+        this.i18n.translate('premium.payment.already_success', {
+          lang,
+          args: {
+            plan: planLabel,
+            duration: transaction.duration,
+            amount: price.toLocaleString(),
+          },
+        }),
+      );
+      return this.checket(ctx)
+    } catch (error) {
+      await this.utils.errorFunction(ctx)
     }
   }
 }

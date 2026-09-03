@@ -74,7 +74,7 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditOrReply(ctx: MyContext, text: string, keyboard: any) {
+  async safeEditOrReply(ctx: MyContext, text: string, keyboard?: any) {
     try {
       await ctx.editMessageText(text, {
         parse_mode: 'HTML',
@@ -245,7 +245,7 @@ export class UtilisService implements OnModuleInit {
     startAt:Date,
     endAt:Date,
     price: number,
-    transaction_id: number | undefined,
+    transaction_id: string | undefined,
     page: number,
     limit: number,
     total: number,
@@ -292,7 +292,7 @@ export class UtilisService implements OnModuleInit {
     const payBtn = transaction_id
       ? {
           text: this.i18n.translate('booking.pay_by_card', { lang }),
-          url: getPaymentClickUrl(price, Number(transaction_id)),
+          url: getPaymentClickUrl(price, transaction_id),
         }
       : null;
 

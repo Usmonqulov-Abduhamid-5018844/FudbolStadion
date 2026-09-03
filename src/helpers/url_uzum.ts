@@ -1,6 +1,6 @@
 export const getPremiumPaymentUzumUrl = (
   amount: number,
-  transactionId: number,
+  transactionId: string,
   plan: string,
   fullName: string,
   lang: string,

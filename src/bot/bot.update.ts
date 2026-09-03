@@ -26,6 +26,7 @@ import { QrService } from 'src/qr/qr.service';
 import {
   CURRENCY_LABELS,
   EStadion_type,
+  getPremiumPaymentDescription,
   IBooking,
   INITIAL_SESSION,
   PLAN_LABELS,
@@ -48,6 +49,7 @@ import {
 import { AdminService } from 'src/admin/admin.service';
 import { formatDate } from 'src/helpers/dateFormat';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
+import { addPaymentCommission } from 'src/helpers/kommisiya';
 
 @Update()
 export class BotUpdate {
@@ -75,6 +77,9 @@ export class BotUpdate {
     if (payload?.startsWith('stadionBooking_')) {
       return this.botService.handlePayload(ctx, payload);
     }
+    if (payload?.startsWith('payment_success_')) {
+    return this.botService.handlePayloadSucces(ctx,payload)
+  }
 
     const data = await this.prisma.sesion.findUnique({
       where: { chat_id: String(ctx.from?.id) },
@@ -2539,12 +2544,17 @@ export class BotUpdate {
         return;
       }
 
-      const paymentUrl = PAYMENT_URL_GENERATORS[provider](
-        amount,
+        const description = getPremiumPaymentDescription(plan, lang);
+        const paymentAmount = addPaymentCommission(amount, 1);
+
+      const paymentUrl = await PAYMENT_URL_GENERATORS[provider](
+        paymentAmount,
         premiumTranzaction.id,
         plan,
         owner.full_name,
         lang,
+        "premium",
+        description
       );
 
       await this.utils.safeEditOrReply(
@@ -2582,6 +2592,8 @@ export class BotUpdate {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
+      
     }
   }
 

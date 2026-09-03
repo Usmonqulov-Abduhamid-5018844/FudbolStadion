@@ -637,212 +637,206 @@ export class OwnersService {
   }
 
   async handleSchedule(ctx: MyContext, lang: string, text: string) {
-  const timePattern =
-    /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
+    const timePattern =
+      /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
 
-  const match = text.match(timePattern);
+    const match = text.match(timePattern);
 
-  if (!match) {
-    await ctx.reply(
-      this.i18n.translate('schedule.schedules.format', { lang }),
-    );
-    return;
-  }
-
-  const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
-  const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
-
-  const toMinutes = (time: string) => {
-    const [hour, minute] = time.split(':').map(Number);
-    return hour * 60 + minute;
-  };
-
-  const startMinutes = toMinutes(startTime);
-  const endMinutes = toMinutes(endTime);
-
-  if (startMinutes === endMinutes) {
-    await ctx.reply(
-      this.i18n.translate('schedule.schedules.error', { lang }),
-    );
-    return;
-  }
-
-  try {
-
-    if (ctx.session.step === 'special_time') {
-      await this.prisma.stadion_special_schedule.create({
-        data: {
-          date: new Date(ctx.session.stadion.special),
-          start_time: startTime,
-          end_time: endTime,
-          stadion_id: Number(ctx.session.stadion.id),
-        },
-      });
-
+    if (!match) {
       await ctx.reply(
-        this.i18n.translate('schedule.off_day.succses', { lang }),
+        this.i18n.translate('schedule.schedules.format', { lang }),
       );
-
-      ctx.session.step = null;
-
-      return this.botService.stadion_special(
-        ctx,
-        Number(ctx.session.stadion.id),
-      );
-    }
-    if (ctx.session.step === 'special_time_edit') {
-      await this.prisma.stadion_special_schedule.update({
-        where: {
-          id: Number(ctx.session.stadion.schedule_id),
-        },
-        data: {
-          stadion_id: Number(ctx.session.stadion.id),
-          start_time: startTime,
-          end_time: endTime,
-          date: new Date(ctx.session.stadion.special),
-        },
-      });
-
-      await ctx.reply(
-        this.i18n.translate('schedule.off_day.update', { lang }),
-      );
-
-      ctx.session.step = null;
-
-      return this.botService.stadion_special(
-        ctx,
-        Number(ctx.session.stadion.id),
-      );
-    }
-    const stadionId = Number(ctx.session.stadion.id);
-
-    const currentDay = Number(ctx.session.stadion.schedule_day);
-
-    const schedules = await this.prisma.stadion_chedule.findMany({
-      where: {
-        stadion_id: stadionId,
-
-        ...(ctx.session.step === 'edit_schedule_time'
-          ? {
-              id: {
-                not: Number(ctx.session.stadion.schedule_id),
-              },
-            }
-          : {}),
-      },
-    });
-
-    const MINUTES_IN_DAY = 24 * 60;
-    const MINUTES_IN_WEEK = 7 * MINUTES_IN_DAY;
-
-    const createInterval = (
-      day: number,
-      start: number,
-      end: number,
-    ): [number, number] => {
-      const startAbsolute =
-        (day - 1) * MINUTES_IN_DAY + start;
-
-      let endAbsolute =
-        (day - 1) * MINUTES_IN_DAY + end;
-
-      if (end <= start) {
-        endAbsolute += MINUTES_IN_DAY;
-      }
-
-      return [startAbsolute, endAbsolute];
-    };
-
-    const [newStart, newEnd] = createInterval(
-      currentDay,
-      startMinutes,
-      endMinutes,
-    );
-
-    const hasOverlap = schedules.some((schedule) => {
-      const existingDay = Number(schedule.day_of_week);
-
-      const existingStart = toMinutes(schedule.start_time);
-      const existingEnd = toMinutes(schedule.end_time);
-
-      const [oldStart, oldEnd] = createInterval(
-        existingDay,
-        existingStart,
-        existingEnd,
-      );
-      const oldIntervals = [
-        [oldStart, oldEnd],
-        [oldStart - MINUTES_IN_WEEK, oldEnd - MINUTES_IN_WEEK],
-        [oldStart + MINUTES_IN_WEEK, oldEnd + MINUTES_IN_WEEK],
-      ];
-
-      const newIntervals = [
-        [newStart, newEnd],
-        [newStart - MINUTES_IN_WEEK, newEnd - MINUTES_IN_WEEK],
-        [newStart + MINUTES_IN_WEEK, newEnd + MINUTES_IN_WEEK],
-      ];
-
-      return newIntervals.some(([ns, ne]) =>
-        oldIntervals.some(([os, oe]) => {
-          return ns < oe && ne > os;
-        }),
-      );
-    });
-
-
-    if (hasOverlap) {
-      await ctx.reply(
-        this.i18n.translate('schedule.schedules.overlap', { lang }),
-      );
-
       return;
     }
 
-    if (ctx.session.step === 'edit_schedule_time') {
-      await this.prisma.stadion_chedule.update({
+    const startTime = `${match[1].padStart(2, '0')}:${match[2].padStart(2, '0')}`;
+    const endTime = `${match[3].padStart(2, '0')}:${match[4].padStart(2, '0')}`;
+
+    const toMinutes = (time: string) => {
+      const [hour, minute] = time.split(':').map(Number);
+      return hour * 60 + minute;
+    };
+
+    const startMinutes = toMinutes(startTime);
+    const endMinutes = toMinutes(endTime);
+
+    if (startMinutes === endMinutes) {
+      await ctx.reply(
+        this.i18n.translate('schedule.schedules.error', { lang }),
+      );
+      return;
+    }
+
+    try {
+      if (ctx.session.step === 'special_time') {
+        await this.prisma.stadion_special_schedule.create({
+          data: {
+            date: new Date(ctx.session.stadion.special),
+            start_time: startTime,
+            end_time: endTime,
+            stadion_id: Number(ctx.session.stadion.id),
+          },
+        });
+
+        await ctx.reply(
+          this.i18n.translate('schedule.off_day.succses', { lang }),
+        );
+
+        ctx.session.step = null;
+
+        return this.botService.stadion_special(
+          ctx,
+          Number(ctx.session.stadion.id),
+        );
+      }
+      if (ctx.session.step === 'special_time_edit') {
+        await this.prisma.stadion_special_schedule.update({
+          where: {
+            id: Number(ctx.session.stadion.schedule_id),
+          },
+          data: {
+            stadion_id: Number(ctx.session.stadion.id),
+            start_time: startTime,
+            end_time: endTime,
+            date: new Date(ctx.session.stadion.special),
+          },
+        });
+
+        await ctx.reply(
+          this.i18n.translate('schedule.off_day.update', { lang }),
+        );
+
+        ctx.session.step = null;
+
+        return this.botService.stadion_special(
+          ctx,
+          Number(ctx.session.stadion.id),
+        );
+      }
+      const stadionId = Number(ctx.session.stadion.id);
+
+      const currentDay = Number(ctx.session.stadion.schedule_day);
+
+      const schedules = await this.prisma.stadion_chedule.findMany({
         where: {
-          id: Number(ctx.session.stadion.schedule_id),
-        },
-
-        data: {
-          start_time: startTime,
-          end_time: endTime,
-        },
-      });
-
-      await ctx.reply(
-        this.i18n.translate('schedule.schedules.updated', { lang }),
-      );
-    }
-
-    else {
-      await this.prisma.stadion_chedule.create({
-        data: {
           stadion_id: stadionId,
-          day_of_week: currentDay,
-          start_time: startTime,
-          end_time: endTime,
+
+          ...(ctx.session.step === 'edit_schedule_time'
+            ? {
+                id: {
+                  not: Number(ctx.session.stadion.schedule_id),
+                },
+              }
+            : {}),
         },
       });
 
-      await ctx.reply(
-        this.i18n.translate('schedule.schedules.creat', { lang }),
+      const MINUTES_IN_DAY = 24 * 60;
+      const MINUTES_IN_WEEK = 7 * MINUTES_IN_DAY;
+
+      const createInterval = (
+        day: number,
+        start: number,
+        end: number,
+      ): [number, number] => {
+        const startAbsolute = (day - 1) * MINUTES_IN_DAY + start;
+
+        let endAbsolute = (day - 1) * MINUTES_IN_DAY + end;
+
+        if (end <= start) {
+          endAbsolute += MINUTES_IN_DAY;
+        }
+
+        return [startAbsolute, endAbsolute];
+      };
+
+      const [newStart, newEnd] = createInterval(
+        currentDay,
+        startMinutes,
+        endMinutes,
       );
+
+      const hasOverlap = schedules.some((schedule) => {
+        const existingDay = Number(schedule.day_of_week);
+
+        const existingStart = toMinutes(schedule.start_time);
+        const existingEnd = toMinutes(schedule.end_time);
+
+        const [oldStart, oldEnd] = createInterval(
+          existingDay,
+          existingStart,
+          existingEnd,
+        );
+        const oldIntervals = [
+          [oldStart, oldEnd],
+          [oldStart - MINUTES_IN_WEEK, oldEnd - MINUTES_IN_WEEK],
+          [oldStart + MINUTES_IN_WEEK, oldEnd + MINUTES_IN_WEEK],
+        ];
+
+        const newIntervals = [
+          [newStart, newEnd],
+          [newStart - MINUTES_IN_WEEK, newEnd - MINUTES_IN_WEEK],
+          [newStart + MINUTES_IN_WEEK, newEnd + MINUTES_IN_WEEK],
+        ];
+
+        return newIntervals.some(([ns, ne]) =>
+          oldIntervals.some(([os, oe]) => {
+            return ns < oe && ne > os;
+          }),
+        );
+      });
+
+      if (hasOverlap) {
+        await ctx.reply(
+          this.i18n.translate('schedule.schedules.overlap', { lang }),
+        );
+
+        return;
+      }
+
+      if (ctx.session.step === 'edit_schedule_time') {
+        await this.prisma.stadion_chedule.update({
+          where: {
+            id: Number(ctx.session.stadion.schedule_id),
+          },
+
+          data: {
+            start_time: startTime,
+            end_time: endTime,
+          },
+        });
+
+        await ctx.reply(
+          this.i18n.translate('schedule.schedules.updated', { lang }),
+        );
+      } else {
+        await this.prisma.stadion_chedule.create({
+          data: {
+            stadion_id: stadionId,
+            day_of_week: currentDay,
+            start_time: startTime,
+            end_time: endTime,
+          },
+        });
+
+        await ctx.reply(
+          this.i18n.translate('schedule.schedules.creat', { lang }),
+        );
+      }
+    } catch (error) {
+      console.error('handleSchedule error:', error);
+
+      await this.utils.errorFunction(ctx);
     }
-  } catch (error) {
-    console.error('handleSchedule error:', error);
 
-    await this.utils.errorFunction(ctx);
+    ctx.session.step = null;
+    ctx.session.stadion.schedule_day = null;
+
+    return this.botService.renderScheduleMenu(
+      ctx,
+      Number(ctx.session.stadion.id),
+    );
   }
-
-  ctx.session.step = null;
-  ctx.session.stadion.schedule_day = null;
-
-  return this.botService.renderScheduleMenu(
-    ctx,
-    Number(ctx.session.stadion.id),
-  );
-}
 
   async handlePrice(ctx: MyContext, lang: string, text: string) {
     const price = Number(text);
@@ -1199,8 +1193,8 @@ export class OwnersService {
           }
           break;
         }
-        case '11':{
-          return this.owner_Bron(ctx, lang)
+        case '11': {
+          return this.owner_Bron(ctx, lang);
         }
         default: {
           break;
@@ -1608,7 +1602,7 @@ export class OwnersService {
     }
   }
 
-///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
+  ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
 
   async owner_Bron(ctx: MyContext, lang: string) {
     try {
@@ -1655,9 +1649,9 @@ export class OwnersService {
           inline_keyboard: [
             [
               {
-                text: this.i18n.translate("admin.bron",{lang}),
-                callback_data:`Newbooking_owners_${ownerData.id}_${lang}`
-              }
+                text: this.i18n.translate('admin.bron', { lang }),
+                callback_data: `Newbooking_owners_${ownerData.id}_${lang}`,
+              },
             ],
             [
               {
@@ -1774,7 +1768,7 @@ export class OwnersService {
           lang,
           args: {
             id: booking.id,
-            date: formatDate(booking.date,lang),
+            date: formatDate(booking.date, lang),
             time: `${booking.start_time} - ${booking.end_time}`,
             stadium: booking.stadion.name,
             region: booking.stadion.region.name,
@@ -1786,14 +1780,13 @@ export class OwnersService {
           },
         }),
         {
-          parse_mode:"HTML",
+          parse_mode: 'HTML',
           reply_markup: {
-          
             inline_keyboard: button,
           },
         },
       );
-        ctx.session.ownerActiveBooking ??= [];
+      ctx.session.ownerActiveBooking ??= [];
       ctx.session.ownerActiveBooking.push(sent.message_id);
     } catch (error) {
       await this.utils.errorFunction(ctx);
@@ -1853,7 +1846,7 @@ export class OwnersService {
             totalMinutes > 0
               ? timeLeftText
               : this.i18n.translate('bookingHistory.time_expired', { lang }),
-          user: booking.user ? booking.user.full_name: booking.customer_name,
+          user: booking.user ? booking.user.full_name : booking.customer_name,
           phone: `${booking.user ? `+${booking.user.phone}` : booking.customer_phone}`,
           username: booking.user?.username
             ? `🔗 @${booking.user.username}`
@@ -1888,8 +1881,7 @@ export class OwnersService {
     }
   }
 
-////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
-
+  ////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
 
   async owner_card(ctx: MyContext, lang: string) {
     try {
@@ -2159,6 +2151,7 @@ export class OwnersService {
   async premium(ctx: MyContext, ownerId: number, lang: string) {
     try {
       const now = new Date();
+
       const subscription = await this.prisma.subscription.findFirst({
         where: {
           ownerId,
@@ -2167,6 +2160,9 @@ export class OwnersService {
             gte: now,
           },
         },
+        orderBy: {
+          endDate: 'desc',
+        },
       });
 
       if (!subscription) {
@@ -2174,14 +2170,19 @@ export class OwnersService {
           lang,
           args: {
             month1_label: PLAN_LABELS[lang]['MONTH_1'],
+
             month3_label: PLAN_LABELS[lang]['MONTH_3'],
+
             year1_label: PLAN_LABELS[lang]['YEAR_1'],
 
             month1_price: this.utils.formatPrice('MONTH_1', lang),
+
             month3_price: this.utils.formatPrice('MONTH_3', lang),
+
             year1_price: this.utils.formatPrice('YEAR_1', lang),
           },
         });
+
         await this.utils.safeEditOrReply(ctx, message, {
           inline_keyboard: [
             [
@@ -2194,6 +2195,7 @@ export class OwnersService {
                 }),
               },
             ],
+
             [
               {
                 text: `${PLAN_LABELS[lang]['MONTH_3']} — ${Premium_price.MONTH_3}`,
@@ -2204,6 +2206,7 @@ export class OwnersService {
                 }),
               },
             ],
+
             [
               {
                 text: `${PLAN_LABELS[lang]['YEAR_1']} — ${Premium_price.YEAR_1}`,
@@ -2214,95 +2217,116 @@ export class OwnersService {
                 }),
               },
             ],
+
             [
               {
                 text: this.i18n.translate('schedule.back', { lang }),
                 callback_data: JSON.stringify({
-                  id: ownerId,
                   type: 'phone_back',
+                  id: ownerId,
                 }),
               },
             ],
           ],
         });
+
         return;
       }
-      const statistics = await this.prisma.premiumTransaction.groupBy({
-        by: ['reason'],
+
+      const transactions = await this.prisma.premiumTransaction.findMany({
         where: {
           owner_id: subscription.ownerId,
-          subscription_id: subscription.id,
           status: 'SUCCESS',
         },
-        _sum: {
-          duration: true,
+        take:5,
+        orderBy: {
+          createdAt: "desc",
         },
       });
-      const purchaseDays =
-        statistics.find((item) => item.reason === 'PURCHASE')?._sum.duration ??
-        0;
 
-      const giftDays =
-        statistics.find((item) => item.reason === 'GIFT')?._sum.duration ?? 0;
+      const statistics = transactions
+        .map((transaction) => {
+          const date = formatDate(transaction.createdAt, lang);
 
-      const compensationDays =
-        statistics.find((item) => item.reason === 'COMPENSATION')?._sum
-          .duration ?? 0;
+          const plan = PLAN_LABELS[lang][transaction.plan];
 
-      const trialDays =
-        statistics.find((item) => item.reason === 'TRIAL')?._sum.duration ?? 0;
+          const dayText = this.i18n.translate('premium.premium_active.day', {
+            lang,
+          });
+
+          switch (transaction.reason) {
+            case 'PURCHASE':
+              return `💳 <b>${this.i18n.translate(
+                'premium.premium_active.history.purchase',
+                { lang },
+              )}</b>\n   📦 ${plan}\n   ➕ ${transaction.duration} ${dayText}\n   📅 ${date}`;
+
+            case 'GIFT':
+              return `🎁 <b>${this.i18n.translate(
+                'premium.premium_active.history.gift',
+                { lang },
+              )}</b>\n   ➕ ${transaction.duration} ${dayText}\n   📅 ${date}`;
+
+            case 'COMPENSATION':
+              return `🤝 <b>${this.i18n.translate(
+                'premium.premium_active.history.compensation',
+                { lang },
+              )}</b>\n   ➕ ${transaction.duration} ${dayText}\n   📅 ${date}`;
+
+            case 'TRIAL':
+              return `🎉 <b>${this.i18n.translate(
+                'premium.premium_active.history.trial',
+                { lang },
+              )}</b>\n   ➕ ${transaction.duration} ${dayText}\n   📅 ${date}`;
+
+            default:
+              return null;
+          }
+        })
+        .filter(Boolean)
+        .join('\n\n');
 
       const diffTime = subscription.endDate.getTime() - now.getTime();
 
-      const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      const statistic = [
-        purchaseDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.purchase', { lang })}:</b> ${purchaseDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
-          : null,
-
-        giftDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.gift', { lang })}:</b> +${giftDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
-          : null,
-
-        compensationDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.compensation', { lang })}:</b> +${compensationDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
-          : null,
-
-        trialDays > 0
-          ? `<b>${this.i18n.translate('premium.premium_active.reason.trial', { lang })}:</b> ${trialDays} ${this.i18n.translate('premium.premium_active.day', { lang })}`
-          : null,
-      ]
-        .filter(Boolean)
-        .join('\n\n');
+      const daysLeft = Math.max(0, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 
       const text = this.i18n.translate('premium.premium_active.active.text', {
         lang,
         args: {
           plan: PLAN_LABELS[lang][subscription.plan],
+
           reason: getPremiumReasonText(subscription.reason, this.i18n, lang),
+
           start_date: formatDate(subscription.startDate, lang),
+
           end_date: formatDate(subscription.endDate, lang),
-          statistics: statistic,
+
+          statistics:
+            statistics ||
+            this.i18n.translate('premium.premium_active.no_history', { lang }),
+
           days_left: daysLeft,
         },
       });
 
       await this.utils.safeEditOrReply(ctx, text, {
+        parse_mode: 'HTML',
+
         inline_keyboard: [
           [
             {
               text: this.i18n.translate('premium.premium_active.extend', {
                 lang,
               }),
+
               callback_data: `SelectOwnerPremium_extend_${subscription.ownerId}`,
             },
           ],
+
           [
             {
-              text: this.i18n.translate('schedule.back', {
-                lang,
-              }),
+              text: this.i18n.translate('schedule.back', { lang }),
+
               callback_data: JSON.stringify({
                 type: 'phone_back',
                 id: ownerId,
@@ -2312,6 +2336,8 @@ export class OwnersService {
         ],
       });
     } catch (error) {
+      console.error('premium error:', error);
+
       await this.utils.errorFunction(ctx);
     }
   }
@@ -3338,10 +3364,7 @@ ${this.i18n.translate('advertisement.preview.confirm_question', { lang })}
 
           const expires = item.expiresAt;
 
-          const result = this.utils.bookingTimeCalculate(
-            expires,
-            lang,
-          );
+          const result = this.utils.bookingTimeCalculate(expires, lang);
 
           const text = this.i18n.translate('advertisement.active_info', {
             lang,
