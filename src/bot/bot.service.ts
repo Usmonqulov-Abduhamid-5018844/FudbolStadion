@@ -1210,7 +1210,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       });
 
       if (!transaction) {
-        await this.utils.safeEditOrReply(ctx,
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('premium.payment.not_found', {
             lang,
           }),
@@ -1219,8 +1220,9 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         return;
       }
 
-      if (transaction.status !== 'SUCCESS') {
-        await this.utils.safeEditOrReply(ctx,
+      if (transaction.status === "PENDING") {
+        await this.utils.safeEditOrReply(
+          ctx,
           this.i18n.translate('premium.payment.pending', {
             lang,
           }),
@@ -1229,14 +1231,22 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         return;
       }
 
+      if (transaction.status === "FAILED") {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('premium.payment.failed', {
+            lang,
+          }),
+        );
+        return;
+      }
 
       const planLabel = PLAN_LABELS[lang][transaction.plan];
 
-      const price = PREMIUM_PLANS[transaction.plan].price
-      
-      
+      const price = PREMIUM_PLANS[transaction.plan].price;
 
-      await this.utils.safeEditOrReply(ctx,
+      await this.utils.safeEditOrReply(
+        ctx,
         this.i18n.translate('premium.payment.already_success', {
           lang,
           args: {
@@ -1246,9 +1256,9 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           },
         }),
       );
-      return this.checket(ctx)
+      return this.checket(ctx);
     } catch (error) {
-      await this.utils.errorFunction(ctx)
+      await this.utils.errorFunction(ctx);
     }
   }
 }

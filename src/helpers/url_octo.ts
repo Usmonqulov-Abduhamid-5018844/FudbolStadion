@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 import { getPremiumPaymentDescription, PremiumPlan } from './interface';
 
@@ -30,10 +31,10 @@ export const generateOctoPaymentUrl = async (
 
       description: description,
 
-      return_url: `https://t.me/stadionbronTestbot?start=payment_success_${transactionId}`,
+      return_url: `https://t.me/${process.env.BOT_USERNAME}?start=payment_success_${transactionId}`,
 
       notify_url:
-        'https://d323-188-113-233-153.ngrok-free.app/payment/octo-webhook',
+        'https://19c2-188-113-240-128.ngrok-free.app/payment/octo-webhook',
 
       language: lang,
       ttl: 5,

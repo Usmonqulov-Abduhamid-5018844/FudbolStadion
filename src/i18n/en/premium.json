@@ -37,6 +37,7 @@
     "checking": "⏳ <b>Your payment is being checked...</b>\n\nPlease wait a moment.",
     "not_found": "❌ <b>Payment not found.</b>\n\nTransaction information is unavailable.",
     "pending": "⏳ <b>Payment has not been confirmed yet.</b>\n\nIf you have already completed the payment, please wait a moment. Premium will be activated automatically after confirmation.",
+    "failed": "❌ <b>Payment failed.</b>\n\nThe transaction was cancelled or an error occurred. Please try again or check the payment status with your bank/card.",
     "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Payment amount: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!"
   },
   "premium_active": {

@@ -9,11 +9,10 @@ export class PaymentController {
   @Post('octo-webhook')
   async creates(@Body() data: CreatOcto_PaymentDto) {
     const transactionId = data.shop_transaction_id;
-
+    
     if (transactionId.startsWith('premium_')) {
-      await this.paymentService.octoPremium_payments(data);
+     return await this.paymentService.octoPremium_payments(data);
     }
-
     return { success: true };
   }
   @Get()

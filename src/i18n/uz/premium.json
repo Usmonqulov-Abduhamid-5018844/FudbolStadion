@@ -38,6 +38,7 @@
     "checking": "⏳ <b>To‘lovingiz tekshirilmoqda...</b>\n\nIltimos, biroz kuting.",
     "not_found": "❌ <b>To‘lov topilmadi.</b>\n\nTranzaksiya maʼlumotlari mavjud emas.",
     "pending": "⏳ <b>To‘lov hali tasdiqlanmadi.</b>\n\nAgar to‘lovni amalga oshirgan bo‘lsangiz, iltimos, biroz kuting. To‘lov tasdiqlangach Premium avtomatik faollashtiriladi.",
+    "failed": "❌ <b>To‘lov amalga oshmadi.</b>\n\nTranzaksiya bekor qilindi yoki xatolik yuz berdi. Iltimos, qaytadan urinib ko‘ring yoki bank/karta orqali to‘lov holatini tekshiring.",
     "already_success": "✅ <b>To‘lov tasdiqlangan!</b>\n\n💎 <b>Premium obunangiz faol</b>\n\n📦 Tarif: <b>{plan}</b>\n⏳ Amal qilish muddati: <b>{duration} kun</b>\n💰 To‘lov summasi: <b>{amount} so‘m</b>\n\n🎉 Premium imkoniyatlaridan foydalanishingiz mumkin!\n❤️ Xaridingiz uchun rahmat!"
   },
 

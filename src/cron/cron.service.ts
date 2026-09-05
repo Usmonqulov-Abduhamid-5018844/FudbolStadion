@@ -5,7 +5,6 @@ import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
 import { formatDate } from 'src/helpers/dateFormat';
 import { buildDailyReport, renderDailyReport } from 'src/helpers/day_state';
-import { WeeklyReportQuery } from 'src/mail/weekly-report.query';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -441,9 +440,6 @@ export class CronService {
           status: AdvertisementStatus.EXPIRED,
         },
       });
-      if (count > 0) {
-        console.log(`${count} ta reklama EXPIRED holatiga o'tkazildi.`);
-      }
     } catch (error) {
       console.log('Reklama muddatini tekshirishda xatolik');
     }
