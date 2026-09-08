@@ -2528,27 +2528,27 @@ export class BotUpdate {
         await this.utils.errorFunction(ctx);
         return;
       }
+      
       const premiumTranzaction = await this.prisma.premiumTransaction.create({
         data: {
           owner_id: owner.id,
           amount,
           plan,
-          duration: durationMap[plan],
-          provider: providerKey,
+          duration: durationMap[plan]
         },
       });
-      const provider = providerKey as PaymentProvider;
 
+      const provider = providerKey as PaymentProvider;
+      
       if (!(provider in PAYMENT_URL_GENERATORS)) {
         await this.utils.errorFunction(ctx);
         return;
       }
 
         const description = getPremiumPaymentDescription(plan, lang);
-        const paymentAmount = addPaymentCommission(amount, 1);
 
       const paymentUrl = await PAYMENT_URL_GENERATORS[provider](
-        paymentAmount,
+        amount,
         premiumTranzaction.id,
         plan,
         owner.full_name,

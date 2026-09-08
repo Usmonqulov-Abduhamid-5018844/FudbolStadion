@@ -931,4 +931,5 @@ export class UtilisService implements OnModuleInit {
 
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
+
 }

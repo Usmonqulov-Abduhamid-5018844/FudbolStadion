@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { NotificationType, PremiumReason } from '@prisma/client';
+import {
+  NotificationType,
+  PremiumReason,
+  TransactionStatus,
+} from '@prisma/client';
 import { count } from 'console';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
@@ -1675,7 +1679,7 @@ export class AdminService {
               include: {
                 premiumTransactions: {
                   where: {
-                    status: 'SUCCESS',
+                    status: TransactionStatus.SUCCESS,
                   },
                   take: 1,
                   orderBy: {
@@ -1689,7 +1693,6 @@ export class AdminService {
               skip: (historyPage - 1) * limit,
               take: limit,
             }),
-
             this.prisma.subscription.count({
               where: {
                 ownerId,
@@ -1711,10 +1714,24 @@ export class AdminService {
           }
 
           const totalPages = Math.ceil(total / limit);
-
           const historyText = history
             .map((item, index) => {
               const transaction = item.premiumTransactions[0];
+
+              const isAdminGift = item.reason !== PremiumReason.PURCHASE;
+
+              const providerLabel = isAdminGift
+                ? this.i18n.translate('admin.premium_history.provider.admin', {
+                    lang,
+                  })
+                : transaction?.provider
+                  ? `${transaction.provider}`
+                  : this.i18n.translate(
+                      'admin.premium_history.provider.unknown',
+                      {
+                        lang,
+                      },
+                    );
 
               return this.i18n.translate('admin.premium_history.history.item', {
                 lang,
@@ -1729,38 +1746,23 @@ export class AdminService {
                     : this.i18n.translate('admin.premium_history.free', {
                         lang,
                       }),
-                  provider:
-                    transaction?.provider === 'ADMIN_GIFT'
-                      ? this.i18n.translate(
-                          'admin.premium_history.provider.admin',
-                          { lang },
-                        )
-                      : (transaction?.provider ??
-                        this.i18n.translate(
-                          'admin.premium_history.provider.unknown',
-                          {
-                            lang,
-                          },
-                        )),
+                  provider: providerLabel,
                 },
               });
             })
             .join('\n\n━━━━━━━━━━━━━━━\n\n');
 
           const pagination: InlineKeyboardButton[] = [];
-
           if (historyPage > 1) {
             pagination.push({
               text: this.i18n.translate('admin.Previous', { lang }),
               callback_data: `AdminOwner_history_${ownerId}_${currentPage}_${historyPage - 1}`,
             });
           }
-
           pagination.push({
             text: `${historyPage}/${totalPages}`,
             callback_data: 'ignore',
           });
-
           if (historyPage < totalPages) {
             pagination.push({
               text: this.i18n.translate('admin.Next', { lang }),
@@ -1788,7 +1790,6 @@ export class AdminService {
               ],
             },
           );
-
           break;
         }
         case 'gift': {
@@ -2134,20 +2135,11 @@ export class AdminService {
             data: {
               owner_id: ownerId,
               subscription_id: activeSubscription.id,
-
               plan,
-
               duration: days,
-
               amount: 0,
-
               reason,
-
-              provider: 'ADMIN_GIFT',
-
-              provider_transactionId: null,
-
-              status: 'SUCCESS',
+              status: TransactionStatus.SUCCESS,
             },
           });
         } else {
@@ -2171,20 +2163,11 @@ export class AdminService {
             data: {
               owner_id: ownerId,
               subscription_id: subscription.id,
-
               plan,
-
               duration: days,
-
               amount: 0,
-
               reason,
-
-              provider: 'ADMIN_GIFT',
-
-              provider_transactionId: null,
-
-              status: 'SUCCESS',
+              status: TransactionStatus.SUCCESS,
             },
           });
         }
@@ -2441,14 +2424,21 @@ export class AdminService {
           callback_data: `admin_back_2`,
         },
       ]);
-
-      const sent = await ctx.replyWithPhoto(stadion.image, {
-        caption: text,
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: actionButtons,
-        },
-      });
+      let sent: any;
+      try {
+        sent = await ctx.replyWithPhoto(stadion.image, {
+          caption: text,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: actionButtons,
+          },
+        });
+      } catch (error) {
+        sent = await ctx.reply(text, {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: actionButtons },
+        });
+      }
 
       ctx.session.admin_messageId = sent.message_id;
       ctx.session.admin_step = 'owner_stadion_details';
@@ -2457,6 +2447,7 @@ export class AdminService {
       ctx.session.historyPage = historyPage;
     } catch (error) {
       await this.utils.errorFunction(ctx);
+      console.log(error);
     } finally {
       if (ctx.session.confirment_messageId) {
         ctx.deleteMessage(ctx.session.confirment_messageId).catch(() => {});

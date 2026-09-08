@@ -11,6 +11,7 @@ export enum PaymentProvider {
   OCTO = "OCTO",
   UZUM = 'UZUM',
 }
+
 export const PAYMENT_URL_GENERATORS = {
   [PaymentProvider.CLICK]: getPremiumPaymentClickUrl,
   [PaymentProvider.PAYME]: getPremiumPaymentPaymeUrl,

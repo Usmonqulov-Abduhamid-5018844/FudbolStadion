@@ -34,6 +34,9 @@
     "button": "💳 Pay",
     "pay_now": "💳 Click the button below to complete the payment",
 
+    "check_again": "🔄 Check again",
+    "taking_too_long": "⏳ Your payment hasn't been confirmed yet.\n\nBank confirmation can sometimes take a little longer. If the money was deducted from your card, don't worry — it will be processed.\n\nPlease try checking again in a few minutes, or contact support if the issue persists.",
+
     "checking": "⏳ <b>Your payment is being checked...</b>\n\nPlease wait a moment.",
     "not_found": "❌ <b>Payment not found.</b>\n\nTransaction information is unavailable.",
     "pending": "⏳ <b>Payment has not been confirmed yet.</b>\n\nIf you have already completed the payment, please wait a moment. Premium will be activated automatically after confirmation.",
@@ -42,7 +45,7 @@
   },
   "premium_active": {
     "active": {
-      "text": "⭐ <b>Your Premium subscription is active</b>\n\n📦 <b>Plan:</b> {plan}\n\n🎁 <b>Subscription type:</b> {reason}\n\n📅 <b>Start date:</b> {start_date}\n\n⏳ <b>End date:</b> {end_date}\n\n📊 <b>Premium history:</b>\n\n{statistics}\n\n━━━━━━━━━━━━━━━━━━\n\n🗓 <b>Remaining:</b> {days_left} days"
+      "text": "⭐ <b>Your Premium subscription is active</b>\n\n📦 <b>Plan:</b> {plan}\n\n🎁 <b>Subscription type:</b> {reason}\n\n📅 <b>Start date:</b> {start_date}\n\n⏳ <b>End date:</b> {end_date}\n\n━━━━━━━━━━━━━━━━━━\n\n📊 <b>Premium history:</b>\n\n{statistics}\n\n━━━━━━━━━━━━━━━━━━\n\n🗓 <b>Remaining:</b> {days_left} days"
     },
 
     "history": {

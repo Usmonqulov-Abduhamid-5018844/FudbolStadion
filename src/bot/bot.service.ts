@@ -20,7 +20,7 @@ import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';
 import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
 import { formatDate } from 'src/helpers/dateFormat';
-import { AdvertisementClickSource } from '@prisma/client';
+import { AdvertisementClickSource, TransactionStatus } from '@prisma/client';
 
 @Injectable()
 export class BotService {
@@ -1220,18 +1220,25 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         return;
       }
 
-      if (transaction.status === "PENDING") {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('premium.payment.pending', {
-            lang,
-          }),
-        );
+      if (transaction.status === TransactionStatus.PENDING) {
+        const secondsSinceCreated =
+          (Date.now() - transaction.createdAt.getTime()) / 1000;
 
+        if (secondsSinceCreated < 30) {
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('premium.payment.pending', { lang }),
+          );
+        } else {
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('premium.payment.taking_too_long', { lang }),
+          );
+        }
         return;
       }
 
-      if (transaction.status === "FAILED") {
+      if (transaction.status === TransactionStatus.FAILED) {
         await this.utils.safeEditOrReply(
           ctx,
           this.i18n.translate('premium.payment.failed', {

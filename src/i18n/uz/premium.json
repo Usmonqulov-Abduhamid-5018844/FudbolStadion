@@ -35,6 +35,9 @@
     "button": "💳 To'lash",
     "pay_now": "💳 To'lovni yakunlash uchun quyidagi tugmani bosing",
 
+    "check_again": "🔄 Qayta tekshirish",
+    "taking_too_long": "⏳ To'lovingiz hali tasdiqlanmadi.\n\nBa'zan bank tomonidan tasdiqlash biroz vaqt olishi mumkin. Agar pul kartangizdan yechilgan bo'lsa, tashvishlanmang — u albatta tekshiriladi.\n\nBir necha daqiqadan so'ng qayta urinib ko'ring yoki muammo davom etsa, administratorga murojaat qiling.",
+
     "checking": "⏳ <b>To‘lovingiz tekshirilmoqda...</b>\n\nIltimos, biroz kuting.",
     "not_found": "❌ <b>To‘lov topilmadi.</b>\n\nTranzaksiya maʼlumotlari mavjud emas.",
     "pending": "⏳ <b>To‘lov hali tasdiqlanmadi.</b>\n\nAgar to‘lovni amalga oshirgan bo‘lsangiz, iltimos, biroz kuting. To‘lov tasdiqlangach Premium avtomatik faollashtiriladi.",
@@ -44,7 +47,7 @@
 
   "premium_active": {
     "active": {
-      "text": "⭐ <b>Premium obunangiz faol</b>\n\n📦 <b>Tarif:</b> {plan}\n\n🎁 <b>Obuna turi:</b> {reason}\n\n📅 <b>Boshlangan sana:</b> {start_date}\n\n⏳ <b>Tugash sanasi:</b> {end_date}\n\n📊 <b>Premium tarixi:</b>\n\n{statistics}\n\n━━━━━━━━━━━━━━━━━━\n\n🗓 <b>Qolgan muddat:</b> {days_left} kun"
+      "text": "⭐ <b>Premium obunangiz faol</b>\n\n📦 <b>Tarif:</b> {plan}\n\n🎁 <b>Obuna turi:</b> {reason}\n\n📅 <b>Boshlangan sana:</b> {start_date}\n\n⏳ <b>Tugash sanasi:</b> {end_date}\n\n━━━━━━━━━━━━━━━━━━\n\n📊 <b>Premium tarixi:</b>\n\n{statistics}\n\n━━━━━━━━━━━━━━━━━━\n\n🗓 <b>Qolgan muddat:</b> {days_left} kun"
     },
 
     "history": {
@@ -67,5 +70,4 @@
     "extend": "🔄 Obunani uzaytirish",
     "day": "kun"
   }
-
 }

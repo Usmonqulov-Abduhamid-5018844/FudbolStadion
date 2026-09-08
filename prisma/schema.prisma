@@ -208,7 +208,7 @@ model Subscription {
 }
 
 model PremiumTransaction {
-  id  String @id @default(uuid()) @db.Uuid
+  id String @id @default(uuid()) @db.Uuid
 
   owner_id Int
   owner    Owners @relation(fields: [owner_id], references: [id], onDelete: Cascade)
@@ -217,32 +217,35 @@ model PremiumTransaction {
   subscription    Subscription? @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
 
   duration Int
+  plan     PremiumPlan
+  amount   Int
+  reason   PremiumReason @default(PURCHASE)
 
-  plan PremiumPlan
-
-  amount Int
-
-
-  reason PremiumReason @default(PURCHASE)
-
-  provider String
-
-  provider_transactionId String?
+  provider                 PaymentProvider?
+  provider_transaction_id  String?
+  provider_data            Json?
 
   status TransactionStatus @default(PENDING)
 
-  octo_payment_UUID String?
-  paid_at           DateTime?
+  currency     String  @default("UZS")
   transfer_sum Int?
-
   refunded_sum Int?
 
+  card_masked_pan String?
+  card_type       String?
+  card_vendor     String?
+  card_country    String?
+  risk_level      Int?
 
-  createdAt DateTime @default(now())
+  paid_at   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([owner_id])
   @@index([subscription_id])
+  @@unique([provider, provider_transaction_id])
 }
+
 
 model sesion {
   id              Int     @id @default(autoincrement())
@@ -414,4 +417,11 @@ enum PremiumReason {
   PURCHASE
   GIFT
   COMPENSATION
+}
+enum PaymentProvider {
+  CLICK
+  PAYME
+  PAYINET
+  UZUM
+  OCTO
 }

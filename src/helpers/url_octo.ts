@@ -13,8 +13,7 @@ export const generateOctoPaymentUrl = async (
 ) => {
 
 
-  const response = await axios.post(
-    'https://secure.octo.uz/prepare_payment',
+  const response = await axios.post(`${process.env.OCTO_BASE_URL}`,
     {
       octo_shop_id: Number(process.env.OCTO_SHOP_ID),
       octo_secret: process.env.OCTO_SECRET,
@@ -33,9 +32,7 @@ export const generateOctoPaymentUrl = async (
 
       return_url: `https://t.me/${process.env.BOT_USERNAME}?start=payment_success_${transactionId}`,
 
-      notify_url:
-        'https://19c2-188-113-240-128.ngrok-free.app/payment/octo-webhook',
-
+      notify_url: `${process.env.OCTO_NOTIFY_URL}`,
       language: lang,
       ttl: 5,
     },

@@ -2310,8 +2310,6 @@ export class OwnersService {
       });
 
       await this.utils.safeEditOrReply(ctx, text, {
-        parse_mode: 'HTML',
-
         inline_keyboard: [
           [
             {
