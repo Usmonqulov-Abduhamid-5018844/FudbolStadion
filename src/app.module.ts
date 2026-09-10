@@ -18,8 +18,10 @@ import { PaymentModule } from './payment/payment.module';
 import { AdminModule } from './admin/admin.module';
 import { NotifikationModule } from './notifikation/notifikation.module';
 import { WeeklyReportModule } from './mail/weekly-report.module';
+import { AppController } from './app.controller';
 
 @Module({
+  controllers:[AppController],
   imports: [
     I18nModule.forRoot({
       fallbackLanguage: 'uz',
