@@ -12,9 +12,11 @@ import {
   AdminStatus,
   AdvertisementStatus,
   Booking_status,
+  PaymentProvider,
   Payments,
   PremiumReason,
   Prisma,
+  TransactionStatus,
 } from '@prisma/client';
 import {
   helpMenuKeyboard_Owner,
@@ -44,7 +46,6 @@ import {
 import { PAYMENT_PROVIDERS } from 'src/helpers/provider';
 import {
   PAYMENT_URL_GENERATORS,
-  PaymentProvider,
 } from 'src/helpers/url_wrapper';
 import { AdminService } from 'src/admin/admin.service';
 import { formatDate } from 'src/helpers/dateFormat';
@@ -78,8 +79,8 @@ export class BotUpdate {
       return this.botService.handlePayload(ctx, payload);
     }
     if (payload?.startsWith('payment_success_')) {
-    return this.botService.handlePayloadSucces(ctx,payload)
-  }
+      return this.botService.handlePayloadSucces(ctx, payload);
+    }
 
     const data = await this.prisma.sesion.findUnique({
       where: { chat_id: String(ctx.from?.id) },
@@ -295,12 +296,14 @@ export class BotUpdate {
           }
           try {
             await ctx.editMessageText(
-                this.i18n.translate("admin.booking.enter_name",{lang}),
-              );
-            } catch (error) {
-           const sent = await ctx.reply(this.i18n.translate("admin.booking.enter_name",{lang}))
-           ctx.session.admin_booking_messages ??= []
-           ctx.session.admin_booking_messages.push(sent.message_id)
+              this.i18n.translate('admin.booking.enter_name', { lang }),
+            );
+          } catch (error) {
+            const sent = await ctx.reply(
+              this.i18n.translate('admin.booking.enter_name', { lang }),
+            );
+            ctx.session.admin_booking_messages ??= [];
+            ctx.session.admin_booking_messages.push(sent.message_id);
           }
           ctx.session.admin_step = 'admin_bron_name';
           ctx.session.admin_bron_name = null;
@@ -1652,19 +1655,6 @@ export class BotUpdate {
                       status_pay_later: true,
                     },
                   }),
-
-                  this.prisma.tranzaktion.create({
-                    data: {
-                      user_id: booking.user_id!,
-                      booking_id: booking.id,
-                      systeam_fee: 0,
-                      owner_amount: Number(booking.total_price),
-                      provider: PaymentProvider.CLICK,
-                      provider_transactionId: '',
-                      owner_card_id: cardId,
-                      amount_received: 0,
-                    },
-                  }),
                 ]);
                 const send = await ctx.reply(
                   this.i18n.translate('booking.payments', { lang }),
@@ -1692,6 +1682,43 @@ export class BotUpdate {
               }
             }
             break;
+
+          case `paymentChange`: {
+            const booking = await this.prisma.booking.findUnique({
+              where: { id: Number(bookingId) },
+            });
+
+            if (!booking) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
+              (provider) => [
+                {
+                  text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
+                  callback_data: `paymentProvider_${provider.key}_${bookingId}`,
+                },
+              ],
+            );
+            buttons.push([
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: 'back_user_payment',
+              },
+            ]);
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('booking.payment.choose_provider', { lang }),
+              {
+                inline_keyboard: buttons,
+              },
+            );
+
+            break;
+          }
+
           case 'alerd':
             {
               await ctx.answerCbQuery(
@@ -1738,6 +1765,101 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
+  @Action(/paymentProvider_(\w+)_(\d+)/)
+  async payment(@Ctx() ctx: MyContext) {
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    const lang = await this.utils.langs(ctx);
+
+    const [, providerKey, bookingIdStr] = ctx.callbackQuery.data.split('_');
+    const bookingId = Number(bookingIdStr);
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        stadion: {
+          include: {
+            owner: {
+              include: {
+                ownerCard: {
+                  select:{id:true}
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      await this.utils.errorFunction(ctx);
+      return;
+    }
+
+    const ownerCard = booking.stadion?.owner?.ownerCard?.id;
+    if (!ownerCard) {
+      await ctx.answerCbQuery(
+        this.i18n.translate('booking.payment.no_active_card', { lang }),
+        { show_alert: true },
+      );
+      return;
+    }
+
+    const provider = providerKey as PaymentProvider;
+
+    const tranzaktion = await this.prisma.tranzaktion.create({
+      data: {
+        user_id: booking.user_id!,
+        booking_id: booking.id,
+        owner_card_id: ownerCard,
+        system_fee: 0,
+        owner_amount: Number(booking.total_price),
+        amount_received: 0,
+        status: TransactionStatus.PENDING,
+      },
+    });
+
+    let paymentUrl: string;
+    try {
+      paymentUrl = await this.utils.generatePaymentUrl({
+        provider,
+        transactionId: tranzaktion.id,
+        amount: Number(booking.total_price),
+        ownerName: booking.stadion.owner.full_name,
+        lang,
+        description:"Booking uchun to'lov"
+      });
+    } catch (err) {
+      await this.prisma.tranzaktion.update({
+        where: { id: tranzaktion.id },
+        data: { status: TransactionStatus.FAILED },
+      });
+      await this.utils.errorFunction(ctx);
+      return;
+    }
+
+    await ctx.answerCbQuery();
+    await this.utils.safeEditOrReply(
+      ctx,
+      this.i18n.translate('booking.payment.link_ready', { lang }),
+      {
+        inline_keyboard: [
+          [
+            {
+              text: this.i18n.translate('booking.payment.pay_button', { lang }),
+              url: paymentUrl,
+            },
+          ],
+          [
+            {
+              text:this.i18n.translate("schedule.back",{lang}),
+              callback_data: `booking_confirm_paymentChange_${booking.id}`
+            }
+          ]
+        ],
+      },
+    );
+  }
+
   @Action(/^back_(owner|user)_(.+)$/)
   async brckAll(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -2528,24 +2650,24 @@ export class BotUpdate {
         await this.utils.errorFunction(ctx);
         return;
       }
-      
+
       const premiumTranzaction = await this.prisma.premiumTransaction.create({
         data: {
           owner_id: owner.id,
           amount,
           plan,
-          duration: durationMap[plan]
+          duration: durationMap[plan],
         },
       });
 
       const provider = providerKey as PaymentProvider;
-      
+
       if (!(provider in PAYMENT_URL_GENERATORS)) {
         await this.utils.errorFunction(ctx);
         return;
       }
 
-        const description = getPremiumPaymentDescription(plan, lang);
+      const description = getPremiumPaymentDescription(plan, lang);
 
       const paymentUrl = await PAYMENT_URL_GENERATORS[provider](
         amount,
@@ -2553,8 +2675,8 @@ export class BotUpdate {
         plan,
         owner.full_name,
         lang,
-        "premium",
-        description
+        'premium',
+        description,
       );
 
       await this.utils.safeEditOrReply(
@@ -2593,7 +2715,6 @@ export class BotUpdate {
     } catch (error) {
       await this.utils.errorFunction(ctx);
       console.log(error);
-      
     }
   }
 
@@ -5851,12 +5972,15 @@ export class BotUpdate {
         }
         ctx.session.admin_bron_name = text;
         try {
-          await ctx.editMessageText(this.i18n.translate("admin.booking.enter_phone",{lang}));
-          
+          await ctx.editMessageText(
+            this.i18n.translate('admin.booking.enter_phone', { lang }),
+          );
         } catch (error) {
-          const sent = await ctx.reply(this.i18n.translate("admin.booking.enter_phone",{lang}))
-          ctx.session.admin_booking_messages ??= []
-          ctx.session.admin_booking_messages.push(sent.message_id)
+          const sent = await ctx.reply(
+            this.i18n.translate('admin.booking.enter_phone', { lang }),
+          );
+          ctx.session.admin_booking_messages ??= [];
+          ctx.session.admin_booking_messages.push(sent.message_id);
         }
         ctx.session.admin_step = 'admin_bron_phone';
         return;

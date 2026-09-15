@@ -1,5 +1,5 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import { Booking_status, Pay_method, Payments } from '@prisma/client';
+import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
+import { Booking_status, Pay_method, PaymentProvider, Payments } from '@prisma/client';
 import { subDays } from 'date-fns';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
@@ -15,11 +15,11 @@ import {
   IBooking,
   PREMIUM_PLANS,
 } from 'src/helpers/interface';
-import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { generateOctoBookingPaymentUrl } from 'src/helpers/url_octo';
 
 export const APP_TZ = 'Asia/Tashkent';
 
@@ -245,7 +245,6 @@ export class UtilisService implements OnModuleInit {
     startAt:Date,
     endAt:Date,
     price: number,
-    transaction_id: string | undefined,
     page: number,
     limit: number,
     total: number,
@@ -289,12 +288,10 @@ export class UtilisService implements OnModuleInit {
       callback_data: `booking_confirm_QR_${id}`,
     };
 
-    const payBtn = transaction_id
-      ? {
+    const payBtn = {
           text: this.i18n.translate('booking.pay_by_card', { lang }),
-          url: getPaymentClickUrl(price, transaction_id),
+          callback_data: `booking_confirm_paymentChange_${id}`,
         }
-      : null;
 
     if (status === 'PENDING') {
       if (booking_peyments === 'CASH') {
@@ -931,5 +928,37 @@ export class UtilisService implements OnModuleInit {
 
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
+
+    async generatePaymentUrl(params: {
+    provider: PaymentProvider;
+    transactionId: string;
+    amount: number;
+    ownerName: string;
+    lang: string;
+    description: string;
+  }): Promise<string> {
+    const { provider, transactionId, amount, ownerName, lang, description } = params;
+
+    switch (provider) {
+      case PaymentProvider.OCTO:
+        return generateOctoBookingPaymentUrl(amount, transactionId, ownerName, lang, description);
+
+      case PaymentProvider.CLICK:
+        throw new Error('Not implemented');
+
+      case PaymentProvider.PAYME:
+        throw new Error('Not implemented');
+
+      case PaymentProvider.UZUM:
+        throw new Error('Not implemented');
+
+      case PaymentProvider.PAYINET:
+        throw new Error('Not implemented');
+
+      default:
+        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
+    }
+  }
+
 
 }

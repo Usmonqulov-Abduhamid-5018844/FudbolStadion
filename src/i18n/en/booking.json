@@ -98,5 +98,12 @@
 
   "already_cancelled": "❌ This booking has already been cancelled. This action cannot be performed again.",
 
-  "already_confirmed": "✅ This booking has already been confirmed. No further confirmation is required."
+  "already_confirmed": "✅ This booking has already been confirmed. No further confirmation is required.",
+  
+  "payment": {
+    "choose_provider": "Choose a payment method 👇",
+     "no_active_card": "No active card found for the stadium owner, please try again later",
+    "link_ready": "Your payment link is ready 👇",
+    "pay_button": "💳 Pay"
+  }
 }

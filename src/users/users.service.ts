@@ -18,11 +18,11 @@ import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
 import { QrService } from 'src/qr/qr.service';
 import { getPaymentClickUrl } from 'src/helpers/url_click';
-import { getStadionIds } from 'src/helpers/stadions';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { PaymentProvider } from 'src/helpers/url_wrapper';
 import { Admin_S, AdminStatus, Prisma } from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
+import { getStadionIds } from 'src/helpers/stadions';
 @Injectable()
 export class UsersService {
   constructor(
@@ -277,7 +277,7 @@ export class UsersService {
             .then(() => {})
             .catch();
           return await this.userSwitch(ctx, 'stadionSearch', lang);
-        }
+        };break
         case 'help': {
           try {
             await this.utils.safeEditHelpMenuReply_User(
@@ -287,6 +287,13 @@ export class UsersService {
           } catch (error) {
             await this.utils.errorFunction(ctx);
           }
+        };break
+        case "payment":{
+          if(ctx.session.bookingBrones){
+            await ctx.deleteMessages(ctx.session.bookingBrones).catch(()=> {})
+            ctx.session.bookingBrones = []
+          }
+          return this.userSwitch(ctx,"stadionBron",lang)
         }
         default: {
           break;
@@ -540,7 +547,6 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   item.startAt,
                   item.endAt,
                   Number(item.total_price),
-                  item.tranzaktions?.id,
                   page,
                   limit,
                   total,
@@ -2728,10 +2734,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             user_id: booking.user_id!,
             booking_id: booking.id,
 
-            systeam_fee: 0,
+            system_fee: 0,
             owner_amount: total,
-
-            provider: PaymentProvider.CLICK,
 
             owner_card_id: cardId,
 
@@ -2949,12 +2953,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               user_id: booking.user_id!,
               booking_id: booking.id,
 
-              systeam_fee: 0,
+              system_fee: 0,
               owner_amount: total,
-
-              provider: PaymentProvider.CLICK,
-
-              status: 'PENDING',
 
               owner_card_id: cardId,
 
@@ -3324,7 +3324,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 startAt,
                 endAt,
                 total_price: total,
-                payment_method: 'CASH',
+                payment_method: "CASH",
                 expires_at: new Date(Date.now() + 15 * 60 * 1000),
               },
             });
@@ -3368,9 +3368,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               data: {
                 user_id: booking.user_id!,
                 booking_id: booking.id,
-                systeam_fee: 0,
+                system_fee: 0,
                 owner_amount: total,
-                provider: PaymentProvider.CLICK,
                 owner_card_id: cardId,
                 amount_received: 0,
               },

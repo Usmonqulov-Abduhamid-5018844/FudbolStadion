@@ -158,7 +158,7 @@ model Booking {
   status_pay_later Boolean        @default(false)
   stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
   user             Users?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tranzaktions     Tranzaktion?
+  tranzaktions     Tranzaktion[]
   notifications    Notification[]
 
   @@index([status, startAt, status_pay_later])
@@ -167,20 +167,45 @@ model Booking {
 }
 
 model Tranzaktion {
-  id                     String @id @default(uuid()) @db.Uuid
-  user_id                Int
-  booking_id             Int                @unique
-  systeam_fee            Int
-  owner_amount           Decimal
-  provider               String
-  provider_transactionId String?
-  status                 Tranzaktion_status @default(PENDING)
-  amount_received        Decimal
-  createdAt              DateTime           @default(now())
-  owner_card_id          Int
-  booking                Booking            @relation(fields: [booking_id], references: [id], onDelete: Cascade)
-  owner_cards            Owner_card         @relation(fields: [owner_card_id], references: [id])
-  user                   Users              @relation(fields: [user_id], references: [id])
+  id String @id @default(uuid()) @db.Uuid
+
+  user_id Int
+  user    Users @relation(fields: [user_id], references: [id])
+
+  booking_id Int
+  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+
+  owner_card_id Int
+  owner_cards   Owner_card @relation(fields: [owner_card_id], references: [id])
+
+  system_fee   Int
+  owner_amount Int
+  amount_received Int
+
+  provider                 PaymentProvider?
+  provider_transaction_id  String?
+  provider_data            Json?
+
+  status TransactionStatus @default(PENDING)
+
+  currency     String @default("UZS")
+  transfer_sum Int?
+  refunded_sum Int?
+
+  card_masked_pan String?
+  card_type       String?
+  card_vendor     String?
+  card_country    String?
+  risk_level      Int?
+
+  paid_at   DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([user_id])
+  @@index([booking_id])
+  @@index([status])
+  @@unique([provider, provider_transaction_id])
 }
 
 model Subscription {
@@ -214,7 +239,7 @@ model PremiumTransaction {
   owner    Owners @relation(fields: [owner_id], references: [id], onDelete: Cascade)
 
   subscription_id Int?
-  subscription    Subscription? @relation(fields: [subscription_id], references: [id], onDelete: Cascade)
+  subscription    Subscription? @relation(fields: [subscription_id], references: [id], onDelete: Restrict)
 
   duration Int
   plan     PremiumPlan

@@ -31,6 +31,7 @@ import { AppController } from './app.controller';
       },
       resolvers: [AcceptLanguageResolver, new QueryResolver(['lang'])],
     }),
+
     ScheduleModule.forRoot(),
 
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),

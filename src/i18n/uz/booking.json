@@ -102,5 +102,13 @@
 
   "already_cancelled": "❌ Ushbu bron allaqachon bekor qilingan. Bu bron uchun qayta amal bajarishning imkoni yo'q.",
 
-  "already_confirmed": "✅ Ushbu bron allaqachon tasdiqlangan. Uni qayta tasdiqlashning hojati yo'q."
+  "already_confirmed": "✅ Ushbu bron allaqachon tasdiqlangan. Uni qayta tasdiqlashning hojati yo'q.",
+  
+  "payment": {
+    "choose_provider": "To'lov usullaridan birini tanlang 👇",
+     "no_active_card": "Stadion egasining faol kartasi topilmadi, iltimos keyinroq urinib ko'ring",
+    "link_ready": "To'lov havolangiz tayyor 👇",
+    "pay_button": "💳 To'lash"
+  }
+
 }
