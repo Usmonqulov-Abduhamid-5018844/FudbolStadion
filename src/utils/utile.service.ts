@@ -17,7 +17,7 @@ import {
 } from 'src/helpers/interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
-import { InlineKeyboardButton } from 'telegraf/types';
+import { InlineKeyboardButton, ParseMode } from 'telegraf/types';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { generateOctoBookingPaymentUrl } from 'src/helpers/url_octo';
 
@@ -74,15 +74,15 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditOrReply(ctx: MyContext, text: string, keyboard?: any) {
+  async safeEditOrReply(ctx: MyContext, text: string, keyboard?: any, parse_mode: ParseMode = "HTML" ) {
     try {
       await ctx.editMessageText(text, {
-        parse_mode: 'HTML',
+        parse_mode,
         reply_markup: keyboard,
       });
     } catch (e) {
       const send = await ctx.reply(text, {
-        parse_mode: 'HTML',
+        parse_mode,
         reply_markup: keyboard,
       });
     }
@@ -290,7 +290,7 @@ export class UtilisService implements OnModuleInit {
 
     const payBtn = {
           text: this.i18n.translate('booking.pay_by_card', { lang }),
-          callback_data: `booking_confirm_paymentChange_${id}`,
+          callback_data: `booking_confirm_paymentChange-${page}_${id}`,
         }
 
     if (status === 'PENDING') {
@@ -341,7 +341,7 @@ export class UtilisService implements OnModuleInit {
 
     return buttons;
   }
-  async errorFunction(ctx: MyContext) {
+  async errorFunction(ctx: MyContext, error?: any) {
     const lang = await this.langs(ctx);
     await ctx.reply(this.i18n.translate('error.error', { lang }), {
       reply_markup: {

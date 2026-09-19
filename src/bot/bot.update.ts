@@ -51,6 +51,7 @@ import { AdminService } from 'src/admin/admin.service';
 import { formatDate } from 'src/helpers/dateFormat';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { addPaymentCommission } from 'src/helpers/kommisiya';
+import { scheduleType } from 'src/helpers/interface/enum';
 
 @Update()
 export class BotUpdate {
@@ -1239,6 +1240,41 @@ export class BotUpdate {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
         const [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
+        if (type.startsWith("paymentChange-")) {
+            const page = Number(type.split("-").pop()) || 1;
+              const booking = await this.prisma.booking.findUnique({
+              where: { id: Number(bookingId) },
+            });
+
+            if (!booking) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
+              (provider) => [
+                {
+                  text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
+                  callback_data: `paymentProvider_${provider.key}_${bookingId}_${page}`,
+                },
+              ],
+            );
+            buttons.push([
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: `back_user_payment-${page}`,
+              },
+            ]);
+
+            await this.utils.safeEditOrReply(
+              ctx,
+              this.i18n.translate('booking.payment.choose_provider', { lang }),
+              {
+                inline_keyboard: buttons,
+              },
+            );
+              return;
+            }
         switch (type) {
           case 'yes': {
             if (ctx.callbackQuery) {
@@ -1287,9 +1323,8 @@ export class BotUpdate {
               },
             });
             try {
-              await ctx.editMessageText(message, {
-                parse_mode: 'Markdown',
-                reply_markup: {
+              await this.utils.safeEditOrReply(ctx,message, {
+               
                   inline_keyboard: [
                     [
                       {
@@ -1298,8 +1333,8 @@ export class BotUpdate {
                       },
                     ],
                   ],
-                },
-              });
+                
+              },"Markdown");
             } catch (error) {
               await this.utils.errorFunction(ctx);
             }
@@ -1332,7 +1367,7 @@ export class BotUpdate {
               }
               const days = format(booking.date, 'dd.MM.yyyy');
               try {
-                await ctx.editMessageText(
+                await this.utils.safeEditOrReply(ctx,
                   this.i18n.translate('booking.booking_cancelled_notice', {
                     lang,
                     args: {
@@ -1342,8 +1377,7 @@ export class BotUpdate {
                     },
                   }),
                   {
-                    parse_mode: 'Markdown',
-                    reply_markup: {
+                  
                       inline_keyboard: [
                         [
                           {
@@ -1354,8 +1388,8 @@ export class BotUpdate {
                           },
                         ],
                       ],
-                    },
-                  },
+                    
+                  },"Markdown"
                 );
               } catch (error) {
                 await this.utils.errorFunction(ctx);
@@ -1422,9 +1456,8 @@ export class BotUpdate {
                 },
               );
               try {
-                await ctx.editMessageText(message, {
-                  parse_mode: 'Markdown',
-                  reply_markup: {
+                await this.utils.safeEditOrReply(ctx,message, {
+              
                     inline_keyboard: [
                       [
                         {
@@ -1433,8 +1466,8 @@ export class BotUpdate {
                         },
                       ],
                     ],
-                  },
-                });
+                  
+                },"Markdown");
                 ctx.session.booking_step = '';
               } catch (error) {}
             }
@@ -1683,42 +1716,6 @@ export class BotUpdate {
             }
             break;
 
-          case `paymentChange`: {
-            const booking = await this.prisma.booking.findUnique({
-              where: { id: Number(bookingId) },
-            });
-
-            if (!booking) {
-              await this.utils.errorFunction(ctx);
-              return;
-            }
-
-            const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
-              (provider) => [
-                {
-                  text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
-                  callback_data: `paymentProvider_${provider.key}_${bookingId}`,
-                },
-              ],
-            );
-            buttons.push([
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'back_user_payment',
-              },
-            ]);
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('booking.payment.choose_provider', { lang }),
-              {
-                inline_keyboard: buttons,
-              },
-            );
-
-            break;
-          }
-
           case 'alerd':
             {
               await ctx.answerCbQuery(
@@ -1765,12 +1762,12 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx);
     }
   }
-  @Action(/paymentProvider_(\w+)_(\d+)/)
+  @Action(/paymentProvider_(\w+)_(\d+)_(\d+)/)
   async payment(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const lang = await this.utils.langs(ctx);
 
-    const [, providerKey, bookingIdStr] = ctx.callbackQuery.data.split('_');
+    const [, providerKey, bookingIdStr,page] = ctx.callbackQuery.data.split('_');
     const bookingId = Number(bookingIdStr);
 
     const booking = await this.prisma.booking.findUnique({
@@ -1852,7 +1849,7 @@ export class BotUpdate {
           [
             {
               text:this.i18n.translate("schedule.back",{lang}),
-              callback_data: `booking_confirm_paymentChange_${booking.id}`
+              callback_data: `booking_confirm_paymentChange-${page}_${booking.id}`
             }
           ]
         ],
@@ -2004,7 +2001,7 @@ export class BotUpdate {
     }
   }
   @Action(
-    /^booking_timeEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})$/,
+    /^booking_timeEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d+)_(\d+)_(\d{4})_(\w+)/,
   )
   async bookingTimeEnd(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -2014,7 +2011,7 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, end_time, day, monthNumber, stadionId, years] =
+      const [_, __, start_time, end_time, day, monthNumber, stadionId, years, type] =
         ctx.callbackQuery.data.split('_');
       const data = new Date(
         Date.UTC(Number(years), Number(monthNumber) - 1, Number(day)),
@@ -2027,6 +2024,7 @@ export class BotUpdate {
         data,
         lang,
         Number(stadionId),
+        type as scheduleType
       );
     }
   }
@@ -2069,7 +2067,7 @@ export class BotUpdate {
     }
   }
   @Action(
-    /^booking_specialEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d{4})_(\d+)_(\d+)$/,
+    /^booking_specialEnd_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d+)_(\d{4})_(\d+)_(\d+)_(\w+)/,
   )
   async userBookingSpecialEnd(@Ctx() ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -2080,7 +2078,7 @@ export class BotUpdate {
     }
     try {
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, __, start_time, end_time, id, year, month, day] =
+        const [_, __, start_time, end_time, id, year, month, day,type] =
           ctx.callbackQuery.data.split('_');
         const data = new Date(
           Date.UTC(Number(year), Number(month) - 1, Number(day)),
@@ -2094,6 +2092,7 @@ export class BotUpdate {
           data,
           lang,
           Number(id),
+          type as scheduleType
         );
       }
     } catch (error) {
@@ -2117,6 +2116,16 @@ export class BotUpdate {
         Number(stadionId),
         lang,
       );
+    }
+  }
+
+  @Action(/bookingPaymentProviders/)
+  async bookingPaymentProviders(@Ctx() ctx: MyContext){
+    if(!ctx.callbackQuery || ("data" in ctx.callbackQuery)) return
+    try {
+      
+    } catch (error) {
+      await this.utils.errorFunction(ctx)
     }
   }
   @Action(/^ignore/)
