@@ -1,5 +1,10 @@
-import { BadRequestException, Injectable, OnModuleInit } from '@nestjs/common';
-import { Booking_status, Pay_method, PaymentProvider, Payments } from '@prisma/client';
+import { BadRequestException, Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  Booking_status,
+  Pay_method,
+  PaymentProvider,
+  Payments,
+} from '@prisma/client';
 import { subDays } from 'date-fns';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
@@ -30,10 +35,12 @@ export interface TimeSlot {
 
 @Injectable()
 export class UtilisService implements OnModuleInit {
+  private readonly logger = new Logger(UtilisService.name)
   constructor(
     @InjectBot() private readonly Bot: Telegraf,
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+
   ) {}
   async onModuleInit() {
     await this.Bot.telegram.setMyCommands([
@@ -74,7 +81,12 @@ export class UtilisService implements OnModuleInit {
     }
   }
 
-  async safeEditOrReply(ctx: MyContext, text: string, keyboard?: any, parse_mode: ParseMode = "HTML" ) {
+  async safeEditOrReply(
+    ctx: MyContext,
+    text: string,
+    keyboard?: any,
+    parse_mode: ParseMode = 'HTML',
+  ) {
     try {
       await ctx.editMessageText(text, {
         parse_mode,
@@ -242,8 +254,8 @@ export class UtilisService implements OnModuleInit {
     data: Date,
     start_time: string,
     end_time: string,
-    startAt:Date,
-    endAt:Date,
+    startAt: Date,
+    endAt: Date,
     price: number,
     page: number,
     limit: number,
@@ -258,10 +270,7 @@ export class UtilisService implements OnModuleInit {
       startAt,
       lang,
     );
-    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
-      endAt,
-      lang,
-    );
+    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(endAt, lang);
 
     const backBtn = {
       text: this.i18n.translate('schedule.back', { lang }),
@@ -289,9 +298,9 @@ export class UtilisService implements OnModuleInit {
     };
 
     const payBtn = {
-          text: this.i18n.translate('booking.pay_by_card', { lang }),
-          callback_data: `booking_confirm_paymentChange-${page}_${id}`,
-        }
+      text: this.i18n.translate('booking.pay_by_card', { lang }),
+      callback_data: `booking_confirm_paymentChange-${page}_${id}`,
+    };
 
     if (status === 'PENDING') {
       if (booking_peyments === 'CASH') {
@@ -341,28 +350,66 @@ export class UtilisService implements OnModuleInit {
 
     return buttons;
   }
-  async errorFunction(ctx: MyContext, error?: any) {
+  async errorFunction(ctx: MyContext, error?: unknown, context?: string) {
     const lang = await this.langs(ctx);
-    await ctx.reply(this.i18n.translate('error.error', { lang }), {
-      reply_markup: {
-        inline_keyboard: [
-          [
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: 'errorBack_1',
-            },
-          ],
-        ],
-      },
-    });
-    if (ctx.callbackQuery) {
-      await ctx
-        .answerCbQuery()
-        .then(() => {})
-        .catch();
+
+    const userId = ctx.from?.id;
+    const username = ctx.from?.username;
+    const chatId = ctx.chat?.id;
+    const callbackData =
+      ctx.callbackQuery && 'data' in ctx.callbackQuery
+        ? ctx.callbackQuery.data
+        : undefined;
+    const messageText =
+      ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
+
+    const contextInfo = [
+      context ? `context: ${context}` : null,
+      userId ? `userId: ${userId}` : null,
+      username ? `username: @${username}` : null,
+      chatId ? `chatId: ${chatId}` : null,
+      callbackData ? `callback_data: ${callbackData}` : null,
+      messageText ? `message: ${messageText}` : null,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    if (error instanceof Error) {
+      this.logger.error(
+        `Xatolik yuz berdi [${contextInfo}]: ${error.message}`,
+        error.stack,
+      );
+    } else if (error) {
+      this.logger.error(
+        `Xatolik yuz berdi [${contextInfo}]: ${JSON.stringify(error)}`,
+      );
+    } else {
+      this.logger.error(`Xatolik yuz berdi [${contextInfo}]`);
     }
 
-    console.log('Error occurred');
+    try {
+      await ctx.reply(this.i18n.translate('error.error', { lang }), {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: this.i18n.translate('schedule.back', { lang }),
+                callback_data: 'errorBack_1',
+              },
+            ],
+          ],
+        },
+      });
+    } catch (replyError) {
+      this.logger.error(
+        `errorFunction: foydalanuvchiga xabar yuborib bo'lmadi [${contextInfo}]`,
+        replyError instanceof Error ? replyError.stack : replyError,
+      );
+    }
+
+    if (ctx.callbackQuery) {
+      await ctx.answerCbQuery().catch(() => {});
+    }
   }
 
   ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
@@ -378,10 +425,7 @@ export class UtilisService implements OnModuleInit {
     const makeCb = (action: string) =>
       `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
 
-    const { totalMinutes } = this.bookingTimeCalculate(
-      booking.startAt,
-      lang,
-    );
+    const { totalMinutes } = this.bookingTimeCalculate(booking.startAt, lang);
 
     const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
       booking.endAt,
@@ -813,16 +857,11 @@ export class UtilisService implements OnModuleInit {
     };
   }
 
-  calculateTotalPrice_Admins(
-    start: string,
-    end: string,
-    pricePerHour: number,
-  ) {
+  calculateTotalPrice_Admins(start: string, end: string, pricePerHour: number) {
     const { endRel: durationMinutes } = this.normalizeRange(start, end);
     const durationHours = durationMinutes / 60;
 
     let total = durationHours * pricePerHour;
-    
 
     return {
       total,
@@ -830,7 +869,6 @@ export class UtilisService implements OnModuleInit {
       hors: durationHours,
     };
   }
-
 
   combineDateAndTime(
     baseDate: Date,
@@ -874,7 +912,6 @@ export class UtilisService implements OnModuleInit {
     return `${String(z.getHours()).padStart(2, '0')}:${String(z.getMinutes()).padStart(2, '0')}`;
   }
 
-
   buildCalendarDate(year: number, month1to12: number, day: number): Date {
     return new Date(Date.UTC(year, month1to12 - 1, day));
   }
@@ -916,7 +953,6 @@ export class UtilisService implements OnModuleInit {
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 
-
   timeUntil(startAt: Date) {
     const now = new Date();
     const diffMs = startAt.getTime() - now.getTime();
@@ -929,19 +965,24 @@ export class UtilisService implements OnModuleInit {
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 
-    async generatePaymentUrl(params: {
+  async generatePaymentUrl(params: {
     provider: PaymentProvider;
     transactionId: string;
     amount: number;
-    ownerName: string;
     lang: string;
     description: string;
   }): Promise<string> {
-    const { provider, transactionId, amount, ownerName, lang, description } = params;
+    const { provider, transactionId, amount, lang, description } =
+      params;
 
     switch (provider) {
       case PaymentProvider.OCTO:
-        return generateOctoBookingPaymentUrl(amount, transactionId, ownerName, lang, description);
+        return generateOctoBookingPaymentUrl(
+          amount,
+          transactionId,
+          lang,
+          description,
+        );
 
       case PaymentProvider.CLICK:
         throw new Error('Not implemented');
@@ -956,9 +997,9 @@ export class UtilisService implements OnModuleInit {
         throw new Error('Not implemented');
 
       default:
-        throw new BadRequestException(`Unsupported payment provider: ${provider}`);
+        throw new BadRequestException(
+          `Unsupported payment provider: ${provider}`,
+        );
     }
   }
-
-
 }

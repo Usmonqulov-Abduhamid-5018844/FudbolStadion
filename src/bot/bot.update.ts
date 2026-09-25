@@ -12,6 +12,7 @@ import {
   AdminStatus,
   AdvertisementStatus,
   Booking_status,
+  Pay_method,
   PaymentProvider,
   Payments,
   PremiumReason,
@@ -30,6 +31,7 @@ import {
   EStadion_type,
   getPremiumPaymentDescription,
   IBooking,
+  INITIAL_PENDING_BOOKING,
   INITIAL_SESSION,
   PLAN_LABELS,
   PREMIUM_PLANS,
@@ -44,17 +46,17 @@ import {
   NotificationSettings_type,
 } from 'src/types/notifikation';
 import { PAYMENT_PROVIDERS } from 'src/helpers/provider';
-import {
-  PAYMENT_URL_GENERATORS,
-} from 'src/helpers/url_wrapper';
+import { PAYMENT_URL_GENERATORS } from 'src/helpers/url_wrapper';
 import { AdminService } from 'src/admin/admin.service';
 import { formatDate } from 'src/helpers/dateFormat';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
 import { addPaymentCommission } from 'src/helpers/kommisiya';
 import { scheduleType } from 'src/helpers/interface/enum';
+import { Logger } from '@nestjs/common';
 
 @Update()
 export class BotUpdate {
+  private readonly logger = new Logger(BotUpdate.name)
   private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
     .split(',')
     .filter(Boolean)
@@ -79,8 +81,11 @@ export class BotUpdate {
     if (payload?.startsWith('stadionBooking_')) {
       return this.botService.handlePayload(ctx, payload);
     }
-    if (payload?.startsWith('payment_success_')) {
+    if (payload?.startsWith('paymentPremium_success_')) {
       return this.botService.handlePayloadSucces(ctx, payload);
+    }
+    if (payload?.startsWith('paymentBooking_success_')) {
+      return this.botService.handlePayload_bookingSuccess(ctx, payload);
     }
 
     const data = await this.prisma.sesion.findUnique({
@@ -1240,41 +1245,41 @@ export class BotUpdate {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
         const [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
-        if (type.startsWith("paymentChange-")) {
-            const page = Number(type.split("-").pop()) || 1;
-              const booking = await this.prisma.booking.findUnique({
-              where: { id: Number(bookingId) },
-            });
+        if (type.startsWith('paymentChange-')) {
+          const page = Number(type.split('-').pop()) || 1;
+          const booking = await this.prisma.booking.findUnique({
+            where: { id: Number(bookingId) },
+          });
 
-            if (!booking) {
-              await this.utils.errorFunction(ctx);
-              return;
-            }
+          if (!booking) {
+            await this.utils.errorFunction(ctx);
+            return;
+          }
 
-            const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
-              (provider) => [
-                {
-                  text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
-                  callback_data: `paymentProvider_${provider.key}_${bookingId}_${page}`,
-                },
-              ],
-            );
-            buttons.push([
+          const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
+            (provider) => [
               {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: `back_user_payment-${page}`,
+                text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
+                callback_data: `paymentProvider_${provider.key}_${bookingId}_${page}`,
               },
-            ]);
+            ],
+          );
+          buttons.push([
+            {
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `back_user_payment-${page}`,
+            },
+          ]);
 
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('booking.payment.choose_provider', { lang }),
-              {
-                inline_keyboard: buttons,
-              },
-            );
-              return;
-            }
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.i18n.translate('booking.payment.choose_provider', { lang }),
+            {
+              inline_keyboard: buttons,
+            },
+          );
+          return;
+        }
         switch (type) {
           case 'yes': {
             if (ctx.callbackQuery) {
@@ -1301,7 +1306,6 @@ export class BotUpdate {
               where: { id: Number(booking.id) },
               data: { status: 'CONFIRMED' },
             });
-            const days = format(booking.date, 'dd.MM.yyyy');
 
             const paymentTextMap = {
               CARD: this.i18n.translate('peyments.card', { lang }),
@@ -1315,7 +1319,7 @@ export class BotUpdate {
               lang,
               args: {
                 stadion_name: booking.stadion.name,
-                date: days,
+                date: formatDate(booking.date, lang),
                 start_time: booking.start_time,
                 end_time: booking.end_time,
                 payment_method: paymentMethodText,
@@ -1323,8 +1327,10 @@ export class BotUpdate {
               },
             });
             try {
-              await this.utils.safeEditOrReply(ctx,message, {
-               
+              await this.utils.safeEditOrReply(
+                ctx,
+                message,
+                {
                   inline_keyboard: [
                     [
                       {
@@ -1333,8 +1339,9 @@ export class BotUpdate {
                       },
                     ],
                   ],
-                
-              },"Markdown");
+                },
+                'Markdown',
+              );
             } catch (error) {
               await this.utils.errorFunction(ctx);
             }
@@ -1365,31 +1372,30 @@ export class BotUpdate {
                 await this.utils.errorFunction(ctx);
                 return;
               }
-              const days = format(booking.date, 'dd.MM.yyyy');
               try {
-                await this.utils.safeEditOrReply(ctx,
+                await this.utils.safeEditOrReply(
+                  ctx,
                   this.i18n.translate('booking.booking_cancelled_notice', {
                     lang,
                     args: {
-                      date: days,
+                      date: formatDate(booking.date,lang),
                       start_time: booking.start_time,
                       end_time: booking.end_time,
                     },
                   }),
                   {
-                  
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: 'errorBack_1',
-                          },
-                        ],
+                    inline_keyboard: [
+                      [
+                        {
+                          text: this.i18n.translate('schedule.back', {
+                            lang,
+                          }),
+                          callback_data: 'errorBack_1',
+                        },
                       ],
-                    
-                  },"Markdown"
+                    ],
+                  },
+                  'Markdown',
                 );
               } catch (error) {
                 await this.utils.errorFunction(ctx);
@@ -1398,16 +1404,26 @@ export class BotUpdate {
             break;
           case 'pending':
             {
-              const booking = await this.prisma.booking.findUnique({
-                where: { id: Number(bookingId) },
-                include: { stadion: true },
-              });
-              if (!booking) {
-                await this.utils.errorFunction(ctx);
-                return;
+
+              const pending = ctx.session.pendingBooking
+              if(
+                !pending ||
+                !pending.date ||
+                !pending.stadion_id ||
+                !pending.start_time || 
+                !pending.end_time || 
+                !pending.startAt ||
+                !pending.endAt ||
+                !pending.total_price ||
+                !pending.user_id ||
+                !pending.payment_method
+              ){
+                this.logger.warn("sesion malumotlari to'liq emas")
+                 await this.utils.errorFunction(ctx); 
+                return
               }
               const { timeLeftText, totalMinutes } =
-                this.utils.bookingTimeCalculate(booking.startAt, lang);
+                this.utils.bookingTimeCalculate(pending.startAt, lang);
 
               if (totalMinutes < 60) {
                 await ctx.answerCbQuery(
@@ -1419,17 +1435,25 @@ export class BotUpdate {
                 );
                 return;
               }
-              const days = format(booking.date, 'dd.MM.yyyy');
+              const stadion = await this.prisma.stadion.findUnique({where:{id:Number(pending.stadion_id)}})
 
-              if (
-                ctx.session.booking_step &&
-                ctx.session.booking_step === 'pay_later'
-              ) {
-                await this.prisma.booking.update({
-                  where: { id: Number(bookingId) },
-                  data: { status_pay_later: true },
-                });
+              if(!stadion){
+                 await this.utils.errorFunction(ctx); 
+                return
               }
+              const booking = await this.prisma.booking.create({data:{
+                date: pending.date,
+                stadion_id: pending.stadion_id,
+                user_id: pending.user_id,
+                payment_method: Pay_method.CARD,
+                start_time: pending.start_time,
+                end_time: pending.end_time,
+                startAt: pending.startAt,
+                endAt: pending.endAt,
+                total_price: pending.total_price,
+                expires_at: new Date(Date.now() + 30 * 60 * 1000),
+                status_pay_later: true
+              }})
 
               const paymentTextMap = {
                 CARD: this.i18n.translate('peyments.card', { lang }),
@@ -1445,8 +1469,8 @@ export class BotUpdate {
                 {
                   lang,
                   args: {
-                    stadion_name: booking.stadion.name,
-                    date: days,
+                    stadion_name: stadion.name,
+                    date: formatDate(booking.date, lang),
                     start_time: booking.start_time,
                     end_time: booking.end_time,
                     payment_method: paymentMethodText,
@@ -1455,9 +1479,11 @@ export class BotUpdate {
                   },
                 },
               );
-              try {
-                await this.utils.safeEditOrReply(ctx,message, {
-              
+
+                await this.utils.safeEditOrReply(
+                  ctx,
+                  message,
+                  {
                     inline_keyboard: [
                       [
                         {
@@ -1466,10 +1492,10 @@ export class BotUpdate {
                         },
                       ],
                     ],
-                  
-                },"Markdown");
-                ctx.session.booking_step = '';
-              } catch (error) {}
+                  },
+                  'Markdown',
+                );
+                ctx.session.pendingBooking = {...INITIAL_PENDING_BOOKING}
             }
             break;
           case 'confirm':
@@ -1585,13 +1611,11 @@ export class BotUpdate {
               }
             }
 
-            const days = format(booking.date, 'dd.MM.yyyy');
-
             const send = await ctx.reply(
               this.i18n.translate('booking.booking_cancelled', {
                 lang,
                 args: {
-                  date: days,
+                  date: formatDate(booking.date,lang),
                   start_time: booking.start_time,
                   end_time: booking.end_time,
                 },
@@ -1759,7 +1783,7 @@ export class BotUpdate {
         }
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error);
     }
   }
   @Action(/paymentProvider_(\w+)_(\d+)_(\d+)/)
@@ -1767,7 +1791,8 @@ export class BotUpdate {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     const lang = await this.utils.langs(ctx);
 
-    const [, providerKey, bookingIdStr,page] = ctx.callbackQuery.data.split('_');
+    const [, providerKey, bookingIdStr, page] =
+      ctx.callbackQuery.data.split('_');
     const bookingId = Number(bookingIdStr);
 
     const booking = await this.prisma.booking.findUnique({
@@ -1778,7 +1803,7 @@ export class BotUpdate {
             owner: {
               include: {
                 ownerCard: {
-                  select:{id:true}
+                  select: { id: true },
                 },
               },
             },
@@ -1821,9 +1846,8 @@ export class BotUpdate {
         provider,
         transactionId: tranzaktion.id,
         amount: Number(booking.total_price),
-        ownerName: booking.stadion.owner.full_name,
         lang,
-        description:"Booking uchun to'lov"
+        description: this.i18n.translate("booking.payment.description",{lang})
       });
     } catch (err) {
       await this.prisma.tranzaktion.update({
@@ -1848,10 +1872,10 @@ export class BotUpdate {
           ],
           [
             {
-              text:this.i18n.translate("schedule.back",{lang}),
-              callback_data: `booking_confirm_paymentChange-${page}_${booking.id}`
-            }
-          ]
+              text: this.i18n.translate('schedule.back', { lang }),
+              callback_data: `booking_confirm_paymentChange-${page}_${booking.id}`,
+            },
+          ],
         ],
       },
     );
@@ -1875,7 +1899,7 @@ export class BotUpdate {
     }
   }
   @Action(
-    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)_(\d+)_(\d+)/,
+    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)_(\d+)_(\d+)_(\w+)/
   )
   async bookingPeyments(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -1896,17 +1920,24 @@ export class BotUpdate {
           stadionId,
           price,
           noshowCount,
+          schedule_type
         ] = ctx.callbackQuery.data.split('_');
+
+      const [year, month, day] = days.split('-');
+      const date = new Date(
+        Date.UTC(Number(year), Number(month) - 1, Number(day)),
+      );
 
         return this.userService.bookingPayments(
           ctx,
           type,
-          days,
+          date,
           start_time,
           end_time,
           Number(stadionId),
           Number(price),
           Number(noshowCount),
+          schedule_type as scheduleType,
           lang,
         );
       }
@@ -2011,8 +2042,17 @@ export class BotUpdate {
     }
     const lang = await this.utils.langs(ctx);
     if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-      const [_, __, start_time, end_time, day, monthNumber, stadionId, years, type] =
-        ctx.callbackQuery.data.split('_');
+      const [
+        _,
+        __,
+        start_time,
+        end_time,
+        day,
+        monthNumber,
+        stadionId,
+        years,
+        type,
+      ] = ctx.callbackQuery.data.split('_');
       const data = new Date(
         Date.UTC(Number(years), Number(monthNumber) - 1, Number(day)),
       );
@@ -2024,7 +2064,7 @@ export class BotUpdate {
         data,
         lang,
         Number(stadionId),
-        type as scheduleType
+        type as scheduleType,
       );
     }
   }
@@ -2078,12 +2118,11 @@ export class BotUpdate {
     }
     try {
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, __, start_time, end_time, id, year, month, day,type] =
+        const [_, __, start_time, end_time, id, year, month, day, type] =
           ctx.callbackQuery.data.split('_');
         const data = new Date(
           Date.UTC(Number(year), Number(month) - 1, Number(day)),
         );
-        console.log('booking_specialEnd', data);
 
         return this.userService.bookingScheduleFinish(
           ctx,
@@ -2092,7 +2131,7 @@ export class BotUpdate {
           data,
           lang,
           Number(id),
-          type as scheduleType
+          type as scheduleType,
         );
       }
     } catch (error) {
@@ -2119,13 +2158,81 @@ export class BotUpdate {
     }
   }
 
-  @Action(/bookingPaymentProviders/)
-  async bookingPaymentProviders(@Ctx() ctx: MyContext){
-    if(!ctx.callbackQuery || ("data" in ctx.callbackQuery)) return
+  @Action(/bookingPaymentProviders_(\w+)/)
+  async bookingPaymentProviders(@Ctx() ctx: MyContext) {
+
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     try {
+      const [_,lang] = ctx.callbackQuery.data.split("_")
       
+      const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
+        (provider) => [
+          {
+            text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
+            callback_data:`SelectPaymentProviders_${provider.key}_${lang}`,
+          },
+        ],
+      );
+      buttons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: `back_user_Booking`,
+        },
+      ]);
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.payment.choose_provider', { lang }),
+        {
+          inline_keyboard: buttons,
+        },
+      );
     } catch (error) {
-      await this.utils.errorFunction(ctx)
+      await this.utils.errorFunction(ctx);
+      
+    }
+  }
+  @Action(/bookingPaymentProviderStep2_(\w+)/)
+  async bookingPaymentProviderStep2(@Ctx() ctx: MyContext) {
+
+    if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+    try {
+      const [_,lang] = ctx.callbackQuery.data.split("_")
+      
+      const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
+        (provider) => [
+          {
+            text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
+            callback_data:`SelectPaymentProviders_${provider.key}_${lang}`,
+          },
+        ],
+      );
+      buttons.push([
+        {
+          text: this.i18n.translate('schedule.back', { lang }),
+          callback_data: `back_user_Payments`,
+        },
+      ]);
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.payment.choose_provider', { lang }),
+        {
+          inline_keyboard: buttons,
+        },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx);
+      
+    }
+  }
+
+  @Action(/SelectPaymentProviders_(\w+)_(\w+)$/)
+  async SelectPaymentProviders(@Ctx() ctx: MyContext){
+    try {
+      if(!ctx.callbackQuery || !("data" in ctx.callbackQuery)) return
+      const [_, providerKey, lang] = ctx.callbackQuery.data.split("_")
+      await this.userService.BookingPaymentProviders(ctx,providerKey,lang)
+    } catch (error) {
+      await this.utils.errorFunction(ctx,error)
     }
   }
   @Action(/^ignore/)
@@ -2681,10 +2788,7 @@ export class BotUpdate {
       const paymentUrl = await PAYMENT_URL_GENERATORS[provider](
         amount,
         premiumTranzaction.id,
-        plan,
-        owner.full_name,
         lang,
-        'premium',
         description,
       );
 

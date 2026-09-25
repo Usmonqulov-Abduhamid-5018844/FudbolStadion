@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
@@ -24,6 +24,7 @@ import { AdvertisementClickSource, TransactionStatus } from '@prisma/client';
 
 @Injectable()
 export class BotService {
+  private readonly logger = new Logger(BotService.name)
   private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
     .split(',')
     .filter(Boolean)
@@ -1063,7 +1064,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             },
           });
         }
-        return this.advertisementBooking(ctx, lang, advertisement.stadion);
+        await this.advertisementBooking(ctx, lang, advertisement.stadion);
+        return
       }
       await this.prisma.sesion.upsert({
         where: {
@@ -1268,4 +1270,78 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       await this.utils.errorFunction(ctx);
     }
   }
+async handlePayload_bookingSuccess(ctx: MyContext, payload: string) {
+  try {
+    const [_, __, transactionId] = payload.split('_');
+
+    const lang = await this.utils.langs(ctx);
+
+    const transaction = await this.prisma.tranzaktion.findUnique({
+      where: {
+        id: transactionId,
+      },
+      include: { booking: true },
+    });
+
+    if (!transaction) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.payment.not_found', { lang }),
+      );
+      return;
+    }
+
+    if (transaction.status === TransactionStatus.PENDING) {
+      const secondsSinceCreated =
+        (Date.now() - transaction.createdAt.getTime()) / 1000;
+
+      if (secondsSinceCreated < 30) {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('booking.payment.pending', { lang }),
+        );
+      } else {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('booking.payment.taking_too_long', { lang }),
+        );
+      }
+      return;
+    }
+
+    if (transaction.status === TransactionStatus.FAILED) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.payment.failed', { lang }),
+      );
+      return;
+    }
+
+    if (!transaction.booking) {
+      this.logger.error(
+        `handlePayload_bookingSuccess: transaction ${transaction.id} uchun booking topilmadi`,
+      );
+      await this.utils.errorFunction(ctx);
+      return;
+    }
+
+    await this.utils.safeEditOrReply(
+      ctx,
+      this.i18n.translate('booking.payment.already_success', {
+        lang,
+        args: {
+          date: formatDate(transaction.booking.date, lang),
+          start_time: transaction.booking.start_time,
+          end_time: transaction.booking.end_time,
+          amount: transaction.booking.total_price.toLocaleString(),
+        },
+      }),
+    );
+
+    return this.checket(ctx);
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error);
+  }
+}
+  
 }

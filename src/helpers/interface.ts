@@ -10,7 +10,7 @@ import {
   Booking_status,
   Pay_method,
 } from '@prisma/client';
-import { ISession } from './bot.sesion';
+import { ISession, PendingBookingSession } from './bot.sesion';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export interface IStadion {
@@ -97,18 +97,36 @@ export type NotificationSettings = {
   payment?: boolean;
   reminder?: boolean;
 };
+export const INITIAL_PENDING_BOOKING: PendingBookingSession = {
+  stadion_id: null,
+  user_id: null,
+  date: null,
+  bookingData: null,
+  start_time: null,
+  end_time: null,
+  startAt: null,
+  endAt: null,
+  total_price: null,
+  payment_method: null,
+  owner_card_id: null,
+  type: null,
+  pricePerHur: null,
+  noshowCount: null
+};
 
 export const INITIAL_SESSION: ISession = {
   name: null,
   lang: null,
   step: null,
   admin_step: null,
+  scheduleId: null,
   admin_bron_name: null,
   admin_bron_phone: null,
-  admin_booking_messages:null,
+  admin_booking_messages: null,
   ownerId: null,
   currentPage: null,
   confirment_messageId: null,
+  pendingBooking: INITIAL_PENDING_BOOKING,
   historyPage: null,
   advertisement_step: null,
   admin_messageId: null,

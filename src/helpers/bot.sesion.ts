@@ -1,5 +1,6 @@
 import { Payments } from '@prisma/client';
 import { Context } from 'telegraf';
+import { scheduleType } from './interface/enum';
 
 export interface ISession {
   name: string | null;
@@ -7,18 +8,20 @@ export interface ISession {
   step: string | null;
   ownerId: number | null;
   currentPage: string | null;
+  scheduleId: number | null;
   historyPage: string | null;
   advertisement_step: string | null;
   admin_step: string | null;
-  admin_bron_name: string | null,
-  admin_bron_phone: string | null,
-  admin_booking_messages:number[] | null;
+  admin_bron_name: string | null;
+  admin_bron_phone: string | null;
+  admin_booking_messages: number[] | null;
   confirment_messageId: number | null;
   admin_messageId: number | null;
   stadion_step: string | null;
   owner_registor: registerOwner;
   user_registor: registorUser;
   stadion: Stadion;
+  pendingBooking?: PendingBookingSession;
   adminOwnerSearch?: {
     active: boolean;
     promptMessageId: number;
@@ -95,4 +98,21 @@ export interface AdvertisementSession {
   image: string | null;
   stadionId: number | null;
   isAllStadiums: boolean;
+}
+
+export interface PendingBookingSession {
+  stadion_id: number | null;
+  user_id: number | null;
+  date: Date | null;
+  bookingData?: Date | null;
+  start_time: string | null;
+  end_time: string | null;
+  startAt: Date | null;
+  endAt: Date | null;
+  total_price: number | null;
+  payment_method: string | null;
+  owner_card_id: number | null;
+  type?: scheduleType | null;
+  pricePerHur?: number | null;
+  noshowCount?: number | null;
 }

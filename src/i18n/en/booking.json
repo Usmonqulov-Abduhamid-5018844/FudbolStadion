@@ -58,7 +58,7 @@
 
   "booking_confirmed": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\nPlease arrive on time! ⏳",
 
-  "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 15-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
+  "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 30-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
   "time_left": {
     "days_hours_minutes": "{days}d {hours}h {minutes}m",
@@ -68,7 +68,7 @@
     "minutes_only": "{minutes}m"
   },
 
-  "payment_time_alert": "❌ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
+  "payment_time_alert": "⚠️ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
 
   "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*",
 
@@ -99,11 +99,19 @@
   "already_cancelled": "❌ This booking has already been cancelled. This action cannot be performed again.",
 
   "already_confirmed": "✅ This booking has already been confirmed. No further confirmation is required.",
-  
+
   "payment": {
     "choose_provider": "Choose a payment method 👇",
-     "no_active_card": "No active card found for the stadium owner, please try again later",
+    "no_active_card": "No active card found for the stadium owner, please try again later",
     "link_ready": "Your payment link is ready 👇",
-    "pay_button": "💳 Pay"
+    "pay_button": "💳 Pay",
+    "redirect": "✅ Your booking has been successfully created!\n\n💰 Payment amount: <b>{total}</b> UZS\n\nTap the button below to proceed with payment 👇",
+    "description": "Payment for stadium booking",
+
+    "not_found": "❌ Payment not found.\n\nIf you've already made the payment, please wait a moment and try again, or contact support.",
+    "pending": "⏳ Your payment is being verified...\n\nPlease wait a few seconds and try again.",
+    "taking_too_long": "⚠️ Payment confirmation is taking longer than usual.\n\nIf funds were deducted from your card, don't worry — it will be confirmed shortly. If the issue persists, please contact support.",
+    "failed": "❌ Payment failed.\n\nPlease try again or choose a different payment method.",
+    "already_success": "✅ <b>Payment successful!</b>\n\n📅 Date: <b>{date}</b>\n🕐 Time: <b>{start_time} - {end_time}</b>\n💰 Amount: <b>{amount}</b> UZS\n\nYour booking is confirmed ✅"
   }
 }

@@ -1,24 +1,20 @@
 
 import axios from 'axios';
-import { getPremiumPaymentDescription, PremiumPlan } from './interface';
 
 export const gerPremiumPaymentOctoUrl = async (
   amount: number,
   transactionId: string,
-  plan: PremiumPlan,
-  ownerName: string,
   lang: string,
-  type: string,
   description:string
 ) => {
 
 
-  const response = await axios.post(`${process.env.OCTO_BASE_URL}`,
+  const response = await axios.post(`${process.env.OCTO_BASE_URL}prepare_payment`,
     {
       octo_shop_id: Number(process.env.OCTO_SHOP_ID),
       octo_secret: process.env.OCTO_SECRET,
 
-      shop_transaction_id: `${type}_${transactionId}`,
+      shop_transaction_id: `premium_${transactionId}`,
 
       auto_capture: true,
       test: true,
@@ -30,7 +26,7 @@ export const gerPremiumPaymentOctoUrl = async (
 
       description: description,
 
-      return_url: `https://t.me/${process.env.BOT_USERNAME}?start=payment_success_${transactionId}`,
+      return_url: `https://t.me/${process.env.BOT_USERNAME}?start=paymentPremium_success_${transactionId}`,
 
       notify_url: `${process.env.OCTO_NOTIFY_URL}`,
       language: lang,
@@ -54,12 +50,11 @@ export const gerPremiumPaymentOctoUrl = async (
 export const generateOctoBookingPaymentUrl = async (
   amount: number,
   transactionId: string,
-  ownerName: string,
   lang: string,
   description: string,
 ) => {
   const response = await axios.post(
-    `${process.env.OCTO_BASE_URL}`,
+    `${process.env.OCTO_BASE_URL}prepare_payment`,
     {
       octo_shop_id: Number(process.env.OCTO_SHOP_ID),
       octo_secret: process.env.OCTO_SECRET,
@@ -76,7 +71,7 @@ export const generateOctoBookingPaymentUrl = async (
 
       description: description,
 
-      return_url: `https://t.me/${process.env.BOT_USERNAME}?start=payment_success_${transactionId}`,
+      return_url: `https://t.me/${process.env.BOT_USERNAME}?start=paymentBooking_success_${transactionId}`,
 
       notify_url: `${process.env.OCTO_NOTIFY_URL}`,
       language: lang,
