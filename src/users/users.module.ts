@@ -5,6 +5,6 @@ import { BotService } from 'src/bot/bot.service';
 @Global()
 @Module({
   providers: [UsersService, BotService],
-  exports:[UsersService]
+  exports: [UsersService],
 })
 export class UsersModule {}

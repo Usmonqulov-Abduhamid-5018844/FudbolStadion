@@ -2,8 +2,10 @@ import { Update, Ctx, Command } from 'nestjs-telegraf';
 import { Context } from 'telegraf';
 import { WeeklyReportQuery } from '../weekly-report.query';
 import { WeeklyReportBotSender } from '../weekly-report-bot-sender';
-import { buildStadiumReportData, getLastFullWeekRange } from '../weekly-report.helper';
-
+import {
+  buildStadiumReportData,
+  getLastFullWeekRange,
+} from '../weekly-report.helper';
 
 @Update()
 export class WeeklyReportTestCommand {

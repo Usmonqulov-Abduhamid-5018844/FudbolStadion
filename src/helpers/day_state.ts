@@ -15,12 +15,9 @@ export const buildDailyReport = (bookings: any[]): DailyReport => {
   const hourCounts = new Array(24).fill(0);
 
   for (const b of bookings) {
-    const stadiumName = b.stadion?.name ?? 'Noma\'lum stadion';
+    const stadiumName = b.stadion?.name ?? "Noma'lum stadion";
 
-    stadiumCounts.set(
-      stadiumName,
-      (stadiumCounts.get(stadiumName) ?? 0) + 1,
-    );
+    stadiumCounts.set(stadiumName, (stadiumCounts.get(stadiumName) ?? 0) + 1);
 
     if (b.startAt) {
       const hour = new Date(b.startAt).getHours();
@@ -28,14 +25,13 @@ export const buildDailyReport = (bookings: any[]): DailyReport => {
     }
   }
 
-  const busiestStadium = [...stadiumCounts.entries()]
-    .sort((a, b) => b[1] - a[1])[0]?.[0];
+  const busiestStadium = [...stadiumCounts.entries()].sort(
+    (a, b) => b[1] - a[1],
+  )[0]?.[0];
 
   const maxCount = Math.max(...hourCounts);
 
-  const peakHour = maxCount > 0 
-    ? hourCounts.indexOf(maxCount)
-    : 0;
+  const peakHour = maxCount > 0 ? hourCounts.indexOf(maxCount) : 0;
 
   return {
     bookings: bookings.length,
@@ -47,13 +43,10 @@ export const buildDailyReport = (bookings: any[]): DailyReport => {
   };
 };
 
-
-
 type DailyReportText = {
   title: string;
   message: string;
 };
-
 
 export const renderDailyReport = (
   r: DailyReport,
@@ -87,7 +80,7 @@ export const renderDailyReport = (
     },
 
     en: {
-      title: '📊 Today\'s Report',
+      title: "📊 Today's Report",
       message: `
 📅 <b>Bookings:</b> ${r.bookings}
 

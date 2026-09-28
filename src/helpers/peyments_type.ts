@@ -1,9 +1,6 @@
 import { Payments } from '@prisma/client';
 
-export const getPaymentText = (
-  payments_type: Payments,
-  i18nObj: any,
-) => {
+export const getPaymentText = (payments_type: Payments, i18nObj: any) => {
   switch (payments_type) {
     case 'CASH':
       return i18nObj.cash;

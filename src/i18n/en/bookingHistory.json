@@ -22,7 +22,8 @@
     "refunded": "💸 Refunded",
     "confirmed": "📌 Confirmed",
     "paid": "💳 Paid",
-    "pending": "⏳ Pending"
+    "pending": "⏳ Pending",
+    "refund_pending": "🔄 Refund pending"
   },
   "time_expired": "⏰ This booking time has expired"
 }

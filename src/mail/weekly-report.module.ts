@@ -5,10 +5,14 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { WeeklyReportBotSender } from './weekly-report-bot-sender';
 import { WeeklyReportCron } from './weekly-report.cron';
 
-
 @Module({
   imports: [PrismaModule],
-  providers: [WeeklyReportService, WeeklyReportQuery, WeeklyReportBotSender,WeeklyReportCron],
+  providers: [
+    WeeklyReportService,
+    WeeklyReportQuery,
+    WeeklyReportBotSender,
+    WeeklyReportCron,
+  ],
   exports: [WeeklyReportService],
 })
 export class WeeklyReportModule {}

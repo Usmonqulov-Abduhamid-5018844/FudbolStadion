@@ -178,19 +178,24 @@ model Tranzaktion {
   owner_card_id Int
   owner_cards   Owner_card @relation(fields: [owner_card_id], references: [id])
 
-  system_fee   Int
-  owner_amount Int
+  system_fee      Int
+  owner_amount    Int
   amount_received Int
 
-  provider                 PaymentProvider?
-  provider_transaction_id  String?
-  provider_data            Json?
+  provider                PaymentProvider?
+  provider_transaction_id String?
+  provider_data           Json?
+
+  refund_status    RefundStatus?
+  refund_id        String?
+  transfer_sum     Int? // to'langan summa (mavjud)
+  refunded_sum     Int? // haqiqatda qaytarilgan summa (mavjud)
+  retained_sum     Int? // ushlab qolingan summa (yangi)
+  retained_percent Decimal? @db.Decimal(10,2) // qo'llangan foiz (yangi)
 
   status TransactionStatus @default(PENDING)
 
   currency     String @default("UZS")
-  transfer_sum Int?
-  refunded_sum Int?
 
   card_masked_pan String?
   card_type       String?
@@ -199,13 +204,13 @@ model Tranzaktion {
   risk_level      Int?
 
   paid_at   DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
+  @@unique([provider, provider_transaction_id])
   @@index([user_id])
   @@index([booking_id])
   @@index([status])
-  @@unique([provider, provider_transaction_id])
 }
 
 model Subscription {
@@ -246,13 +251,13 @@ model PremiumTransaction {
   amount   Int
   reason   PremiumReason @default(PURCHASE)
 
-  provider                 PaymentProvider?
-  provider_transaction_id  String?
-  provider_data            Json?
+  provider                PaymentProvider?
+  provider_transaction_id String?
+  provider_data           Json?
 
   status TransactionStatus @default(PENDING)
 
-  currency     String  @default("UZS")
+  currency     String @default("UZS")
   transfer_sum Int?
   refunded_sum Int?
 
@@ -266,11 +271,10 @@ model PremiumTransaction {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
+  @@unique([provider, provider_transaction_id])
   @@index([owner_id])
   @@index([subscription_id])
-  @@unique([provider, provider_transaction_id])
 }
-
 
 model sesion {
   id              Int     @id @default(autoincrement())
@@ -374,6 +378,12 @@ enum AdvertisementStatus {
   REJECTED
 }
 
+enum RefundStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
 enum Payments {
   CASH
   CARD
@@ -388,17 +398,12 @@ enum Booking_status {
   CANCELED
   NOSHOW
   REFUNDED
+  REFUND_PENDING
 }
 
 enum Pay_method {
   CASH
   CARD
-}
-
-enum Tranzaktion_status {
-  PENDING
-  PAID
-  FAILED
 }
 
 enum TransactionStatus {
@@ -443,6 +448,7 @@ enum PremiumReason {
   GIFT
   COMPENSATION
 }
+
 enum PaymentProvider {
   CLICK
   PAYME

@@ -1,3 +1,7 @@
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('UzumHelper');
+
 export const getPremiumPaymentUzumUrl = (
   amount: number,
   transactionId: string,
@@ -17,4 +21,14 @@ export const getPremiumPaymentUzumUrl = (
   });
 
   return `${baseUrl}?${params.toString()}`;
+};
+
+export const refundUzumPayment = async (
+  providerTransactionId: string,
+  amount: number,
+): Promise<boolean> => {
+  logger.warn(
+    `refundUzumPayment hali to'liq yozilmagan (tx: ${providerTransactionId}, summa: ${amount})`,
+  );
+  return false;
 };

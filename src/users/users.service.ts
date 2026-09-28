@@ -16,17 +16,20 @@ import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { toZonedTime, format } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
-import { QrService } from 'src/qr/qr.service';
-import { getPaymentClickUrl } from 'src/helpers/url_click';
 import { statusMap } from 'src/helpers/bookingStatus';
-import { Admin_S, AdminStatus, Pay_method, Prisma, PaymentProvider } from '@prisma/client';
+import {
+  Admin_S,
+  AdminStatus,
+  Pay_method,
+  Prisma,
+  PaymentProvider,
+} from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
 import { getStadionIds } from 'src/helpers/stadions';
 import { scheduleType } from 'src/helpers/interface/enum';
-import { callback } from 'telegraf/typings/button';
 @Injectable()
 export class UsersService {
-  private readonly logger = new Logger(UsersService.name)
+  private readonly logger = new Logger(UsersService.name);
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
@@ -313,7 +316,7 @@ export class UsersService {
             !pending.type
           ) {
             await this.utils.errorFunction(ctx);
-            this.logger.warn("sesion yetarliy emas")
+            this.logger.warn('sesion yetarliy emas');
             break;
           }
           await this.bookingScheduleFinish(
@@ -328,40 +331,42 @@ export class UsersService {
 
           break;
         }
-        case "Payments":{
-                    const pending = ctx.session.pendingBooking;
-          if (
-           !pending ||
-                !pending.date ||
-                !pending.stadion_id ||
-                !pending.start_time || 
-                !pending.end_time || 
-                !pending.startAt ||
-                !pending.endAt ||
-                !pending.total_price ||
-                !pending.user_id ||
-                !pending.payment_method ||
-                !pending.pricePerHur ||
-                !pending.type ||
-                !pending.noshowCount
-          ) {
-            await this.utils.errorFunction(ctx);
-            this.logger.warn("sesion yetarliy emas")
-            break;
-          }
+        case 'Payments':
+          {
+            const pending = ctx.session.pendingBooking;
+            if (
+              !pending ||
+              !pending.date ||
+              !pending.stadion_id ||
+              !pending.start_time ||
+              !pending.end_time ||
+              !pending.startAt ||
+              !pending.endAt ||
+              !pending.total_price ||
+              !pending.user_id ||
+              !pending.payment_method ||
+              !pending.pricePerHur ||
+              !pending.type ||
+              !pending.noshowCount
+            ) {
+              await this.utils.errorFunction(ctx);
+              this.logger.warn('sesion yetarliy emas');
+              break;
+            }
             await this.bookingPayments(
-                    ctx,
-                    "card",
-                    pending.date,
-                    pending.start_time,
-                    pending.end_time,
-                    pending.stadion_id,
-                    pending.pricePerHur,
-                    pending.noshowCount,
-                    pending.type as scheduleType,
-                    lang,
-                  );
-        } break;
+              ctx,
+              'card',
+              pending.date,
+              pending.start_time,
+              pending.end_time,
+              pending.stadion_id,
+              pending.pricePerHur,
+              pending.noshowCount,
+              pending.type as scheduleType,
+              lang,
+            );
+          }
+          break;
         default: {
           break;
         }
@@ -695,7 +700,7 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED'],
+                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED',"REFUND_PENDING"],
                     },
                   },
                   orderBy: {
@@ -728,7 +733,7 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED'],
+                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED',"REFUND_PENDING"],
                     },
                   },
                 }),
@@ -2610,7 +2615,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     type: scheduleType,
   ) {
     try {
-      ctx.session.pendingBooking = {...INITIAL_PENDING_BOOKING}
+      ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -2970,23 +2975,21 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         };
 
         if (noshowCount >= 2 && hasCard) {
-
           ctx.session.pendingBooking = {
-          stadion_id: stadion.id,
-          date: date,
-          bookingData: bookingDate,
-          start_time: start_time,
-          end_time: end_time,
-          startAt: startAt,
-          endAt: endAt,
-          owner_card_id: cardId,
-          payment_method: Pay_method.CARD,
-          total_price: total,
-          user_id: user.id,
-          type,
-        };
+            stadion_id: stadion.id,
+            date: date,
+            bookingData: bookingDate,
+            start_time: start_time,
+            end_time: end_time,
+            startAt: startAt,
+            endAt: endAt,
+            owner_card_id: cardId,
+            payment_method: Pay_method.CARD,
+            total_price: total,
+            user_id: user.id,
+            type,
+          };
           const paymentMethodText = paymentMethodTextMap.CARD || 'CARD';
-
 
           const warning = this.i18n.translate('booking.warning', { lang });
 
@@ -3024,13 +3027,12 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 [
                   {
                     text: this.i18n.translate('booking.pay_by_card', { lang }),
-                    callbacl_data: `bookingPaymentProviders_${lang}`,
+                    callback_data: `bookingPaymentProviders_${lang}`,
                   },
                 ],
                 [
                   {
                     text: this.i18n.translate('schedule.back', { lang }),
-
                     callback_data,
                   },
                 ],
@@ -3038,7 +3040,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             },
             'Markdown',
           );
-
           return;
         }
 
@@ -3258,14 +3259,14 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     lang: string,
   ) {
     try {
-      ctx.session.pendingBooking = {...INITIAL_PENDING_BOOKING}
+      ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
       const { total, hors } = this.utils.calculateTotalPrice(
         start_time,
         end_time,
         pricePerHur,
         noshowCount,
       );
- 
+
       const user = await this.prisma.users.findUnique({
         where: { chatID: String(ctx.from?.id) },
       });
@@ -3385,8 +3386,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               total_price: total,
               pricePerHur,
               noshowCount,
-              type: schedule_type
-            }
+              type: schedule_type,
+            };
             const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
             let warning = '';
 
@@ -3436,7 +3437,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                   ],
                   [
                     {
-                      text: this.i18n.translate("schedule.back", { lang }),
+                      text: this.i18n.translate('schedule.back', { lang }),
                       callback_data: `back_user_Booking`,
                     },
                   ],
@@ -3690,98 +3691,103 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       await ctx.answerCbQuery().catch(() => {});
     }
   }
- async BookingPaymentProviders(ctx: MyContext, providerKey: string, lang: string) {
-  try {
-    const provider = providerKey as PaymentProvider;
+  async BookingPaymentProviders(
+    ctx: MyContext,
+    providerKey: string,
+    lang: string,
+  ) {
+    try {
+      const provider = providerKey as PaymentProvider;
 
-    const pending = ctx.session.pendingBooking;
+      const pending = ctx.session.pendingBooking;
 
-    if (
-      !pending ||
-      !pending.start_time ||
-      !pending.end_time ||
-      !pending.stadion_id ||
-      !pending.type ||
-      !pending.bookingData ||
-      !pending.endAt ||
-      !pending.startAt ||
-      !pending.owner_card_id ||
-      !pending.payment_method ||
-      !pending.total_price ||
-      !pending.user_id
-    ) {
-      await this.utils.errorFunction(ctx);
-      this.logger.warn('BookingPaymentProviders: pendingBooking topilmadi yoki to\'liq emas');
-      return;
-    }
-    
+      if (
+        !pending ||
+        !pending.start_time ||
+        !pending.end_time ||
+        !pending.stadion_id ||
+        !pending.type ||
+        !pending.bookingData ||
+        !pending.endAt ||
+        !pending.startAt ||
+        !pending.owner_card_id ||
+        !pending.payment_method ||
+        !pending.total_price ||
+        !pending.user_id
+      ) {
+        await this.utils.errorFunction(ctx);
+        this.logger.warn(
+          "BookingPaymentProviders: pendingBooking topilmadi yoki to'liq emas",
+        );
+        return;
+      }
 
-    const { booking, transaction } = await this.prisma.$transaction(async (tx) => {
-      const booking = await tx.booking.create({
-        data: {
-          stadion_id: pending.stadion_id!,
-          user_id: pending.user_id!,
+      const { booking, transaction } = await this.prisma.$transaction(
+        async (tx) => {
+          const booking = await tx.booking.create({
+            data: {
+              stadion_id: pending.stadion_id!,
+              user_id: pending.user_id!,
 
-          date: pending.bookingData!,
+              date: pending.bookingData!,
 
-          start_time: pending.start_time!,
-          end_time: pending.end_time!,
+              start_time: pending.start_time!,
+              end_time: pending.end_time!,
 
-          startAt: pending.startAt!,
-          endAt: pending.endAt!,
+              startAt: pending.startAt!,
+              endAt: pending.endAt!,
 
-          total_price: pending.total_price!,
-          payment_method: Pay_method.CARD,
+              total_price: pending.total_price!,
+              payment_method: Pay_method.CARD,
 
-          expires_at: new Date(Date.now() + 15 * 60 * 1000),
+              expires_at: new Date(Date.now() + 15 * 60 * 1000),
+            },
+          });
+
+          const transaction = await tx.tranzaktion.create({
+            data: {
+              user_id: booking.user_id!,
+              booking_id: booking.id,
+
+              system_fee: 0,
+              owner_amount: pending.total_price!,
+
+              owner_card_id: pending.owner_card_id!,
+
+              amount_received: 0,
+            },
+          });
+
+          return { booking, transaction };
         },
-      });
-
-      const transaction = await tx.tranzaktion.create({
-        data: {
-          user_id: booking.user_id!,
-          booking_id: booking.id,
-
-          system_fee: 0,
-          owner_amount: pending.total_price!,
-
-          owner_card_id: pending.owner_card_id!,
-
-          amount_received: 0,
-        },
-      });
-
-      return { booking, transaction };
-    });
-    
-
-    const paymentUrl = await this.utils.generatePaymentUrl({
-      provider: provider,
-      transactionId: transaction.id,
-      amount: pending.total_price,
-      lang,
-      description: this.i18n.translate("booking.payment.description",{lang})
-  });
-
-    if (!paymentUrl) {
-      this.logger.error(
-        `BookingPaymentProviders: noma'lum provider "${providerKey}", booking_id: ${booking.id}`,
       );
-      await this.utils.errorFunction(ctx);
-      return;
-    }
 
-    const message = this.i18n.translate('booking.payment.redirect', {
-      lang,
-      args: {
-        total: pending.total_price.toLocaleString(),
-      },
-    });
+      const paymentUrl = await this.utils.generatePaymentUrl({
+        provider: provider,
+        transactionId: transaction.id,
+        amount: pending.total_price,
+        lang,
+        description: this.i18n.translate('booking.payment.description', {
+          lang,
+        }),
+      });
 
-    await this.utils.safeEditOrReply(
-      ctx,
-      message,
-      {
+      if (!paymentUrl) {
+        this.logger.error(
+          `BookingPaymentProviders: noma'lum provider "${providerKey}", booking_id: ${booking.id}`,
+        );
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      const message = this.i18n.translate('booking.payment.redirect', {
+        lang,
+        args: {
+          total: pending.total_price.toLocaleString(),
+        },
+      });
+
+      await this.utils.safeEditOrReply(ctx, message, {
         inline_keyboard: [
           [
             {
@@ -3796,12 +3802,11 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             },
           ],
         ],
-      },
-    );
+      });
 
-    ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
-  } catch (error) {
-    await this.utils.errorFunction(ctx, error);
+      ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error);
+    }
   }
-}
 }

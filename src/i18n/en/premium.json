@@ -34,14 +34,11 @@
     "button": "💳 Pay",
     "pay_now": "💳 Click the button below to complete the payment",
 
-    "check_again": "🔄 Check again",
-    "taking_too_long": "⏳ Your payment hasn't been confirmed yet.\n\nBank confirmation can sometimes take a little longer. If the money was deducted from your card, don't worry — it will be processed.\n\nPlease try checking again in a few minutes, or contact support if the issue persists.",
-
-    "checking": "⏳ <b>Your payment is being checked...</b>\n\nPlease wait a moment.",
-    "not_found": "❌ <b>Payment not found.</b>\n\nTransaction information is unavailable.",
-    "pending": "⏳ <b>Payment has not been confirmed yet.</b>\n\nIf you have already completed the payment, please wait a moment. Premium will be activated automatically after confirmation.",
-    "failed": "❌ <b>Payment failed.</b>\n\nThe transaction was cancelled or an error occurred. Please try again or check the payment status with your bank/card.",
-    "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Payment amount: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!"
+    "not_found": "❌ <b>Payment not found.</b>\n\nThe link may be invalid or expired. If you believe this is a mistake, please contact support.",
+    "pending": "⏳ <b>Payment not yet confirmed.</b>\n\nIf you've already made the payment, please wait a bit. Premium will activate automatically once confirmed.",
+    "taking_too_long": "⚠️ <b>Payment confirmation is taking longer than usual.</b>\n\nIf the money has been deducted from your card, don't worry — it will be confirmed soon. If the issue persists, please contact support.",
+    "failed": "❌ <b>Payment failed.</b>\n\nThe transaction was canceled or an error occurred. Please try again or check the payment status with your bank/card.",
+    "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Amount paid: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!"
   },
   "premium_active": {
     "active": {

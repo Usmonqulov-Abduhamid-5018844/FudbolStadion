@@ -17,13 +17,20 @@ import {
   Payments,
   PremiumReason,
   Prisma,
+  RefundStatus,
   TransactionStatus,
 } from '@prisma/client';
 import {
   helpMenuKeyboard_Owner,
   helpMenuKeyboard_Users,
 } from 'src/helpers/Inline_keybort';
-import { UtilisService } from 'src/utils/utile.service';
+import {
+  calculateCancelRefund,
+  canCancelBooking,
+  formatSum,
+  MIN_CANCEL_HOURS_BEFORE,
+  UtilisService,
+} from 'src/utils/utile.service';
 import { format, subDays } from 'date-fns';
 import { QrService } from 'src/qr/qr.service';
 import {
@@ -56,7 +63,7 @@ import { Logger } from '@nestjs/common';
 
 @Update()
 export class BotUpdate {
-  private readonly logger = new Logger(BotUpdate.name)
+  private readonly logger = new Logger(BotUpdate.name);
   private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
     .split(',')
     .filter(Boolean)
@@ -1378,7 +1385,7 @@ export class BotUpdate {
                   this.i18n.translate('booking.booking_cancelled_notice', {
                     lang,
                     args: {
-                      date: formatDate(booking.date,lang),
+                      date: formatDate(booking.date, lang),
                       start_time: booking.start_time,
                       end_time: booking.end_time,
                     },
@@ -1404,23 +1411,22 @@ export class BotUpdate {
             break;
           case 'pending':
             {
-
-              const pending = ctx.session.pendingBooking
-              if(
+              const pending = ctx.session.pendingBooking;
+              if (
                 !pending ||
                 !pending.date ||
                 !pending.stadion_id ||
-                !pending.start_time || 
-                !pending.end_time || 
+                !pending.start_time ||
+                !pending.end_time ||
                 !pending.startAt ||
                 !pending.endAt ||
                 !pending.total_price ||
                 !pending.user_id ||
                 !pending.payment_method
-              ){
-                this.logger.warn("sesion malumotlari to'liq emas")
-                 await this.utils.errorFunction(ctx); 
-                return
+              ) {
+                this.logger.warn("sesion malumotlari to'liq emas");
+                await this.utils.errorFunction(ctx);
+                return;
               }
               const { timeLeftText, totalMinutes } =
                 this.utils.bookingTimeCalculate(pending.startAt, lang);
@@ -1435,25 +1441,29 @@ export class BotUpdate {
                 );
                 return;
               }
-              const stadion = await this.prisma.stadion.findUnique({where:{id:Number(pending.stadion_id)}})
+              const stadion = await this.prisma.stadion.findUnique({
+                where: { id: Number(pending.stadion_id) },
+              });
 
-              if(!stadion){
-                 await this.utils.errorFunction(ctx); 
-                return
+              if (!stadion) {
+                await this.utils.errorFunction(ctx);
+                return;
               }
-              const booking = await this.prisma.booking.create({data:{
-                date: pending.date,
-                stadion_id: pending.stadion_id,
-                user_id: pending.user_id,
-                payment_method: Pay_method.CARD,
-                start_time: pending.start_time,
-                end_time: pending.end_time,
-                startAt: pending.startAt,
-                endAt: pending.endAt,
-                total_price: pending.total_price,
-                expires_at: new Date(Date.now() + 30 * 60 * 1000),
-                status_pay_later: true
-              }})
+              const booking = await this.prisma.booking.create({
+                data: {
+                  date: pending.date,
+                  stadion_id: pending.stadion_id,
+                  user_id: pending.user_id,
+                  payment_method: Pay_method.CARD,
+                  start_time: pending.start_time,
+                  end_time: pending.end_time,
+                  startAt: pending.startAt,
+                  endAt: pending.endAt,
+                  total_price: pending.total_price,
+                  expires_at: new Date(Date.now() + 30 * 60 * 1000),
+                  status_pay_later: true,
+                },
+              });
 
               const paymentTextMap = {
                 CARD: this.i18n.translate('peyments.card', { lang }),
@@ -1480,22 +1490,22 @@ export class BotUpdate {
                 },
               );
 
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  message,
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'errorBack_1',
-                        },
-                      ],
+              await this.utils.safeEditOrReply(
+                ctx,
+                message,
+                {
+                  inline_keyboard: [
+                    [
+                      {
+                        text: this.i18n.translate('schedule.back', { lang }),
+                        callback_data: 'errorBack_1',
+                      },
                     ],
-                  },
-                  'Markdown',
-                );
-                ctx.session.pendingBooking = {...INITIAL_PENDING_BOOKING}
+                  ],
+                },
+                'Markdown',
+              );
+              ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
             }
             break;
           case 'confirm':
@@ -1577,26 +1587,328 @@ export class BotUpdate {
               }
             }
             break;
-          case 'cancel': {
+
+          case 'cancelChecking': {
             const booking = await this.prisma.booking.findUnique({
               where: { id: Number(bookingId) },
-              include: { stadion: { include: { owner: true } } },
+              include: { stadion: true, user: true },
             });
+
             if (!booking) {
               await this.utils.errorFunction(ctx);
               return;
             }
-            if (booking.status === 'CANCELED') {
+
+            if (String(booking.user?.chatID) !== String(ctx.from?.id)) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            if (
+              booking.status === 'CANCELED' ||
+              booking.status === 'REFUNDED' ||
+              booking.status === 'REFUND_PENDING'
+            ) {
               await ctx.answerCbQuery(
                 this.i18n.translate('booking.already_cancelled', { lang }),
                 { show_alert: true },
               );
               return;
             }
-            await this.prisma.booking.update({
-              where: { id: booking.id },
-              data: { status: 'CANCELED' },
+
+            const { totalMinutes } = this.utils.bookingTimeCalculateRaw(
+              booking.date,
+              booking.start_time,
+            );
+
+            if (!canCancelBooking(totalMinutes)) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.cancel_too_late', {
+                  lang,
+                  args: { hours: MIN_CANCEL_HOURS_BEFORE },
+                }),
+                { show_alert: true },
+              );
+              return;
+            }
+
+            const baseArgs = {
+              stadion: booking.stadion.name,
+              date: formatDate(booking.date, lang),
+              start_time: booking.start_time,
+              end_time: booking.end_time,
+            };
+
+            let text: string;
+
+            if (booking.status === 'PAID') {
+              const transaction = await this.prisma.tranzaktion.findFirst({
+                where: {
+                  booking_id: booking.id,
+                  status: TransactionStatus.SUCCESS,
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+
+              if (!transaction) {
+                this.logger.error(
+                  `Booking #${booking.id} PAID, lekin SUCCESS tranzaksiya topilmadi`,
+                );
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+
+              const { paidAmount, retained, refundable, percent } =
+                calculateCancelRefund(
+                  Number(transaction.transfer_sum),
+                  totalMinutes,
+                );
+
+              text = this.i18n.translate('booking.cancel_confirm_paid', {
+                lang,
+                args: {
+                  ...baseArgs,
+                  percent,
+                  paid: formatSum(paidAmount),
+                  retained: formatSum(retained),
+                  refundable: formatSum(refundable),
+                },
+              });
+            } else {
+              text = this.i18n.translate('booking.cancel_confirm', {
+                lang,
+                args: baseArgs,
+              });
+            }
+
+            await this.utils.safeEditOrReply(ctx, text, {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('booking.cancel_yes', { lang }),
+                    callback_data: `booking_confirm_cancel_${booking.id}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_user_5',
+                  },
+                ],
+              ],
             });
+
+            if (ctx.callbackQuery) {
+              try {
+                await ctx.answerCbQuery();
+              } catch (error) {}
+            }
+            break;
+          }
+          case 'cancel': {
+            const booking = await this.prisma.booking.findUnique({
+              where: { id: Number(bookingId) },
+              include: { stadion: { include: { owner: true } }, user: true },
+            });
+
+            if (!booking) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            if (String(booking.user?.chatID) !== String(ctx.from?.id)) {
+              await this.utils.errorFunction(ctx);
+              return;
+            }
+
+            if (
+              booking.status === 'CANCELED' ||
+              booking.status === 'REFUNDED' ||
+              booking.status === 'REFUND_PENDING'
+            ) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.already_cancelled', { lang }),
+                { show_alert: true },
+              );
+              return;
+            }
+
+            const { totalMinutes } = this.utils.bookingTimeCalculateRaw(
+              booking.date,
+              booking.start_time,
+            );
+
+            if (!canCancelBooking(totalMinutes)) {
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.cancel_too_late', {
+                  lang,
+                  args: { hours: MIN_CANCEL_HOURS_BEFORE },
+                }),
+                { show_alert: true },
+              );
+              return;
+            }
+
+            const backKeyboard = {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('schedule.back', { lang }),
+                    callback_data: 'back_user_5',
+                  },
+                ],
+              ],
+            };
+
+            const answerSafe = async (): Promise<void> => {
+              if (ctx.callbackQuery) {
+                try {
+                  await ctx.answerCbQuery();
+                } catch (error) {}
+              }
+            };
+
+            const wasPaid = booking.status === 'PAID';
+            let refundedAmount = 0;
+            let appliedPercent = 0;
+
+            if (wasPaid) {
+              const transaction = await this.prisma.tranzaktion.findFirst({
+                where: {
+                  booking_id: booking.id,
+                  status: TransactionStatus.SUCCESS,
+                },
+                orderBy: { createdAt: 'desc' },
+              });
+
+              if (
+                !transaction ||
+                !transaction.provider ||
+                !transaction.provider_transaction_id ||
+                transaction.transfer_sum == null
+              ) {
+                this.logger.error(
+                  `Booking #${booking.id} PAID, lekin yaroqli SUCCESS tranzaksiya topilmadi`,
+                );
+                await this.utils.errorFunction(ctx);
+                return;
+              }
+
+              const { retained, refundable, percent } = calculateCancelRefund(
+                transaction.transfer_sum,
+                totalMinutes,
+              );
+
+              const locked = await this.prisma.booking.updateMany({
+                where: { id: booking.id, status: 'PAID' },
+                data: { status: 'REFUND_PENDING' },
+              });
+
+              if (locked.count === 0) {
+                await answerSafe();
+                return;
+              }
+
+              await ctx.answerCbQuery(
+                this.i18n.translate('booking.refund_processing', { lang }),
+              );
+
+              let refundResult: {
+                status: RefundStatus;
+                refund_id: string | null;
+              } = {
+                status: RefundStatus.FAILED,
+                refund_id: null,
+              };
+
+              try {
+                refundResult = await this.utils.refundPayment(
+                  transaction.provider,
+                  transaction.provider_transaction_id,
+                  refundable,
+                );
+              } catch (error) {
+                this.logger.error(
+                  `Booking #${booking.id} uchun refund xatosi`,
+                  error instanceof Error ? error.stack : error,
+                );
+              }
+
+              if (refundResult.status === RefundStatus.FAILED) {
+                await this.prisma.booking.updateMany({
+                  where: { id: booking.id, status: 'REFUND_PENDING' },
+                  data: { status: 'PAID' },
+                });
+
+                await this.prisma.tranzaktion.update({
+                  where: { id: transaction.id },
+                  data: {
+                    refund_status: RefundStatus.FAILED,
+                    refund_id: refundResult.refund_id,
+                    retained_sum: null,
+                    retained_percent: null,
+                  },
+                });
+
+                await this.utils.safeEditOrReply(
+                  ctx,
+                  this.i18n.translate('booking.refund_failed', { lang }),
+                  backKeyboard,
+                );
+                await answerSafe();
+                return;
+              }
+
+              if (refundResult.status === RefundStatus.PENDING) {
+                await this.prisma.tranzaktion.update({
+                  where: { id: transaction.id },
+                  data: {
+                    refund_status: RefundStatus.PENDING,
+                    refund_id: refundResult.refund_id,
+                    retained_sum: retained,
+                    retained_percent: percent,
+                  },
+                });
+
+                await this.utils.safeEditOrReply(
+                  ctx,
+                  this.i18n.translate('booking.refund_pending', { lang }),
+                  backKeyboard,
+                );
+                await answerSafe();
+                return;
+              }
+
+              refundedAmount = refundable;
+              appliedPercent = percent;
+
+              await this.prisma.booking.updateMany({
+                where: { id: booking.id, status: 'REFUND_PENDING' },
+                data: { status: 'REFUNDED' },
+              });
+
+              await this.prisma.tranzaktion.update({
+                where: { id: transaction.id },
+                data: {
+                  refund_status: RefundStatus.SUCCEEDED,
+                  refund_id: refundResult.refund_id,
+                  refunded_sum: refundable,
+                  retained_sum: retained,
+                  retained_percent: percent,
+                },
+              });
+            } else {
+              const updated = await this.prisma.booking.updateMany({
+                where: { id: booking.id, status: booking.status },
+                data: { status: 'CANCELED' },
+              });
+
+              if (updated.count === 0) {
+                await answerSafe();
+                return;
+              }
+            }
+
             if (booking.status === 'CONFIRMED' || booking.status === 'PAID') {
               const settings: NotificationSettings_type = {
                 ...DefaultNotificationSettings,
@@ -1612,39 +1924,36 @@ export class BotUpdate {
             }
 
             const send = await ctx.reply(
-              this.i18n.translate('booking.booking_cancelled', {
-                lang,
-                args: {
-                  date: formatDate(booking.date,lang),
-                  start_time: booking.start_time,
-                  end_time: booking.end_time,
+              this.i18n.translate(
+                wasPaid
+                  ? 'booking.booking_cancelled_refunded'
+                  : 'booking.booking_cancelled',
+                {
+                  lang,
+                  args: {
+                    date: formatDate(booking.date, lang),
+                    start_time: booking.start_time,
+                    end_time: booking.end_time,
+                    percent: appliedPercent,
+                    refundable: formatSum(refundedAmount),
+                  },
                 },
-              }),
+              ),
               {
-                parse_mode: 'Markdown',
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_5',
-                      },
-                    ],
-                  ],
-                },
+                parse_mode: 'HTML',
+                reply_markup: backKeyboard,
               },
             );
+
             if (!ctx.session.bookingBrones) {
               ctx.session.bookingBrones = [];
             }
             ctx.session.bookingBrones.push(send.message_id);
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
+
+            await answerSafe();
             break;
           }
+
           case 'selectPeyments':
             {
               try {
@@ -1847,7 +2156,9 @@ export class BotUpdate {
         transactionId: tranzaktion.id,
         amount: Number(booking.total_price),
         lang,
-        description: this.i18n.translate("booking.payment.description",{lang})
+        description: this.i18n.translate('booking.payment.description', {
+          lang,
+        }),
       });
     } catch (err) {
       await this.prisma.tranzaktion.update({
@@ -1899,7 +2210,7 @@ export class BotUpdate {
     }
   }
   @Action(
-    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)_(\d+)_(\d+)_(\w+)/
+    /^booking_peyments_(cash|card)_(\d{2}:\d{2})_(\d{2}:\d{2})_(\d{4}-\d{1,2}-\d{1,2})_(\d+)_(\d+)_(\d+)_(\w+)/,
   )
   async bookingPeyments(@Ctx() ctx: MyContext) {
     if (ctx.callbackQuery) {
@@ -1920,13 +2231,13 @@ export class BotUpdate {
           stadionId,
           price,
           noshowCount,
-          schedule_type
+          schedule_type,
         ] = ctx.callbackQuery.data.split('_');
 
-      const [year, month, day] = days.split('-');
-      const date = new Date(
-        Date.UTC(Number(year), Number(month) - 1, Number(day)),
-      );
+        const [year, month, day] = days.split('-');
+        const date = new Date(
+          Date.UTC(Number(year), Number(month) - 1, Number(day)),
+        );
 
         return this.userService.bookingPayments(
           ctx,
@@ -2160,16 +2471,15 @@ export class BotUpdate {
 
   @Action(/bookingPaymentProviders_(\w+)/)
   async bookingPaymentProviders(@Ctx() ctx: MyContext) {
-
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     try {
-      const [_,lang] = ctx.callbackQuery.data.split("_")
-      
+      const [_, lang] = ctx.callbackQuery.data.split('_');
+
       const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
         (provider) => [
           {
             text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
-            callback_data:`SelectPaymentProviders_${provider.key}_${lang}`,
+            callback_data: `SelectPaymentProviders_${provider.key}_${lang}`,
           },
         ],
       );
@@ -2188,21 +2498,19 @@ export class BotUpdate {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      
     }
   }
   @Action(/bookingPaymentProviderStep2_(\w+)/)
   async bookingPaymentProviderStep2(@Ctx() ctx: MyContext) {
-
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
     try {
-      const [_,lang] = ctx.callbackQuery.data.split("_")
-      
+      const [_, lang] = ctx.callbackQuery.data.split('_');
+
       const buttons: InlineKeyboardButton[][] = PAYMENT_PROVIDERS.map(
         (provider) => [
           {
             text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
-            callback_data:`SelectPaymentProviders_${provider.key}_${lang}`,
+            callback_data: `SelectPaymentProviders_${provider.key}_${lang}`,
           },
         ],
       );
@@ -2221,18 +2529,17 @@ export class BotUpdate {
       );
     } catch (error) {
       await this.utils.errorFunction(ctx);
-      
     }
   }
 
   @Action(/SelectPaymentProviders_(\w+)_(\w+)$/)
-  async SelectPaymentProviders(@Ctx() ctx: MyContext){
+  async SelectPaymentProviders(@Ctx() ctx: MyContext) {
     try {
-      if(!ctx.callbackQuery || !("data" in ctx.callbackQuery)) return
-      const [_, providerKey, lang] = ctx.callbackQuery.data.split("_")
-      await this.userService.BookingPaymentProviders(ctx,providerKey,lang)
+      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
+      const [_, providerKey, lang] = ctx.callbackQuery.data.split('_');
+      await this.userService.BookingPaymentProviders(ctx, providerKey, lang);
     } catch (error) {
-      await this.utils.errorFunction(ctx,error)
+      await this.utils.errorFunction(ctx, error);
     }
   }
   @Action(/^ignore/)

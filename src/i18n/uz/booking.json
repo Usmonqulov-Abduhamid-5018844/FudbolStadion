@@ -63,6 +63,8 @@
 
   "booking_cancelled": "❌ *Bron bekor qilindi*.\n\n📂 Bron butunlay o‘chirilgan va qayta tiklanmaydi.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
+  "booking_cancelled_refunded": "✅ *Bandlovingiz bekor qilindi.*\n\n📅 Sana: *{date}*\n🕐 Vaqt: *{start_time} - {end_time}*\n\n💰 To'lovingiz qaytarib berildi. Mablag' hisobingizga (bank/kartaga qarab) bir necha kun ichida tushishi mumkin.",
+
   "time_left": {
     "days_hours_minutes": "🟢 {days} kun {hours} soat {minutes} minut",
 
@@ -75,7 +77,7 @@
 
   "confirm_with_payment": "✅ Sizning bron tasdiqlandi!\n\n🏟 Stadion: *{stadion_name}*\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n\n💰 Umumiy narx: *{total} so'm*\n\n⚠️ Diqqat: O‘yin boshlanishidan kamida 1 soat oldin to‘lov amalga oshirilishi kerak.\n\nO'yin boshlanishigacha: *{time_left}* vaqt qoldi",
 
-  "cancel_not_allowed": "⛔ O‘yinning boshlanishiga 1 soatdan kam vaqt qoldi.\nShu sababli ushbu bronni hozir bekor qilib bo‘lmaydi.\nIltimos, keyingi bronlaringizni oldindan rejalashtiring ⚽",
+  "cancel_not_allowed": "⛔ O‘yinning boshlanishiga 2 soatdan kam vaqt qoldi.\nShu sababli ushbu bronni hozir bekor qilib bo‘lmaydi.\nIltimos, keyingi bronlaringizni oldindan rejalashtiring ⚽",
 
   "qr_caption": "🎫 <b>Sizning bron QR kodingiz</b>\n\n📍 Stadionga borganingizda ushbu QR kodni stadion egasiga ko'rsating.\n\n📱 Stadion egasi QR kodni skaner qilib broningizni tasdiqlaydi.",
   "qr_button": "📲 QR tayyorlash",
@@ -112,10 +114,21 @@
     "redirect": "✅ Bandlovingiz muvaffaqiyatli qabul qilindi!\n\n💰 To'lov summasi: <b>{total}</b> so'm\n\nTo'lovni amalga oshirish uchun quyidagi tugmani bosing 👇",
     "description": "Stadion band qilish uchun to'lov",
 
-    "not_found": "❌ To'lov topilmadi.\n\nAgar to'lovni amalga oshirgan bo'lsangiz, biroz kutib qayta urinib ko'ring yoki qo'llab-quvvatlash xizmatiga murojaat qiling.",
-    "pending": "⏳ To'lovingiz tekshirilmoqda...\n\nIltimos, bir necha soniya kuting va qayta urinib ko'ring.",
-    "taking_too_long": "⚠️ To'lov tasdiqlanishi odatdagidan uzoqroq davom etmoqda.\n\nAgar kartangizdan pul yechilgan bo'lsa, xavotir olmang — tez orada tasdiqlanadi. Muammo davom etsa, qo'llab-quvvatlash xizmatiga murojaat qiling.",
-    "failed": "❌ To'lov amalga oshmadi.\n\nIltimos, qaytadan urinib ko'ring yoki boshqa to'lov usulini tanlang.",
-    "already_success": "✅ <b>To'lov muvaffaqiyatli amalga oshirildi!</b>\n\n📅 Sana: <b>{date}</b>\n🕐 Vaqt: <b>{start_time} - {end_time}</b>\n💰 Summa: <b>{amount}</b> so'm\n\nBandlovingiz tasdiqlandi ✅"
-  }
+    "not_found": "❌ <b>To'lov topilmadi.</b>\n\nHavola noto'g'ri yoki eskirgan bo'lishi mumkin. Agar xato deb hisoblasangiz, qo'llab-quvvatlash xizmatiga murojaat qiling.",
+    "pending": "⏳ <b>To'lov hali tasdiqlanmadi.</b>\n\nAgar to'lovni amalga oshirgan bo'lsangiz, iltimos, biroz kuting. To'lov tasdiqlangach bandlovingiz avtomatik tasdiqlanadi.",
+    "taking_too_long": "⚠️ <b>To'lov tasdiqlanishi odatdagidan uzoqroq davom etmoqda.</b>\n\nAgar kartangizdan pul yechilgan bo'lsa, xavotir olmang — tez orada tasdiqlanadi. Muammo davom etsa, qo'llab-quvvatlash xizmatiga murojaat qiling.",
+    "failed": "❌ <b>To'lov amalga oshmadi.</b>\n\nTranzaksiya bekor qilindi yoki xatolik yuz berdi. Iltimos, qaytadan urinib ko'ring yoki bank/karta orqali to'lov holatini tekshiring.",
+    "already_success": "✅ <b>To'lov muvaffaqiyatli amalga oshirildi!</b>\n\n📅 Sana: <b>{date}</b>\n🕐 Vaqt: <b>{start_time} - {end_time}</b>\n💰 Summa: <b>{amount} so'm</b>\n\nBandlovingiz tasdiqlandi ✅"
+  },
+  "refund_processing": "⏳ To‘lovingiz qaytarilmoqda. Iltimos, kuting...",
+  "refund_failed": "❌ <b>Pulni qaytarib bo‘lmadi</b>\n\n⚠️ To‘lovni qaytarish vaqtida xatolik yuz berdi.\n\n🔄 Iltimos, keyinroq qayta urinib ko‘ring yoki administrator bilan bog‘laning.",
+
+  "cancel_too_late": "⛔ Bronni boshlanishiga {hours} soatdan kam qolganda bekor qilib bo'lmaydi.",
+
+  "cancel_confirm": "❓ <b>Bronni bekor qilmoqchimisiz?</b>\n\n━━━━━━━━━━━━━━\n🏟 Stadion: <b>{stadion}</b>\n\n📅 Sana: <b>{date}</b>\n\n⏰ Vaqt: <b>{start_time} - {end_time}</b>\n━━━━━━━━━━━━━━",
+
+  "cancel_confirm_paid": "❓ <b>Bronni bekor qilmoqchimisiz?</b>\n\n━━━━━━━━━━━━━━\n🏟 Stadion: <b>{stadion}</b>\n\n📅 Sana: <b>{date}</b>\n\n⏰ Vaqt: <b>{start_time} - {end_time}</b>\n━━━━━━━━━━━━━━\n\n💳 To'langan: <b>{paid} so'm</b>\n\n➖ Ushlab qolinadi (<b>{percent}%</b>): <b>{retained} so'm</b>\n\n✅ Qaytariladi: <b>{refundable} so'm</b>\n\n<i>Tasdiqlaysizmi?</i>",
+
+  "cancel_yes": "✅ Ha, bekor qilish",
+  "refund_pending": "⏳ <b>Qaytarim so‘rovingiz qabul qilindi!</b>\n\n💳 Hozirda to‘lov tizimi tomonidan qaytarim holati tekshirilmoqda.\n🔄 Natija avtomatik ravishda tekshirib boriladi.\n\n🕐 Iltimos, biroz kuting. Natija aniqlangach, sizga xabar beriladi."
 }

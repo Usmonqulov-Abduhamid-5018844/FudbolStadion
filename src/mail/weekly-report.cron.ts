@@ -10,7 +10,6 @@ export class WeeklyReportCron {
     timeZone: 'Asia/Tashkent',
   })
   async sendWeeklyOwnerReports(): Promise<void> {
-    
     await this.weeklyReportService.sendWeeklyReportsToAllOwners();
   }
 }

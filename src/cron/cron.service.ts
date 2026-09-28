@@ -162,7 +162,7 @@ export class CronService {
           status: 'PENDING',
           createdAt: { lt: new Date(now.getTime() - 30 * 60 * 1000) },
         },
-        data:{status:"CANCELLED"}
+        data: { status: 'CANCELLED' },
       });
 
       if (result.count > 0) {

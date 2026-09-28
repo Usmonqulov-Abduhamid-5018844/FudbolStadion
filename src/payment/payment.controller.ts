@@ -1,4 +1,12 @@
-import { Controller, Get, Post, Body, Logger } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Logger,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { CreatOcto_PaymentDto } from './dto/create-payment.dto';
 
@@ -13,6 +21,7 @@ export class PaymentController {
   }
 
   @Post('octo-webhook')
+  @HttpCode(HttpStatus.OK)
   async creates(@Body() data: CreatOcto_PaymentDto) {
     const transactionId = data.shop_transaction_id;
 

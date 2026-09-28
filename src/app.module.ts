@@ -21,7 +21,7 @@ import { WeeklyReportModule } from './mail/weekly-report.module';
 import { AppController } from './app.controller';
 
 @Module({
-  controllers:[AppController],
+  controllers: [AppController],
   imports: [
     I18nModule.forRoot({
       fallbackLanguage: 'uz',

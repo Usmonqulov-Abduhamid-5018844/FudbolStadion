@@ -60,6 +60,10 @@
 
   "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 30-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
+  "booking_cancelled": "❌ *Booking cancelled*.\n\n📂 The booking has been permanently deleted and cannot be restored.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
+
+  "booking_cancelled_refunded": "✅ *Your booking has been cancelled.*\n\n📅 Date: *{date}*\n🕐 Time: *{start_time} - {end_time}*\n\n💰 Your payment has been refunded. Funds may take a few days to appear in your account, depending on your bank/card.",
+
   "time_left": {
     "days_hours_minutes": "{days}d {hours}h {minutes}m",
 
@@ -72,7 +76,7 @@
 
   "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*",
 
-  "cancel_not_allowed": "⛔ Less than 1 hour is left before the game starts.\nTherefore, this booking can no longer be canceled.\nPlease plan your bookings in advance ⚽",
+  "cancel_not_allowed": "⛔ Less than 2 hour is left before the game starts.\nTherefore, this booking can no longer be canceled.\nPlease plan your bookings in advance ⚽",
 
   "qr_caption": "🎫 <b>Your Booking QR Code</b>\n\n📍 When you arrive at the stadium, show this QR code to the stadium owner.\n\n📱 The stadium owner will scan the QR code to confirm your booking.",
   "qr_button": "📲 Generate QR",
@@ -108,10 +112,21 @@
     "redirect": "✅ Your booking has been successfully created!\n\n💰 Payment amount: <b>{total}</b> UZS\n\nTap the button below to proceed with payment 👇",
     "description": "Payment for stadium booking",
 
-    "not_found": "❌ Payment not found.\n\nIf you've already made the payment, please wait a moment and try again, or contact support.",
-    "pending": "⏳ Your payment is being verified...\n\nPlease wait a few seconds and try again.",
-    "taking_too_long": "⚠️ Payment confirmation is taking longer than usual.\n\nIf funds were deducted from your card, don't worry — it will be confirmed shortly. If the issue persists, please contact support.",
-    "failed": "❌ Payment failed.\n\nPlease try again or choose a different payment method.",
-    "already_success": "✅ <b>Payment successful!</b>\n\n📅 Date: <b>{date}</b>\n🕐 Time: <b>{start_time} - {end_time}</b>\n💰 Amount: <b>{amount}</b> UZS\n\nYour booking is confirmed ✅"
-  }
+    "not_found": "❌ <b>Payment not found.</b>\n\nThe link may be invalid or expired. If you believe this is a mistake, please contact support.",
+    "pending": "⏳ <b>Payment not yet confirmed.</b>\n\nIf you've already made the payment, please wait a bit. Your booking will be confirmed automatically once the payment is verified.",
+    "taking_too_long": "⚠️ <b>Payment confirmation is taking longer than usual.</b>\n\nIf the money has been deducted from your card, don't worry — it will be confirmed soon. If the issue persists, please contact support.",
+    "failed": "❌ <b>Payment failed.</b>\n\nThe transaction was canceled or an error occurred. Please try again or check the payment status with your bank/card.",
+    "already_success": "✅ <b>Payment completed successfully!</b>\n\n📅 Date: <b>{date}</b>\n🕐 Time: <b>{start_time} - {end_time}</b>\n💰 Amount: <b>{amount} UZS</b>\n\nYour booking is confirmed ✅"
+  },
+  "refund_processing": "⏳ Your payment is being refunded. Please wait...",
+  "refund_failed": "❌ <b>Failed to refund the payment</b>\n\n⚠️ An error occurred while processing the refund.\n\n🔄 Please try again later or contact the administrator.",
+
+  "cancel_too_late": "⛔ Cancellation is not possible less than {hours} hours before the booking.",
+
+  "cancel_confirm": "❓ <b>Cancel this booking?</b>\n\n━━━━━━━━━━━━━━\n🏟 Stadium: <b>{stadion}</b>\n\n📅 Date: <b>{date}</b>\n\n⏰ Time: <b>{start_time} - {end_time}</b>\n━━━━━━━━━━━━━━",
+
+  "cancel_confirm_paid": "❓ <b>Cancel this booking?</b>\n\n━━━━━━━━━━━━━━\n🏟 Stadium: <b>{stadion}</b>\n\n📅 Date: <b>{date}</b>\n\n⏰ Time: <b>{start_time} - {end_time}</b>\n━━━━━━━━━━━━━━\n\n💳 Paid: <b>{paid} UZS</b>\n\n➖ Retained (<b>{percent}%</b>): <b>{retained} UZS</b>\n\n✅ Refunded: <b>{refundable} UZS</b>\n\n<i>Do you confirm?</i>",
+
+  "cancel_yes": "✅ Yes, cancel",
+  "refund_pending": "⏳ <b>Your refund request has been accepted!</b>\n\n💳 The payment system is currently checking the refund status.\n🔄 The status will be checked automatically.\n\n🕐 Please wait. You will be notified as soon as the result is available."
 }

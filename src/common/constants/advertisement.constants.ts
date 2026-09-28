@@ -1,3 +1,3 @@
 export const ADVERTISEMENT = {
-  ACTIVE_DAYS: 5
+  ACTIVE_DAYS: 5,
 };

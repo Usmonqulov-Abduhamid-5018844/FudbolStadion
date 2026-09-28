@@ -1,4 +1,9 @@
-import { StadiumReportInput, StadiumReportData, withDefaults, esc } from './weekly-report.types';
+import {
+  StadiumReportInput,
+  StadiumReportData,
+  withDefaults,
+  esc,
+} from './weekly-report.types';
 import { renderHeader } from './components/headr';
 import { renderSummaryCards } from './components/summary-cards';
 import { renderFinance } from './components/finance';

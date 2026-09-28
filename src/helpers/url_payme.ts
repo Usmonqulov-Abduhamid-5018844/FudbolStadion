@@ -1,4 +1,7 @@
+import { Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
+
+const logger = new Logger('PaymeHelper');
 
 export const getPremiumPaymentPaymeUrl = (
   amount: number,
@@ -30,4 +33,14 @@ export const getPremiumPaymentPaymeUrl = (
     .digest('hex');
 
   return `${baseUrl}/${encoded}?sign=${sign}`;
+};
+
+export const refundPaymePayment = async (
+  providerTransactionId: string,
+  amount: number,
+): Promise<boolean> => {
+  logger.warn(
+    `refundPayme Payment hali to'liq yozilmagan (tx: ${providerTransactionId}, summa: ${amount})`,
+  );
+  return false;
 };

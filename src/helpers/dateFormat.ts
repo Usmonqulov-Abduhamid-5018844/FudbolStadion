@@ -1,7 +1,4 @@
-export function formatDate(
-  date: Date,
-  lang: string
-): string {
+export function formatDate(date: Date, lang: string): string {
   const months = {
     uz: [
       'Yanvar',

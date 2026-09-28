@@ -1,7 +1,7 @@
-import { PaymentProvider } from "./url_wrapper";
+import { PaymentProvider } from './url_wrapper';
 
 export const PAYMENT_PROVIDERS = [
-   {
+  {
     key: PaymentProvider.OCTO,
     icon: '🟠',
     translationKey: 'premium.payment.providers.octo',

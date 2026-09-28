@@ -111,7 +111,7 @@ export const INITIAL_PENDING_BOOKING: PendingBookingSession = {
   owner_card_id: null,
   type: null,
   pricePerHur: null,
-  noshowCount: null
+  noshowCount: null,
 };
 
 export const INITIAL_SESSION: ISession = {

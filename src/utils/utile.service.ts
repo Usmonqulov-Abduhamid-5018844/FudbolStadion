@@ -1,9 +1,15 @@
-import { BadRequestException, Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import {
   Booking_status,
   Pay_method,
   PaymentProvider,
   Payments,
+  RefundStatus,
 } from '@prisma/client';
 import { subDays } from 'date-fns';
 import { I18nService } from 'nestjs-i18n';
@@ -24,7 +30,14 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
 import { InlineKeyboardButton, ParseMode } from 'telegraf/types';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
-import { generateOctoBookingPaymentUrl } from 'src/helpers/url_octo';
+import {
+  generateOctoBookingPaymentUrl,
+  refundOctoPayment,
+} from 'src/helpers/url_octo';
+import { refundClickPayment } from 'src/helpers/url_click';
+import { refundPaymePayment } from 'src/helpers/url_payme';
+import { refundPayinetPayment } from 'src/helpers/url_paynet';
+import { refundUzumPayment } from 'src/helpers/url_uzum';
 
 export const APP_TZ = 'Asia/Tashkent';
 
@@ -35,12 +48,11 @@ export interface TimeSlot {
 
 @Injectable()
 export class UtilisService implements OnModuleInit {
-  private readonly logger = new Logger(UtilisService.name)
+  private readonly logger = new Logger(UtilisService.name);
   constructor(
     @InjectBot() private readonly Bot: Telegraf,
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
-
   ) {}
   async onModuleInit() {
     await this.Bot.telegram.setMyCommands([
@@ -279,7 +291,7 @@ export class UtilisService implements OnModuleInit {
 
     const cancelBtn = {
       text: this.i18n.translate('booking.cancel', { lang }),
-      callback_data: `booking_confirm_cancel_${id}`,
+      callback_data: `booking_confirm_cancelChecking_${id}`,
     };
 
     const confirmBtn = {
@@ -321,7 +333,7 @@ export class UtilisService implements OnModuleInit {
         return buttons;
       }
 
-      if (totalMinutes > 60) {
+      if (totalMinutes > 120) {
         if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
           buttons.push([changePaymentBtn]);
         }
@@ -335,7 +347,7 @@ export class UtilisService implements OnModuleInit {
         buttons.push([
           {
             text: this.i18n.translate(timeLeftText, { lang }),
-            callback_data: `booking_confirm_alert_${id}`,
+            callback_data: `booking_confirm_alerd_${id}`,
           },
           qrBtn,
         ]);
@@ -972,8 +984,7 @@ export class UtilisService implements OnModuleInit {
     lang: string;
     description: string;
   }): Promise<string> {
-    const { provider, transactionId, amount, lang, description } =
-      params;
+    const { provider, transactionId, amount, lang, description } = params;
 
     switch (provider) {
       case PaymentProvider.OCTO:
@@ -1002,4 +1013,143 @@ export class UtilisService implements OnModuleInit {
         );
     }
   }
+  async refundPayment(
+    provider: PaymentProvider,
+    providerTransactionId: string,
+    amount: number,
+  ): Promise<{ status: RefundStatus; refund_id: string | null }> {
+    try {
+      switch (provider) {
+        case PaymentProvider.OCTO: {
+          const result = await refundOctoPayment(providerTransactionId, amount);
+          return {
+            status: this.mapRefundStatus(result.status),
+            refund_id: result.refund_id,
+          };
+        }
+
+        case PaymentProvider.CLICK: {
+          const success = await refundClickPayment(
+            providerTransactionId,
+            amount,
+          );
+          return {
+            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
+            refund_id: null,
+          };
+        }
+
+        case PaymentProvider.PAYME: {
+          const success = await refundPaymePayment(
+            providerTransactionId,
+            amount,
+          );
+          return {
+            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
+            refund_id: null,
+          };
+        }
+
+        case PaymentProvider.PAYINET: {
+          const success = await refundPayinetPayment(
+            providerTransactionId,
+            amount,
+          );
+          return {
+            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
+            refund_id: null,
+          };
+        }
+
+        case PaymentProvider.UZUM: {
+          const success = await refundUzumPayment(
+            providerTransactionId,
+            amount,
+          );
+          return {
+            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
+            refund_id: null,
+          };
+        }
+
+        default:
+          this.logger.error(
+            `Noma'lum provider uchun refund so'raldi: ${provider} (tx: ${providerTransactionId})`,
+          );
+          return { status: RefundStatus.FAILED, refund_id: null };
+      }
+    } catch (error) {
+      this.logger.error(
+        `Refund xatosi: provider=${provider}, tx=${providerTransactionId}`,
+        error instanceof Error ? error.stack : error,
+      );
+      return { status: RefundStatus.FAILED, refund_id: null };
+    }
+  }
+
+  private mapRefundStatus(
+    status: 'succeeded' | 'pending' | 'failed',
+  ): RefundStatus {
+    const map: Record<string, RefundStatus> = {
+      succeeded: RefundStatus.SUCCEEDED,
+      pending: RefundStatus.PENDING,
+      failed: RefundStatus.FAILED,
+    };
+    return map[status] ?? RefundStatus.FAILED;
+  }
 }
+
+export const MIN_CANCEL_HOURS_BEFORE = 2;
+
+export const MAX_CANCEL_HOURS_BEFORE = 24;
+
+export const CANCEL_INTERVAL_HOURS = 2;
+
+export const MAX_RETAINED_PERCENT = 40;
+
+export const getCompensationPercent = (totalMinutes: number): number => {
+  const hours = totalMinutes / 60;
+
+  if (hours >= MAX_CANCEL_HOURS_BEFORE) {
+    return 0;
+  }
+  if (hours <= MIN_CANCEL_HOURS_BEFORE) {
+    return MAX_RETAINED_PERCENT;
+  }
+  const totalIntervals =
+    (MAX_CANCEL_HOURS_BEFORE - MIN_CANCEL_HOURS_BEFORE) /
+    CANCEL_INTERVAL_HOURS;
+
+  const intervalsPassed = Math.floor(
+    (MAX_CANCEL_HOURS_BEFORE - hours) /
+      CANCEL_INTERVAL_HOURS,
+  );
+
+  const percentPerInterval =
+    MAX_RETAINED_PERCENT / totalIntervals;
+
+  const percent = intervalsPassed * percentPerInterval;
+  return Math.min(
+    Math.round(percent * 100) / 100,
+    MAX_RETAINED_PERCENT,
+  );
+};
+
+export const canCancelBooking = (totalMinutes: number): boolean =>
+  totalMinutes >= MIN_CANCEL_HOURS_BEFORE * 60;
+
+export const calculateCancelRefund = (
+  paidAmount: number,
+  totalMinutes: number,
+) => {
+  const percent = getCompensationPercent(totalMinutes);
+  const retained = Math.round((paidAmount * percent) / 100);
+  return {
+    paidAmount,
+    retained,
+    refundable: paidAmount - retained,
+    percent,
+  };
+};
+export const formatSum = (value: number): string =>
+  value.toLocaleString('ru-RU').replace(/\u00A0/g, ' ');

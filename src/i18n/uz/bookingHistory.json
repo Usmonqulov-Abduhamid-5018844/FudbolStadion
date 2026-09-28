@@ -23,7 +23,8 @@
     "refunded": "💸 Pul qaytarilgan",
     "confirmed": "📌 Tasdiqlangan",
     "paid": "💳 To‘langan",
-    "pending": "⏳ Kutilmoqda"
+    "pending": "⏳ Kutilmoqda",
+    "refund_pending": "🔄 Qaytarma jarayonda"
   },
   "time_expired": "⏰ Ushbu bron vaqti tugagan"
 }

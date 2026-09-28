@@ -64,7 +64,9 @@ export interface StadiumReportData {
 }
 
 // Chaqiruvchi tomondan qisman (partial) obyekt berilishi mumkin — qolganlari default bilan to'ldiriladi
-export type StadiumReportInput = Partial<Omit<StadiumReportData, 'stats' | 'finance' | 'highlights'>> & {
+export type StadiumReportInput = Partial<
+  Omit<StadiumReportData, 'stats' | 'finance' | 'highlights'>
+> & {
   stats?: Partial<StadiumStats>;
   finance?: Partial<FinanceSummary>;
   highlights?: Partial<Highlights>;
@@ -76,7 +78,15 @@ export const DEFAULT_REPORT_DATA: StadiumReportData = {
   periodFrom: '',
   periodTo: '',
   owner: '',
-  stats: { revenue: 0, revenueDelta: 0, bookings: 0, bookingsDelta: 0, customers: 0, newCustomers: 0, occupancy: 0 },
+  stats: {
+    revenue: 0,
+    revenueDelta: 0,
+    bookings: 0,
+    bookingsDelta: 0,
+    customers: 0,
+    newCustomers: 0,
+    occupancy: 0,
+  },
   finance: { total: 0, avgBooking: 0, maxBooking: 0, avgDaily: 0 },
   stadiums: [],
   days: [],
@@ -92,7 +102,10 @@ export function withDefaults(data: StadiumReportInput): StadiumReportData {
     ...data,
     stats: { ...DEFAULT_REPORT_DATA.stats, ...(data.stats || {}) },
     finance: { ...DEFAULT_REPORT_DATA.finance, ...(data.finance || {}) },
-    highlights: { ...DEFAULT_REPORT_DATA.highlights, ...(data.highlights || {}) },
+    highlights: {
+      ...DEFAULT_REPORT_DATA.highlights,
+      ...(data.highlights || {}),
+    },
   };
 }
 

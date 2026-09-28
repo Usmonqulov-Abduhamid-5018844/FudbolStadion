@@ -2238,9 +2238,9 @@ export class OwnersService {
           owner_id: subscription.ownerId,
           status: 'SUCCESS',
         },
-        take:5,
+        take: 5,
         orderBy: {
-          createdAt: "desc",
+          createdAt: 'desc',
         },
       });
 

@@ -4,6 +4,6 @@ import { AdminService } from './admin.service';
 @Global()
 @Module({
   providers: [AdminService],
-  exports:[AdminService]
+  exports: [AdminService],
 })
 export class AdminModule {}

@@ -1,8 +1,7 @@
 import { PremiumReason } from '@prisma/client';
 import { I18nService } from 'nestjs-i18n';
 
-
-export const  getPremiumReasonText =(
+export const getPremiumReasonText = (
   reason: PremiumReason,
   i18n: I18nService,
   lang: string,
@@ -18,9 +17,11 @@ export const  getPremiumReasonText =(
       return i18n.translate('premium.premium_active.reason.gift', { lang });
 
     case PremiumReason.COMPENSATION:
-      return i18n.translate('premium.premium_active.reason.compensation', { lang });
+      return i18n.translate('premium.premium_active.reason.compensation', {
+        lang,
+      });
 
     default:
       return '';
   }
-}
+};

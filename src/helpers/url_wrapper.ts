@@ -1,14 +1,14 @@
-import { getPremiumPaymentClickUrl } from "./url_click";
-import { gerPremiumPaymentOctoUrl } from "./url_octo";
-import { getPremiumPaymentPaymeUrl } from "./url_payme";
-import { getPremiumPaymentPaynetUrl } from "./url_paynet";
-import { getPremiumPaymentUzumUrl } from "./url_uzum";
+import { getPremiumPaymentClickUrl } from './url_click';
+import { gerPremiumPaymentOctoUrl } from './url_octo';
+import { getPremiumPaymentPaymeUrl } from './url_payme';
+import { getPremiumPaymentPaynetUrl } from './url_paynet';
+import { getPremiumPaymentUzumUrl } from './url_uzum';
 
 export enum PaymentProvider {
   CLICK = 'CLICK',
   PAYME = 'PAYME',
   PAYNET = 'PAYNET',
-  OCTO = "OCTO",
+  OCTO = 'OCTO',
   UZUM = 'UZUM',
 }
 

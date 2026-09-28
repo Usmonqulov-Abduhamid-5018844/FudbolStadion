@@ -1,18 +1,7 @@
+import { Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 
-export const getPaymentClickUrl = (total: number, transactionId: string) => {
-  const merchantId = process.env.CLICK_MERCHANT_ID;
-
-  const callbackUrl = `${process.env.BACKEND_URL}/payment/click-webhook`;
-
-  return (
-    `https://my.click.uz/pay` +
-    `?merchant_id=${merchantId}` +
-    `&amount=${total}` +
-    `&transaction_id=${transactionId}` +
-    `&callback_url=${encodeURIComponent(callbackUrl)}`
-  );
-};
+const logger = new Logger('ClickHelper');
 
 export const getPremiumPaymentClickUrl = (
   amount: number,
@@ -52,4 +41,14 @@ export const getPaymentCardUrl = (ownerId: number) => {
       `${process.env.BACKEND_URL}/payment/addCard-webhook`,
     )}`
   );
+};
+
+export const refundClickPayment = async (
+  providerTransactionId: string,
+  amount: number,
+): Promise<boolean> => {
+  logger.warn(
+    `refundClickPayment hali to'liq yozilmagan (tx: ${providerTransactionId}, summa: ${amount})`,
+  );
+  return false;
 };

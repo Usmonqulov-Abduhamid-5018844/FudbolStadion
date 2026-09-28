@@ -13,7 +13,9 @@ function stadiumRow(s: StadiumPerformance): string {
     </div>`;
 }
 
-export function renderStadiumPerformance(stadiums: StadiumPerformance[]): string {
+export function renderStadiumPerformance(
+  stadiums: StadiumPerformance[],
+): string {
   return `
 <section>
   <div class="section-head"><span class="num">02</span><h2>Stadionlar bo'yicha ko'rsatkichlar</h2></div>

@@ -11,7 +11,9 @@ function noteRow(n: Recommendation): string {
     </div>`;
 }
 
-export function renderRecommendations(recommendations: Recommendation[]): string {
+export function renderRecommendations(
+  recommendations: Recommendation[],
+): string {
   return `
 <section>
   <div class="section-head"><span class="num">05</span><h2>Tavsiyalar</h2></div>

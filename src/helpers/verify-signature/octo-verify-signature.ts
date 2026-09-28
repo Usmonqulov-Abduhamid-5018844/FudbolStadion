@@ -1,21 +1,27 @@
-import { CreatOcto_PaymentDto } from "src/payment/dto/create-payment.dto";
+import { CreatOcto_PaymentDto } from 'src/payment/dto/create-payment.dto';
 import * as crypto from 'crypto';
 
 export const verifyOctoSignature = (data: CreatOcto_PaymentDto): boolean => {
-  const uniqueKey = process.env.OCTO_UNIQUE_KEY
-
-  if (!uniqueKey) {
+  const uniqueKey = process.env.OCTO_UNIQUE_KEY;
+  if (!uniqueKey || !data.signature) {
     return false;
   }
-  const raw = `${uniqueKey}${data.octo_payment_UUID}${data.status}`
+
+  const raw = `${uniqueKey}${data.octo_payment_UUID}${data.status}`;
   const computedSignature = crypto
     .createHash('sha1')
     .update(raw)
     .digest('hex')
     .toUpperCase();
 
+  const received = data.signature.toUpperCase();
+
+  if (computedSignature.length !== received.length) {
+    return false;
+  }
+
   return crypto.timingSafeEqual(
     Buffer.from(computedSignature),
-    Buffer.from(data.signature.toUpperCase()),
+    Buffer.from(received),
   );
-}
+};

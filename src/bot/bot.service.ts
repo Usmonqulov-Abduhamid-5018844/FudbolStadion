@@ -21,10 +21,11 @@ import { AdminService } from 'src/admin/admin.service';
 import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
 import { formatDate } from 'src/helpers/dateFormat';
 import { AdvertisementClickSource, TransactionStatus } from '@prisma/client';
+import { PaymentGuardResult } from 'src/helpers/interface/enum';
 
 @Injectable()
 export class BotService {
-  private readonly logger = new Logger(BotService.name)
+  private readonly logger = new Logger(BotService.name);
   private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
     .split(',')
     .filter(Boolean)
@@ -1065,7 +1066,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           });
         }
         await this.advertisementBooking(ctx, lang, advertisement.stadion);
-        return
+        return;
       }
       await this.prisma.sesion.upsert({
         where: {
@@ -1196,62 +1197,72 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     }
   }
 
+  private async guardTransactionStatus(
+    ctx: MyContext,
+    lang: string,
+    transaction: { status: TransactionStatus; createdAt: Date } | null,
+    requesterChatId: string | null | undefined,
+    i18nPrefix: 'premium.payment' | 'booking.payment',
+  ): Promise<PaymentGuardResult> {
+    if (!transaction) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate(`${i18nPrefix}.not_found`, { lang }),
+      );
+      return 'not_found';
+    }
+
+    if (requesterChatId && requesterChatId !== String(ctx.from?.id)) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate(`${i18nPrefix}.not_found`, { lang }),
+      );
+      return 'unauthorized';
+    }
+
+    if (transaction.status === TransactionStatus.PENDING) {
+      const secondsSinceCreated =
+        (Date.now() - transaction.createdAt.getTime()) / 1000;
+      const key = secondsSinceCreated < 30 ? 'pending' : 'taking_too_long';
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate(`${i18nPrefix}.${key}`, { lang }),
+      );
+      return 'pending';
+    }
+
+    if (transaction.status === TransactionStatus.FAILED) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate(`${i18nPrefix}.failed`, { lang }),
+      );
+      return 'failed';
+    }
+
+    return 'ok';
+  }
+
   async handlePayloadSucces(ctx: MyContext, payload: string) {
     try {
-      const [_, __, transactionId] = payload.split('_');
-
+      const transactionId = payload.slice('paymentPremium_success_'.length);
       const lang = await this.utils.langs(ctx);
 
       const transaction = await this.prisma.premiumTransaction.findUnique({
-        where: {
-          id: transactionId,
-        },
-        include: {
-          owner: true,
-        },
+        where: { id: transactionId },
+        include: { owner: true },
       });
 
-      if (!transaction) {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('premium.payment.not_found', {
-            lang,
-          }),
-        );
-
-        return;
-      }
-
-      if (transaction.status === TransactionStatus.PENDING) {
-        const secondsSinceCreated =
-          (Date.now() - transaction.createdAt.getTime()) / 1000;
-
-        if (secondsSinceCreated < 30) {
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('premium.payment.pending', { lang }),
-          );
-        } else {
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('premium.payment.taking_too_long', { lang }),
-          );
-        }
-        return;
-      }
-
-      if (transaction.status === TransactionStatus.FAILED) {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('premium.payment.failed', {
-            lang,
-          }),
-        );
-        return;
-      }
+      const result = await this.guardTransactionStatus(
+        ctx,
+        lang,
+        transaction,
+        transaction?.owner?.chatID,
+        'premium.payment',
+      );
+      if (result !== 'ok' || !transaction) return;
 
       const planLabel = PLAN_LABELS[lang][transaction.plan];
-
       const price = PREMIUM_PLANS[transaction.plan].price;
 
       await this.utils.safeEditOrReply(
@@ -1267,81 +1278,53 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       );
       return this.checket(ctx);
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error);
     }
   }
-async handlePayload_bookingSuccess(ctx: MyContext, payload: string) {
-  try {
-    const [_, __, transactionId] = payload.split('_');
 
-    const lang = await this.utils.langs(ctx);
+  async handlePayload_bookingSuccess(ctx: MyContext, payload: string) {
+    try {
+      const transactionId = payload.slice('paymentBooking_success_'.length);
+      const lang = await this.utils.langs(ctx);
 
-    const transaction = await this.prisma.tranzaktion.findUnique({
-      where: {
-        id: transactionId,
-      },
-      include: { booking: true },
-    });
+      const transaction = await this.prisma.tranzaktion.findUnique({
+        where: { id: transactionId },
+        include: { booking: true, user: true },
+      });
 
-    if (!transaction) {
-      await this.utils.safeEditOrReply(
+      const result = await this.guardTransactionStatus(
         ctx,
-        this.i18n.translate('booking.payment.not_found', { lang }),
-      );
-      return;
-    }
-
-    if (transaction.status === TransactionStatus.PENDING) {
-      const secondsSinceCreated =
-        (Date.now() - transaction.createdAt.getTime()) / 1000;
-
-      if (secondsSinceCreated < 30) {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('booking.payment.pending', { lang }),
-        );
-      } else {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('booking.payment.taking_too_long', { lang }),
-        );
-      }
-      return;
-    }
-
-    if (transaction.status === TransactionStatus.FAILED) {
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('booking.payment.failed', { lang }),
-      );
-      return;
-    }
-
-    if (!transaction.booking) {
-      this.logger.error(
-        `handlePayload_bookingSuccess: transaction ${transaction.id} uchun booking topilmadi`,
-      );
-      await this.utils.errorFunction(ctx);
-      return;
-    }
-
-    await this.utils.safeEditOrReply(
-      ctx,
-      this.i18n.translate('booking.payment.already_success', {
         lang,
-        args: {
-          date: formatDate(transaction.booking.date, lang),
-          start_time: transaction.booking.start_time,
-          end_time: transaction.booking.end_time,
-          amount: transaction.booking.total_price.toLocaleString(),
-        },
-      }),
-    );
+        transaction,
+        transaction?.user?.chatID,
+        'booking.payment',
+      );
+      if (result !== 'ok' || !transaction) return;
 
-    return this.checket(ctx);
-  } catch (error) {
-    await this.utils.errorFunction(ctx, error);
+      if (!transaction.booking) {
+        this.logger.error(
+          `handlePayload_bookingSuccess: transaction ${transaction.id} uchun booking topilmadi`,
+        );
+        await this.utils.errorFunction(ctx);
+        return;
+      }
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('booking.payment.already_success', {
+          lang,
+          args: {
+            date: formatDate(transaction.booking.date, lang),
+            start_time: transaction.booking.start_time,
+            end_time: transaction.booking.end_time,
+            amount: transaction.booking.total_price.toNumber().toLocaleString(),
+          },
+        }),
+      );
+
+      return this.checket(ctx);
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error);
+    }
   }
-}
-  
 }

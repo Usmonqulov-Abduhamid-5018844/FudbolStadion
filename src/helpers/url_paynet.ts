@@ -1,3 +1,7 @@
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('PayinetHelper');
+
 export const getPremiumPaymentPaynetUrl = (
   amount: number,
   transactionId: string,
@@ -16,4 +20,14 @@ export const getPremiumPaymentPaynetUrl = (
   });
 
   return `${baseUrl}?${params.toString()}`;
+};
+
+export const refundPayinetPayment = async (
+  providerTransactionId: string,
+  amount: number,
+): Promise<boolean> => {
+  logger.warn(
+    `refundPayinet Payment hali to'liq yozilmagan (tx: ${providerTransactionId}, summa: ${amount})`,
+  );
+  return false;
 };
