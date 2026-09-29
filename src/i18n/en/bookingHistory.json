@@ -13,7 +13,10 @@
     "status": "📊 Status",
     "location": "📍 Location",
     "view_map": "Open",
-    "check_in": "🟢 Checked In"
+    "check_in": "🟢 Checked In",
+    "refunded": "💰 Refunded",
+    "retained": "⚠️ Retained",
+    "refund_in_progress": "🔄 Refund in progress, result will be known shortly"
   },
   "booking_status": {
     "completed": "✅ Completed",

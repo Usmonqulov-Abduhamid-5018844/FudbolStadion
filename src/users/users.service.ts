@@ -23,6 +23,7 @@ import {
   Pay_method,
   Prisma,
   PaymentProvider,
+  TransactionStatus,
 } from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
 import { getStadionIds } from 'src/helpers/stadions';
@@ -700,7 +701,13 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED',"REFUND_PENDING"],
+                      in: [
+                        'COMPLETED',
+                        'NOSHOW',
+                        'CANCELED',
+                        'REFUNDED',
+                        'REFUND_PENDING',
+                      ],
                     },
                   },
                   orderBy: {
@@ -725,6 +732,17 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                         },
                       },
                     },
+                    tranzaktions: {
+                      where: { status: TransactionStatus.SUCCESS },
+                      orderBy: { createdAt: 'desc' },
+                      take: 1,
+                      select: {
+                        refunded_sum: true,
+                        retained_sum: true,
+                        retained_percent: true,
+                        refund_status: true,
+                      },
+                    },
                   },
                   skip: (page - 1) * limit,
                   take: limit,
@@ -733,7 +751,13 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   where: {
                     user_id: user.id,
                     status: {
-                      in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED',"REFUND_PENDING"],
+                      in: [
+                        'COMPLETED',
+                        'NOSHOW',
+                        'CANCELED',
+                        'REFUNDED',
+                        'REFUND_PENDING',
+                      ],
                     },
                   },
                 }),
@@ -788,8 +812,34 @@ ${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(
 
 ${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
 
-${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
+${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}\n`;
 
+                if (
+                  (item.status === 'REFUNDED' ||
+                    item.status === 'REFUND_PENDING') &&
+                  item.tranzaktions.length > 0
+                ) {
+                  const tx = item.tranzaktions[0];
+
+                  if (item.status === 'REFUNDED' && tx.refunded_sum != null) {
+                    message += `
+${this.i18n.translate('bookingHistory.booking.refunded', { lang })}: ${formatPrice(tx.refunded_sum)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}\n`;
+
+                    if (
+                      tx.retained_sum != null &&
+                      Number(tx.retained_sum) > 0
+                    ) {
+                      message += `
+${this.i18n.translate('bookingHistory.booking.retained', { lang })}: ${formatPrice(tx.retained_sum)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })} (${tx.retained_percent ?? 0}%)\n`;
+                    }
+                  }
+
+                  if (item.status === 'REFUND_PENDING') {
+                    message += `
+${this.i18n.translate('bookingHistory.booking.refund_in_progress', { lang })}\n`;
+                  }
+                }
+                message += `
 ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
 
 ━━━━━━━━━━━━━━━━━━━━

@@ -13,7 +13,10 @@
     "status": "📊 Статус",
     "location": "📍 Адрес",
     "view_map": "Открыть",
-    "check_in": "🟢 Прибыл"
+    "check_in": "🟢 Прибыл",
+    "refunded": "💰 Возвращено",
+    "retained": "⚠️ Удержано",
+    "refund_in_progress": "🔄 Возврат в обработке, результат будет известен в ближайшее время"
   },
   "booking_status": {
     "completed": "✅ Завершено",

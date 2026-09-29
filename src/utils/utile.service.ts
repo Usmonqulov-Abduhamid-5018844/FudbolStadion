@@ -1107,6 +1107,8 @@ export const CANCEL_INTERVAL_HOURS = 2;
 
 export const MAX_RETAINED_PERCENT = 40;
 
+export const PERCENT_DRIFT_TOLERANCE = 5;
+
 export const getCompensationPercent = (totalMinutes: number): number => {
   const hours = totalMinutes / 60;
 

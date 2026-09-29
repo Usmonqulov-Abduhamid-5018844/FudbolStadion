@@ -276,6 +276,7 @@ export class PaymentService {
             provider_transaction_id: data.octo_payment_UUID,
             provider_data: data as unknown as Prisma.InputJsonValue,
             paid_at: new Date(data.payed_time),
+            owner_amount: data.transfer_sum,
             transfer_sum: data.transfer_sum,
             refunded_sum: data.refunded_sum,
             currency: data.currency,

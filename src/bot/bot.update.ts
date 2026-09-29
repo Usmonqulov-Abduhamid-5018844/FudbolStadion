@@ -29,6 +29,7 @@ import {
   canCancelBooking,
   formatSum,
   MIN_CANCEL_HOURS_BEFORE,
+  PERCENT_DRIFT_TOLERANCE,
   UtilisService,
 } from 'src/utils/utile.service';
 import { format, subDays } from 'date-fns';
@@ -1251,7 +1252,7 @@ export class BotUpdate {
     try {
       const lang = await this.utils.langs(ctx);
       if (ctx.callbackQuery && 'data' in ctx.callbackQuery) {
-        const [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
+        let [_, __, type, bookingId] = ctx.callbackQuery.data.split('_');
         if (type.startsWith('paymentChange-')) {
           const page = Number(type.split('-').pop()) || 1;
           const booking = await this.prisma.booking.findUnique({
@@ -1287,6 +1288,13 @@ export class BotUpdate {
           );
           return;
         }
+        let shownPercent = 0;
+        const cancelMatch = type.match(/^(-?\d+(?:\.\d+)?)-cancel$/);
+        if (cancelMatch) {
+          shownPercent = Number(cancelMatch[1]);
+          type = 'cancel';
+        }
+
         switch (type) {
           case 'yes': {
             if (ctx.callbackQuery) {
@@ -1589,6 +1597,7 @@ export class BotUpdate {
             break;
 
           case 'cancelChecking': {
+            let percentForButton = 0;
             const booking = await this.prisma.booking.findUnique({
               where: { id: Number(bookingId) },
               include: { stadion: true, user: true },
@@ -1660,7 +1669,7 @@ export class BotUpdate {
 
               const { paidAmount, retained, refundable, percent } =
                 calculateCancelRefund(
-                  Number(transaction.transfer_sum),
+                  Number(booking.total_price),
                   totalMinutes,
                 );
 
@@ -1674,19 +1683,19 @@ export class BotUpdate {
                   refundable: formatSum(refundable),
                 },
               });
+              percentForButton = booking.status === 'PAID' ? percent : 0;
             } else {
               text = this.i18n.translate('booking.cancel_confirm', {
                 lang,
                 args: baseArgs,
               });
             }
-
             await this.utils.safeEditOrReply(ctx, text, {
               inline_keyboard: [
                 [
                   {
                     text: this.i18n.translate('booking.cancel_yes', { lang }),
-                    callback_data: `booking_confirm_cancel_${booking.id}`,
+                    callback_data: `booking_confirm_${percentForButton}-cancel_${booking.id}`,
                   },
                 ],
                 [
@@ -1771,6 +1780,7 @@ export class BotUpdate {
             const wasPaid = booking.status === 'PAID';
             let refundedAmount = 0;
             let appliedPercent = 0;
+            let appretained = 0;
 
             if (wasPaid) {
               const transaction = await this.prisma.tranzaktion.findFirst({
@@ -1784,8 +1794,7 @@ export class BotUpdate {
               if (
                 !transaction ||
                 !transaction.provider ||
-                !transaction.provider_transaction_id ||
-                transaction.transfer_sum == null
+                !transaction.provider_transaction_id
               ) {
                 this.logger.error(
                   `Booking #${booking.id} PAID, lekin yaroqli SUCCESS tranzaksiya topilmadi`,
@@ -1795,9 +1804,21 @@ export class BotUpdate {
               }
 
               const { retained, refundable, percent } = calculateCancelRefund(
-                transaction.transfer_sum,
+                Number(booking.total_price),
                 totalMinutes,
               );
+              const percentDiff = Math.abs(percent - shownPercent);
+
+              if (percentDiff >= PERCENT_DRIFT_TOLERANCE) {
+
+                await ctx.answerCbQuery(
+                  this.i18n.translate('booking.cancel_condition_changed', {
+                    lang,
+                  }),
+                  { show_alert: true },
+                );
+                return;
+              }
 
               const locked = await this.prisma.booking.updateMany({
                 where: { id: booking.id, status: 'PAID' },
@@ -1881,6 +1902,7 @@ export class BotUpdate {
 
               refundedAmount = refundable;
               appliedPercent = percent;
+              appretained = retained;
 
               await this.prisma.booking.updateMany({
                 where: { id: booking.id, status: 'REFUND_PENDING' },
@@ -1934,13 +1956,14 @@ export class BotUpdate {
                     date: formatDate(booking.date, lang),
                     start_time: booking.start_time,
                     end_time: booking.end_time,
-                    percent: appliedPercent,
                     refundable: formatSum(refundedAmount),
+                    percent: appliedPercent,
+                    retained: formatSum(appretained),
                   },
                 },
               ),
               {
-                parse_mode: 'HTML',
+                parse_mode: 'Markdown',
                 reply_markup: backKeyboard,
               },
             );
@@ -2095,6 +2118,7 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx, error);
     }
   }
+
   @Action(/paymentProvider_(\w+)_(\d+)_(\d+)/)
   async payment(@Ctx() ctx: MyContext) {
     if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;

@@ -13,7 +13,10 @@
     "status": "📊 Holat",
     "location": "📍 Manzil",
     "view_map": "Ko'rish",
-    "check_in": "🟢 Kelgan"
+    "check_in": "🟢 Kelgan",
+    "refunded": "💰 Qaytarilgan",
+    "retained": "⚠️ Ushlab qolingan",
+    "refund_in_progress": "🔄 Qaytarma jarayonda, natija tez orada aniqlanadi"
   },
 
   "booking_status": {

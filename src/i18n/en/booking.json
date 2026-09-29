@@ -60,9 +60,8 @@
 
   "booking_cancelled_notice": "❌ *Booking cancelled*.\n\n⏳ The booking is not deleted immediately and is kept in a 30-minute pending state. You can restore the booking during this time.\n\n📂 To restore the booking, go to the *Active bookings* section.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
 
-  "booking_cancelled": "❌ *Booking cancelled*.\n\n📂 The booking has been permanently deleted and cannot be restored.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
-
-  "booking_cancelled_refunded": "✅ *Your booking has been cancelled.*\n\n📅 Date: *{date}*\n🕐 Time: *{start_time} - {end_time}*\n\n💰 Your payment has been refunded. Funds may take a few days to appear in your account, depending on your bank/card.",
+  "booking_cancelled": "❌ *Booking cancelled*.\n\n📂 The booking has been fully removed and cannot be restored.\n\n📅 *{date}*\n\n⏰ *{start_time} - {end_time}*",
+  "booking_cancelled_refunded": "✅ *Your booking has been cancelled.*\n\n📅 Date: *{date}*\n🕐 Time: *{start_time} - {end_time}*\n\n💰 Refunded to your card: *{refundable} UZS*\n⚠️ Retained as compensation ({percent}%): *{retained} UZS*\n\n🕒 Funds may take a few days to appear on your account.",
 
   "time_left": {
     "days_hours_minutes": "{days}d {hours}h {minutes}m",
@@ -72,7 +71,7 @@
     "minutes_only": "{minutes}m"
   },
 
-  "payment_time_alert": "⚠️ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
+  "payment_time_alert": "⚠️ {time_left} left until the game starts.\nPayment must be made at least 2 hour in advance.",
 
   "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*",
 
@@ -128,5 +127,7 @@
   "cancel_confirm_paid": "❓ <b>Cancel this booking?</b>\n\n━━━━━━━━━━━━━━\n🏟 Stadium: <b>{stadion}</b>\n\n📅 Date: <b>{date}</b>\n\n⏰ Time: <b>{start_time} - {end_time}</b>\n━━━━━━━━━━━━━━\n\n💳 Paid: <b>{paid} UZS</b>\n\n➖ Retained (<b>{percent}%</b>): <b>{retained} UZS</b>\n\n✅ Refunded: <b>{refundable} UZS</b>\n\n<i>Do you confirm?</i>",
 
   "cancel_yes": "✅ Yes, cancel",
-  "refund_pending": "⏳ <b>Your refund request has been accepted!</b>\n\n💳 The payment system is currently checking the refund status.\n🔄 The status will be checked automatically.\n\n🕐 Please wait. You will be notified as soon as the result is available."
+  "refund_pending": "⏳ <b>Your refund request has been accepted!</b>\n\n💳 The payment system is currently checking the refund status.\n🔄 The status will be checked automatically.\n\n🕐 Please wait. You will be notified as soon as the result is available.",
+
+  "cancel_condition_changed": "⏳ The condition changed slightly due to the delay. Please tap “Cancel” again — the updated terms will be shown."
 }
