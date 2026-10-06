@@ -72,7 +72,7 @@
     "minutes_only": "🔴 {minutes} minut"
   },
 
-  "payment_time_alert": "⚠️ O'yin boshlanishiga {time_left} qoldi.\nTo'lov kamida 2 soat oldin amalga oshirilishi kerak.",
+  "payment_time_alert": "⚠️ O'yin boshlanishiga {time_left} qoldi.\nTo'lov kamida 1 soat oldin amalga oshirilishi kerak.",
 
   "confirm_with_payment": "✅ Sizning bron tasdiqlandi!\n\n🏟 Stadion: *{stadion_name}*\n\n📅 Sana: *{date}*\n\n⏰ Vaqt: *{start_time} - {end_time}*\n\n💳 To‘lov turi: *{payment_method}*\n\n💰 Umumiy narx: *{total} so'm*\n\n⚠️ Diqqat: O‘yin boshlanishidan kamida 1 soat oldin to‘lov amalga oshirilishi kerak.\n\nO'yin boshlanishigacha: *{time_left}* vaqt qoldi",
 

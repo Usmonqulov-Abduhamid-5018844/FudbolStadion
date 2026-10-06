@@ -71,7 +71,7 @@
     "minutes_only": "{minutes}m"
   },
 
-  "payment_time_alert": "⚠️ {time_left} left until the game starts.\nPayment must be made at least 2 hour in advance.",
+  "payment_time_alert": "⚠️ {time_left} left until the game starts.\nPayment must be made at least 1 hour in advance.",
 
   "confirm_with_payment": "✅ Your booking is confirmed!\n\n🏟 Stadium: *{stadion_name}*\n\n📅 Date: *{date}*\n\n⏰ Time: *{start_time} - {end_time}*\n\n💳 Payment method: *{payment_method}*\n\n💰 Total price: *{total} UZS*\n\n⚠️ Note: Payment must be made at least 1 hour before the game starts.\n\nTime left until the game: *{time_left}*",
 

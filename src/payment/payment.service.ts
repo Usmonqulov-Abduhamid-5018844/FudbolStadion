@@ -207,7 +207,7 @@ export class PaymentService {
     //   );
     //   throw new BadRequestException('Invalid signature');
     // }
-
+    
     const transactionId = data.shop_transaction_id.slice('booking_'.length);
 
     try {

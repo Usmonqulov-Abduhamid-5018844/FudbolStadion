@@ -4,7 +4,6 @@ import {
   PremiumReason,
   TransactionStatus,
 } from '@prisma/client';
-import { count } from 'console';
 import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';

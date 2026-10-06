@@ -38,6 +38,7 @@ import { refundClickPayment } from 'src/helpers/url_click';
 import { refundPaymePayment } from 'src/helpers/url_payme';
 import { refundPayinetPayment } from 'src/helpers/url_paynet';
 import { refundUzumPayment } from 'src/helpers/url_uzum';
+import { Decimal } from '@prisma/client/runtime/library';
 
 export const APP_TZ = 'Asia/Tashkent';
 
@@ -1153,5 +1154,5 @@ export const calculateCancelRefund = (
     percent,
   };
 };
-export const formatSum = (value: number): string =>
-  value.toLocaleString('ru-RU').replace(/\u00A0/g, ' ');
+export const formatSum = (value: number | Decimal): string =>
+  Number(value).toLocaleString('ru-RU').replace(/\u00A0/g, ' ');

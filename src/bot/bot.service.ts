@@ -3,14 +3,12 @@ import { I18nService } from 'nestjs-i18n';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { isCkecked } from 'src/helpers/isChecked_firstName';
 import { PrismaService } from 'src/prisma/prisma.service';
-import { Markup, Telegraf } from 'telegraf';
+import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { formatInTimeZone } from 'date-fns-tz';
 import { getPaymentText } from 'src/helpers/peyments_type';
-import { UtilisService } from 'src/utils/utile.service';
+import { formatSum, UtilisService } from 'src/utils/utile.service';
 import {
   EStadion_type,
-  INITIAL_SESSION,
   IStadion,
   PLAN_LABELS,
   PREMIUM_PLANS,
@@ -1317,7 +1315,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             date: formatDate(transaction.booking.date, lang),
             start_time: transaction.booking.start_time,
             end_time: transaction.booking.end_time,
-            amount: transaction.booking.total_price.toNumber().toLocaleString(),
+            amount: formatSum(transaction.booking.total_price),
           },
         }),
       );

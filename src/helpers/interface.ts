@@ -62,7 +62,7 @@ export interface IBooking {
   date: Date;
   start_time: string;
   end_time: string;
-  total_price: Decimal;
+  total_price: number;
   startAt: Date;
   endAt: Date;
   check_in: boolean;

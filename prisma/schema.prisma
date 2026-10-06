@@ -146,7 +146,7 @@ model Booking {
   date             DateTime       @db.Date
   start_time       String
   end_time         String
-  total_price      Decimal
+  total_price      Int
   startAt          DateTime
   endAt            DateTime
   check_in         Boolean        @default(false)

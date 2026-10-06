@@ -58,7 +58,6 @@ import { PAYMENT_URL_GENERATORS } from 'src/helpers/url_wrapper';
 import { AdminService } from 'src/admin/admin.service';
 import { formatDate } from 'src/helpers/dateFormat';
 import { NotifikationService } from 'src/notifikation/notifikation.service';
-import { addPaymentCommission } from 'src/helpers/kommisiya';
 import { scheduleType } from 'src/helpers/interface/enum';
 import { Logger } from '@nestjs/common';
 
@@ -1492,7 +1491,7 @@ export class BotUpdate {
                     start_time: booking.start_time,
                     end_time: booking.end_time,
                     payment_method: paymentMethodText,
-                    total: booking.total_price.toLocaleString(),
+                    total: formatSum(booking.total_price),
                     time_left: timeLeftText,
                   },
                 },
@@ -2761,7 +2760,7 @@ export class BotUpdate {
         );
       }
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      this.utils.errorFunction(ctx, error);
     }
   }
   @Action(/search_working_(start|end)_(.+)_(.+)/)
@@ -2814,7 +2813,7 @@ export class BotUpdate {
         }
       }
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      this.utils.errorFunction(ctx, error);
     }
   }
 
@@ -2840,7 +2839,7 @@ export class BotUpdate {
         );
       }
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error,"search_stadionsPage");
     }
   }
 

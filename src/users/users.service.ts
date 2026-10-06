@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { formatInTimeZone } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
 import { MyContext } from 'src/helpers/bot.sesion';
@@ -343,15 +342,21 @@ export class UsersService {
               !pending.end_time ||
               !pending.startAt ||
               !pending.endAt ||
-              !pending.total_price ||
               !pending.user_id ||
               !pending.payment_method ||
-              !pending.pricePerHur ||
               !pending.type ||
-              !pending.noshowCount
+              pending.total_price == null ||
+              pending.pricePerHur == null ||
+              pending.noshowCount == null
             ) {
-              await this.utils.errorFunction(ctx);
-              this.logger.warn('sesion yetarliy emas');
+              this.logger.warn(
+                `sesion yetarliy emas: ${JSON.stringify(pending)}`,
+              );
+              await this.utils.errorFunction(
+                ctx,
+                undefined,
+                'back_user_Payments',
+              );
               break;
             }
             await this.bookingPayments(
@@ -3438,6 +3443,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               noshowCount,
               type: schedule_type,
             };
+
             const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
             let warning = '';
 
@@ -3461,7 +3467,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 payment_method: paymentMethodText,
               },
             });
-
+            console.log(ctx.session.pendingBooking);
             await this.utils.safeEditOrReply(
               ctx,
               message,
@@ -3502,11 +3508,11 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         }
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, 'bookingPayments');
     }
   }
 
-  async searchWorkingStadions(
+  async searchWorkingStadions(  
     ctx: MyContext,
     date: string,
     start_time: string,
@@ -3736,7 +3742,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         },
       );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, 'searchWorkingStadions');
     } finally {
       await ctx.answerCbQuery().catch(() => {});
     }
