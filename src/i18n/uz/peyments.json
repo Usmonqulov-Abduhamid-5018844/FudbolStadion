@@ -2,11 +2,22 @@
   "card": "💳 Karta",
   "cash": "💵 Naqt",
   "both": "💳💵 Ikkalasi",
-  "cards": "➕ Yangi karta qo'shish",
-  "not_found": "⚠️ Karta ma’lumotlaringiz topilmadi",
 
+  "change_card_block": "💳 Ushbu stadion uchun karta ulangan emas.\n\n👤 Stadion egasi karta qo‘shmaguncha CARD rejimi ishlamaydi.\n\n➡️ Iltimos, boshqa to‘lov usulidan foydalaning.",
 
-  "change_card_block": "💳 Ushbu stadion uchun karta ulangan emas.\n\n👤 Stadion egasi karta qo‘shmaguncha CARD rejimi ishlamaydi.\n\n➡️ Iltimos, boshqa to‘lov usulidan foydalaning."
-
-
+  "owner_card": {
+    "status": {
+      "active": "✅ Faol",
+      "inactive": "⏸ Faol emas",
+      "expired": "⚠️ Muddati tugagan"
+    },
+    "empty": {
+      "text": "💳 <b>To'lov kartasi</b>\n\n❌ Karta hali ulanmagan.\n\nMijozlar to'lagan pul shu kartaga tushadi. Kartani ulash uchun quyidagi tugmani bosing 👇",
+      "add_button": "➕ Karta ulash"
+    },
+    "active": {
+      "text": "💳 <b>To'lov kartasi</b>\n\n📌 Holat: {status}\n🏦 Turi: <b>{type}</b>\n🔢 Raqam: <code>•••• •••• •••• {last4}</code>\n📅 Amal qilish muddati: <b>{expire}</b>\n🔗 Tizim: {provider}\n🗓 Ulangan sana: {added}\n\nMijozlar to'lagan pul shu kartaga tushadi.",
+      "change_button": "🔄 Kartani almashtirish"
+    }
+  }
 }

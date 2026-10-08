@@ -2,10 +2,22 @@
   "card": "💳 Card",
   "cash": "💵 Cash",
   "both": "💳💵 Both",
-  "cards": "➕ Add New Card",
-  "not_found": "⚠️ Your card information was not found",
 
-  "change_card_block": "💳 No card is connected for this stadium.\n\n👤 CARD mode will be available only after the stadium owner adds a payment card.\n\n➡️ Please choose another payment method."
+  "change_card_block": "💳 No card is connected for this stadium.\n\n👤 CARD mode will be available only after the stadium owner adds a payment card.\n\n➡️ Please choose another payment method.",
+
+  "owner_card": {
+    "status": {
+      "active": "✅ Active",
+      "inactive": "⏸ Inactive",
+      "expired": "⚠️ Expired"
+    },
+    "empty": {
+      "text": "💳 <b>Payment card</b>\n\n❌ No card has been linked yet.\n\nMoney paid by customers will be sent to this card. Tap the button below to link your card 👇",
+      "add_button": "➕ Link card"
+    },
+    "active": {
+      "text": "💳 <b>Payment card</b>\n\n📌 Status: {status}\n🏦 Type: <b>{type}</b>\n🔢 Number: <code>•••• •••• •••• {last4}</code>\n📅 Expiry date: <b>{expire}</b>\n🔗 System: {provider}\n🗓 Linked on: {added}\n\nMoney paid by customers is sent to this card.",
+      "change_button": "🔄 Change card"
+    }
+  }
 }
-
-

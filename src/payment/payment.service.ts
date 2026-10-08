@@ -4,6 +4,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import {
   Booking_status,
   PaymentProvider,
+  PremiumReason,
   Prisma,
   TransactionStatus,
 } from '@prisma/client';
@@ -137,6 +138,7 @@ export class PaymentService {
                 endDate,
                 plan: payment.plan,
                 isActive: true,
+                reason: PremiumReason.PURCHASE
               },
             })
           : await tx.subscription.create({
@@ -146,6 +148,7 @@ export class PaymentService {
                 startDate,
                 endDate,
                 isActive: true,
+                reason: PremiumReason.PURCHASE
               },
             });
 

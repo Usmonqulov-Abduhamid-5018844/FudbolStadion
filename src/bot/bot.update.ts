@@ -382,6 +382,7 @@ export class BotUpdate {
   @Action(/ownerBooking_(.+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
+
       const lang = await this.utils.langs(ctx);
 
       const data = (ctx.callbackQuery as any).data.split('_');
@@ -493,6 +494,7 @@ export class BotUpdate {
       await ctx.answerCbQuery(this.i18n.translate('loading.loading', { lang }));
 
       await this.utils.clearSessionMessages(ctx);
+      await this.utils.deleteClickedMessage(ctx);
 
       const callback_data: string = 'ownerBooking';
 
@@ -678,6 +680,7 @@ export class BotUpdate {
 
       if (action === 'all') {
         await this.utils.clearSessionMessages(ctx);
+        await this.utils.deleteClickedMessage(ctx);
         if (ctx.session.ownerDataFilter) {
           return this.ownerService.handleDataFilter(
             ctx,
@@ -757,7 +760,6 @@ export class BotUpdate {
       if (action.startsWith('STATUS')) {
         const status = action.replace('STATUS.', '') as Booking_status;
 
-        await this.utils.clearSessionMessages(ctx);
         const limit = 5;
         const where: Prisma.BookingWhereInput = {
           stadion: {
@@ -798,6 +800,8 @@ export class BotUpdate {
         );
 
         const callback_data: string = 'bookingAllData';
+        await this.utils.clearSessionMessages(ctx)
+        await this.utils.deleteClickedMessage(ctx);
 
         await Promise.all(
           bookings.map((item: IBooking) =>
@@ -879,6 +883,7 @@ export class BotUpdate {
           return;
         }
         await this.utils.clearSessionMessages(ctx);
+        await this.utils.deleteClickedMessage(ctx);
         const buttons: InlineKeyboardButton[][] = [
           [
             {
@@ -955,7 +960,7 @@ export class BotUpdate {
     const stadionId = Number(match[2]);
     const page = Number(match[3]);
     try {
-      const limit = 5;
+      const limit = 4;
       const lang = await this.utils.langs(ctx);
       const now = new Date();
       const base = new Date(
@@ -965,7 +970,6 @@ export class BotUpdate {
       const callback_data: string = 'bookingFilter';
       const callback: string = 'bookingFilter_' + action + '_' + stadionId;
 
-      await this.utils.clearSessionMessages(ctx);
       if (['7days', '30days', 'active', 'allFilter'].includes(action)) {
         const where: Prisma.BookingWhereInput = {
           stadion_id: stadionId,
@@ -1024,6 +1028,8 @@ export class BotUpdate {
         await ctx.answerCbQuery(
           this.i18n.translate('loading.loading', { lang }),
         );
+              await this.utils.clearSessionMessages(ctx);
+      await this.utils.deleteClickedMessage(ctx)
         await Promise.all(
           bookings.map((booking) =>
             this.ownerService.sendBookingMessage(
@@ -1809,7 +1815,6 @@ export class BotUpdate {
               const percentDiff = Math.abs(percent - shownPercent);
 
               if (percentDiff >= PERCENT_DRIFT_TOLERANCE) {
-
                 await ctx.answerCbQuery(
                   this.i18n.translate('booking.cancel_condition_changed', {
                     lang,
@@ -2839,7 +2844,7 @@ export class BotUpdate {
         );
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx, error,"search_stadionsPage");
+      await this.utils.errorFunction(ctx, error, 'search_stadionsPage');
     }
   }
 

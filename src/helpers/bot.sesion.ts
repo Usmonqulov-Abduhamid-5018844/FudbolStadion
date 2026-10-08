@@ -8,6 +8,7 @@ export interface ISession {
   step: string | null;
   ownerId: number | null;
   currentPage: string | null;
+  ownerMenuMessageId: number | null;
   scheduleId: number | null;
   historyPage: string | null;
   advertisement_step: string | null;

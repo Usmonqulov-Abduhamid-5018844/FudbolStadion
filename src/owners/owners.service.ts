@@ -57,7 +57,6 @@ export class OwnersService {
       },
     });
   }
-
   async registor_step(ctx: MyContext, lang: string) {
     if (ctx.message && 'text' in ctx.message) {
       if (ctx.session.owner_registor.step === 'full_name') {
@@ -202,7 +201,6 @@ export class OwnersService {
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
-
   async handleStadionMenu(ctx: MyContext, lang: string) {
     try {
       const owner = await this.prisma.owners.findUnique({
@@ -272,7 +270,6 @@ export class OwnersService {
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
-
   async ownerSettings(ctx: MyContext, lang: string) {
     try {
       const owner = await this.prisma.owners.findUnique({
@@ -348,7 +345,6 @@ export class OwnersService {
       ctx.reply(this.i18n.translate('error.error', { lang }));
     }
   }
-
   async updatePhone(ctx: MyContext, lang: string, text: string) {
     try {
       const phone = text;
@@ -563,7 +559,6 @@ export class OwnersService {
       });
     }
   }
-
   async handleOffDays(ctx: MyContext, lang: string, text: string) {
     const isValidFormat = /^\d{4}-\d{2}-\d{2}$/.test(text);
     if (!isValidFormat) {
@@ -635,7 +630,6 @@ export class OwnersService {
       await ctx.reply(this.i18n.translate('schedule.off_day.error', { lang }));
     }
   }
-
   async handleSchedule(ctx: MyContext, lang: string, text: string) {
     const timePattern =
       /^([01]?\d|2[0-3]):([0-5]\d)\s*-\s*([01]?\d|2[0-3]):([0-5]\d)$/;
@@ -837,7 +831,6 @@ export class OwnersService {
       Number(ctx.session.stadion.id),
     );
   }
-
   async handlePrice(ctx: MyContext, lang: string, text: string) {
     const price = Number(text);
 
@@ -985,7 +978,9 @@ export class OwnersService {
       switch (data) {
         case '1':
           {
-            ctx.reply(
+            await this.utils.deleteClickedMessage(ctx);
+            await this.utils.sendMainMenu(
+              ctx,
               this.i18n.translate('menyu_buttons.menu', { lang }),
               Markup.keyboard([
                 [
@@ -1260,7 +1255,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async miniStadion(ctx: MyContext, childId: number, lang: string) {
     try {
       const child = await this.prisma.stadion.findFirstOrThrow({
@@ -1422,7 +1416,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async stadionMenyu(ctx: MyContext, stadionID: number, lang: string) {
     try {
       const stadion = await this.prisma.stadion.findUnique({
@@ -1888,50 +1881,93 @@ export class OwnersService {
       const owner = await this.prisma.owners.findUnique({
         where: { chatID: String(ctx.from?.id) },
       });
-      if (!owner) {
-        return await this.utils.errorFunction(ctx);
-      }
-      const owner_cards = await this.prisma.owner_card.findUnique({
+      if (!owner) return await this.utils.errorFunction(ctx);
+
+      const card = await this.prisma.owner_card.findUnique({
         where: { owner_id: owner.id },
       });
-      if (!owner_cards) {
-        await ctx.reply(this.i18n.translate('peyments.not_found', { lang }), {
+
+      const backBtn = {
+        text: this.i18n.translate('schedule.back', { lang }),
+        callback_data: 'back_owner_1',
+      };
+
+      if (!card) {
+        await ctx.reply(
+          this.i18n.translate('peyments.owner_card.empty.text', { lang }),
+          {
+            parse_mode: 'HTML',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.i18n.translate('peyments.owner_card.empty.add_button', {
+                      lang,
+                    }),
+                    url: getPaymentCardUrl(owner.id),
+                  },
+                ],
+                [backBtn],
+              ],
+            },
+          },
+        );
+        return;
+      }
+
+      const last4 = card.cardMask.replace(/\D/g, '').slice(-4) || '••••';
+      const mm = card.expireMonth.padStart(2, '0');
+      const yy = card.expireYear.slice(-2);
+      const fullYear =
+        card.expireYear.length === 2
+          ? 2000 + Number(card.expireYear)
+          : Number(card.expireYear);
+
+      const isExpired =
+        new Date(fullYear, Number(card.expireMonth), 0, 23, 59, 59) <
+        new Date();
+
+      const statusKey = isExpired
+        ? 'expired'
+        : card.isActive
+          ? 'active'
+          : 'inactive';
+
+      await ctx.reply(
+        this.i18n.translate('peyments.owner_card.active.text', {
+          lang,
+          args: {
+            status: this.i18n.translate(`peyments.owner_card.status.${statusKey}`, {
+              lang,
+            }),
+            type: card.cardType.toUpperCase(),
+            last4,
+            expire: `${mm}/${yy}`,
+            provider: card.provider.toUpperCase(),
+            added: formatDate(card.createdAt, lang),
+          },
+        }),
+        {
+          parse_mode: 'HTML',
           reply_markup: {
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate('peyments.cards', { lang }),
+                  text: this.i18n.translate('peyments.owner_card.active.change_button', {
+                    lang,
+                  }),
                   url: getPaymentCardUrl(owner.id),
                 },
               ],
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: 'back_owner_1',
-                },
-              ],
+              [backBtn],
             ],
           },
-        });
-        return;
-      }
-      await ctx.reply('Karta mavjud ✅', {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'back_owner_1',
-              },
-            ],
-          ],
         },
-      });
+      );
     } catch (error) {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async handleDataFilter(
     ctx: MyContext,
     text: string,
@@ -2059,7 +2095,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async searchBooking(
     ctx: MyContext,
     input: { type: string; value: string | number },
@@ -2147,7 +2182,6 @@ export class OwnersService {
       ctx.session.owner_registor.id = null;
     }
   }
-
   async premium(ctx: MyContext, ownerId: number, lang: string) {
     try {
       const now = new Date();
@@ -2238,7 +2272,7 @@ export class OwnersService {
           owner_id: subscription.ownerId,
           status: 'SUCCESS',
         },
-        take: 5,
+        take: 4,
         orderBy: {
           createdAt: 'desc',
         },
@@ -2334,12 +2368,9 @@ export class OwnersService {
         ],
       });
     } catch (error) {
-      console.error('premium error:', error);
-
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, 'owner prwmium');
     }
   }
-
   async renderNotification(ctx: MyContext, ownerId: number, lang: string) {
     try {
       const [count_unread, count_read, count_all] = await Promise.all([
@@ -2428,7 +2459,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async notificationSettings(ctx: MyContext, ownerId: number, lang: string) {
     try {
       const now = new Date();
@@ -2521,7 +2551,6 @@ export class OwnersService {
       );
     } catch (error) {}
   }
-
   async advertisement(
     ctx: MyContext,
     action: string,
@@ -3014,7 +3043,6 @@ export class OwnersService {
       await this.utils.errorFunction(ctx);
     }
   }
-
   async selectAdvertisementStadium(ctx: MyContext, lang: string) {
     const owner = await this.prisma.owners.findUnique({
       where: {
@@ -3068,7 +3096,6 @@ export class OwnersService {
     ctx.session.advertisements ??= [];
     ctx.session.advertisements.push(send.message_id);
   }
-
   async advertisementPreview(ctx: MyContext, lang: string) {
     try {
       ctx.session.advertisements ??= [];
@@ -3197,7 +3224,6 @@ ${this.i18n.translate('advertisement.preview.confirm_question', { lang })}
       }
     }
   }
-
   async advertisement_created(ctx: MyContext, lang: string) {
     try {
       const chatId = String(ctx.from?.id);
@@ -3683,7 +3709,6 @@ ${this.i18n.translate('advertisement.preview.confirm_question', { lang })}
       }
     }
   }
-
   async advertisement_checking(
     ctx: MyContext,
     type: string,

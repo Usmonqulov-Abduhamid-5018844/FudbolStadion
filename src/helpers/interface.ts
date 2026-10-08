@@ -11,7 +11,6 @@ import {
   Pay_method,
 } from '@prisma/client';
 import { ISession, PendingBookingSession } from './bot.sesion';
-import { Decimal } from '@prisma/client/runtime/library';
 
 export interface IStadion {
   id: number;
@@ -121,6 +120,7 @@ export const INITIAL_SESSION: ISession = {
   admin_step: null,
   scheduleId: null,
   admin_bron_name: null,
+  ownerMenuMessageId: null,
   admin_bron_phone: null,
   admin_booking_messages: null,
   ownerId: null,

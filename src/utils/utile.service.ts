@@ -527,6 +527,10 @@ export class UtilisService implements OnModuleInit {
       ctx.session.ownerActiveBooking = [];
     }
   }
+  async deleteClickedMessage(ctx: MyContext) {
+    const id = (ctx.callbackQuery as any)?.message?.message_id;
+    if (id) await ctx.deleteMessage(id).catch(() => {});
+  }
 
   async sendPagination(
     ctx: MyContext,
@@ -1098,6 +1102,15 @@ export class UtilisService implements OnModuleInit {
     };
     return map[status] ?? RefundStatus.FAILED;
   }
+
+  async sendMainMenu(ctx: MyContext, text: string, keyboard: any) {
+    if (ctx.session.ownerMenuMessageId) {
+      await ctx.deleteMessage(ctx.session.ownerMenuMessageId).catch(() => {});
+      ctx.session.ownerMenuMessageId = null;
+    }
+    const sent = await ctx.reply(text, keyboard);
+    ctx.session.ownerMenuMessageId = sent.message_id;
+  }
 }
 
 export const MIN_CANCEL_HOURS_BEFORE = 2;
@@ -1120,22 +1133,16 @@ export const getCompensationPercent = (totalMinutes: number): number => {
     return MAX_RETAINED_PERCENT;
   }
   const totalIntervals =
-    (MAX_CANCEL_HOURS_BEFORE - MIN_CANCEL_HOURS_BEFORE) /
-    CANCEL_INTERVAL_HOURS;
+    (MAX_CANCEL_HOURS_BEFORE - MIN_CANCEL_HOURS_BEFORE) / CANCEL_INTERVAL_HOURS;
 
   const intervalsPassed = Math.floor(
-    (MAX_CANCEL_HOURS_BEFORE - hours) /
-      CANCEL_INTERVAL_HOURS,
+    (MAX_CANCEL_HOURS_BEFORE - hours) / CANCEL_INTERVAL_HOURS,
   );
 
-  const percentPerInterval =
-    MAX_RETAINED_PERCENT / totalIntervals;
+  const percentPerInterval = MAX_RETAINED_PERCENT / totalIntervals;
 
   const percent = intervalsPassed * percentPerInterval;
-  return Math.min(
-    Math.round(percent * 100) / 100,
-    MAX_RETAINED_PERCENT,
-  );
+  return Math.min(Math.round(percent * 100) / 100, MAX_RETAINED_PERCENT);
 };
 
 export const canCancelBooking = (totalMinutes: number): boolean =>
@@ -1155,4 +1162,6 @@ export const calculateCancelRefund = (
   };
 };
 export const formatSum = (value: number | Decimal): string =>
-  Number(value).toLocaleString('ru-RU').replace(/\u00A0/g, ' ');
+  Number(value)
+    .toLocaleString('ru-RU')
+    .replace(/\u00A0/g, ' ');
