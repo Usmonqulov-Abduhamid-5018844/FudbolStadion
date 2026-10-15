@@ -34,10 +34,6 @@ import {
   generateOctoBookingPaymentUrl,
   refundOctoPayment,
 } from 'src/helpers/url_octo';
-import { refundClickPayment } from 'src/helpers/url_click';
-import { refundPaymePayment } from 'src/helpers/url_payme';
-import { refundPayinetPayment } from 'src/helpers/url_paynet';
-import { refundUzumPayment } from 'src/helpers/url_uzum';
 import { Decimal } from '@prisma/client/runtime/library';
 
 export const APP_TZ = 'Asia/Tashkent';
@@ -982,144 +978,56 @@ export class UtilisService implements OnModuleInit {
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 
-  async generatePaymentUrl(params: {
-    provider: PaymentProvider;
-    transactionId: string;
-    amount: number;
-    lang: string;
-    description: string;
-  }): Promise<string> {
-    const { provider, transactionId, amount, lang, description } = params;
+  // async refundPayment(
+  //   provider: PaymentProvider,
+  //   providerTransactionId: string,
+  //   amount: number,
+  // ): Promise<{ status: RefundStatus; refund_id: string | null }> {
+  //   try {
+  //     switch (provider) {
+  //       case PaymentProvider.PAYLOV: {
+  //         const result = await refundOctoPayment(providerTransactionId, amount);
+  //         return {
+  //           status: this.mapRefundStatus(result.status),
+  //           refund_id: result.refund_id,
+  //         };
+  //       }
 
-    switch (provider) {
-      case PaymentProvider.OCTO:
-        return generateOctoBookingPaymentUrl(
-          amount,
-          transactionId,
-          lang,
-          description,
-        );
+  //       default:
+  //         this.logger.error(
+  //           `Noma'lum provider uchun refund so'raldi: ${provider} (tx: ${providerTransactionId})`,
+  //         );
+  //         return { status: RefundStatus.FAILED, refund_id: null };
+  //     }
+  //   } catch (error) {
+  //     this.logger.error(
+  //       `Refund xatosi: provider=${provider}, tx=${providerTransactionId}`,
+  //       error instanceof Error ? error.stack : error,
+  //     );
+  //     return { status: RefundStatus.FAILED, refund_id: null };
+  //   }
+  // }
 
-      case PaymentProvider.CLICK:
-        throw new Error('Not implemented');
+  // private mapRefundStatus(
+  //   status: 'succeeded' | 'pending' | 'failed',
+  // ): RefundStatus {
+  //   const map: Record<string, RefundStatus> = {
+  //     succeeded: RefundStatus.SUCCEEDED,
+  //     pending: RefundStatus.PENDING,
+  //     failed: RefundStatus.FAILED,
+  //   };
+  //   return map[status] ?? RefundStatus.FAILED;
+  // }
 
-      case PaymentProvider.PAYME:
-        throw new Error('Not implemented');
-
-      case PaymentProvider.UZUM:
-        throw new Error('Not implemented');
-
-      case PaymentProvider.PAYINET:
-        throw new Error('Not implemented');
-
-      default:
-        throw new BadRequestException(
-          `Unsupported payment provider: ${provider}`,
-        );
-    }
-  }
-  async refundPayment(
-    provider: PaymentProvider,
-    providerTransactionId: string,
-    amount: number,
-  ): Promise<{ status: RefundStatus; refund_id: string | null }> {
-    try {
-      switch (provider) {
-        case PaymentProvider.OCTO: {
-          const result = await refundOctoPayment(providerTransactionId, amount);
-          return {
-            status: this.mapRefundStatus(result.status),
-            refund_id: result.refund_id,
-          };
-        }
-
-        case PaymentProvider.CLICK: {
-          const success = await refundClickPayment(
-            providerTransactionId,
-            amount,
-          );
-          return {
-            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
-            refund_id: null,
-          };
-        }
-
-        case PaymentProvider.PAYME: {
-          const success = await refundPaymePayment(
-            providerTransactionId,
-            amount,
-          );
-          return {
-            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
-            refund_id: null,
-          };
-        }
-
-        case PaymentProvider.PAYINET: {
-          const success = await refundPayinetPayment(
-            providerTransactionId,
-            amount,
-          );
-          return {
-            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
-            refund_id: null,
-          };
-        }
-
-        case PaymentProvider.UZUM: {
-          const success = await refundUzumPayment(
-            providerTransactionId,
-            amount,
-          );
-          return {
-            status: success ? RefundStatus.SUCCEEDED : RefundStatus.FAILED,
-            refund_id: null,
-          };
-        }
-
-        default:
-          this.logger.error(
-            `Noma'lum provider uchun refund so'raldi: ${provider} (tx: ${providerTransactionId})`,
-          );
-          return { status: RefundStatus.FAILED, refund_id: null };
-      }
-    } catch (error) {
-      this.logger.error(
-        `Refund xatosi: provider=${provider}, tx=${providerTransactionId}`,
-        error instanceof Error ? error.stack : error,
-      );
-      return { status: RefundStatus.FAILED, refund_id: null };
-    }
-  }
-
-  private mapRefundStatus(
-    status: 'succeeded' | 'pending' | 'failed',
-  ): RefundStatus {
-    const map: Record<string, RefundStatus> = {
-      succeeded: RefundStatus.SUCCEEDED,
-      pending: RefundStatus.PENDING,
-      failed: RefundStatus.FAILED,
-    };
-    return map[status] ?? RefundStatus.FAILED;
-  }
-
-  async sendMainMenu(ctx: MyContext, text: string, keyboard: any) {
-    if (ctx.session.ownerMenuMessageId) {
-      await ctx.deleteMessage(ctx.session.ownerMenuMessageId).catch(() => {});
-      ctx.session.ownerMenuMessageId = null;
-    }
-    const sent = await ctx.reply(text, keyboard);
-    ctx.session.ownerMenuMessageId = sent.message_id;
-  }
 }
 
 export const MIN_CANCEL_HOURS_BEFORE = 2;
 
 export const MAX_CANCEL_HOURS_BEFORE = 24;
 
-export const CANCEL_INTERVAL_HOURS = 2;
+export const CANCEL_INTERVAL_HOURS = 1;
 
-export const MAX_RETAINED_PERCENT = 40;
+export const MAX_RETAINED_PERCENT = 50;
 
 export const PERCENT_DRIFT_TOLERANCE = 5;
 

@@ -2,7 +2,6 @@ import { Logger } from '@nestjs/common';
 import axios from 'axios';
 import { randomUUID } from 'node:crypto';
 
-
 const logger = new Logger('OctoHelper');
 
 export const gerPremiumPaymentOctoUrl = async (

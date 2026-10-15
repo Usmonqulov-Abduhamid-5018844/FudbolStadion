@@ -20,6 +20,7 @@ import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
 import { formatDate } from 'src/helpers/dateFormat';
 import { AdvertisementClickSource, TransactionStatus } from '@prisma/client';
 import { PaymentGuardResult } from 'src/helpers/interface/enum';
+import { escapeHtml } from 'src/helpers/stadions';
 
 @Injectable()
 export class BotService {
@@ -909,10 +910,6 @@ export class BotService {
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
       });
-      const formatPrice = (price?: number | string) => {
-        if (!price) return '❌';
-        return new Intl.NumberFormat('uz-UZ').format(Number(price));
-      };
 
       const statusText = stadion.working_status
         ? `🟢 ${this.i18n.translate('view.active', { lang })}`
@@ -934,20 +931,38 @@ export class BotService {
         );
       }
 
-      const message = `
-🏟 <b>${stadion.name}</b>\n
-${this.i18n.translate('view.locate', { lang })} ${locationText}
-${this.i18n.translate(`stadions.stadium_status.${keyMap[stadion.admin_status]}`, { lang })}
-${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
-${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
-${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
-${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
-${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
-${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt, lang)}
-${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, lang)}
-`;
+      const notSet = this.i18n.translate('view.not', { lang });
+      const message = this.i18n.translate('view.card', {
+        lang,
+        args: {
+          name: escapeHtml(stadion.name),
+          adminStatus: this.i18n.translate(
+            `view.stadium_status.${keyMap[stadion.admin_status]}`,
+            { lang },
+          ),
+          location: locationText,
+          type: stadionTypeLabel(
+            stadion.mini,
+            stadion.stadion_mini,
+            lang,
+            this.i18n,
+          ),
+          count: stadion.max_count ? String(stadion.max_count) : notSet,
+          size:
+            stadion.length && stadion.width
+              ? `${stadion.length} x ${stadion.width}`
+              : notSet,
+          price: stadion.price ? formatSum(stadion.price) : notSet,
+          payments: getPaymentText(
+            stadion.payments_type,
+            this.i18n.translate('peyments', { lang }),
+          ),
+          phone: escapeHtml(owner?.phone ?? '—'),
+          status: statusText,
+          created: formatDate(stadion.createdAt, lang),
+          updated: formatDate(stadion.updatedAt, lang),
+        },
+      });
 
       if (!ctx.session.ownerStadions) {
         ctx.session.ownerStadions = [];
@@ -1202,43 +1217,41 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     requesterChatId: string | null | undefined,
     i18nPrefix: 'premium.payment' | 'booking.payment',
   ): Promise<PaymentGuardResult> {
-    if (!transaction) {
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate(`${i18nPrefix}.not_found`, { lang }),
-      );
-      return 'not_found';
-    }
-
-    if (requesterChatId && requesterChatId !== String(ctx.from?.id)) {
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate(`${i18nPrefix}.not_found`, { lang }),
-      );
-      return 'unauthorized';
-    }
-
-    if (transaction.status === TransactionStatus.PENDING) {
-      const secondsSinceCreated =
-        (Date.now() - transaction.createdAt.getTime()) / 1000;
-      const key = secondsSinceCreated < 30 ? 'pending' : 'taking_too_long';
-
-      await this.utils.safeEditOrReply(
+    const reply = (key: string) =>
+      this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate(`${i18nPrefix}.${key}`, { lang }),
       );
-      return 'pending';
+
+    if (!transaction) {
+      await reply('not_found');
+      return 'not_found';
     }
 
-    if (transaction.status === TransactionStatus.FAILED) {
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate(`${i18nPrefix}.failed`, { lang }),
-      );
-      return 'failed';
+    if (!requesterChatId || requesterChatId !== String(ctx.from?.id)) {
+      await reply('not_found');
+      return 'unauthorized';
     }
 
-    return 'ok';
+    switch (transaction.status) {
+      case TransactionStatus.SUCCESS:
+        return 'ok';
+
+      case TransactionStatus.PENDING: {
+        const secondsSinceCreated =
+          (Date.now() - transaction.createdAt.getTime()) / 1000;
+        await reply(secondsSinceCreated < 30 ? 'pending' : 'taking_too_long');
+        return 'pending';
+      }
+
+      case TransactionStatus.CANCELLED:
+        await reply('cancelled');
+        return 'cancelled';
+
+      default:
+        await reply('failed');
+        return 'failed';
+    }
   }
 
   async handlePayloadSucces(ctx: MyContext, payload: string) {
@@ -1260,17 +1273,14 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       );
       if (result !== 'ok' || !transaction) return;
 
-      const planLabel = PLAN_LABELS[lang][transaction.plan];
-      const price = PREMIUM_PLANS[transaction.plan].price;
-
       await this.utils.safeEditOrReply(
         ctx,
         this.i18n.translate('premium.payment.already_success', {
           lang,
           args: {
-            plan: planLabel,
+            plan: PLAN_LABELS[lang][transaction.plan],
             duration: transaction.duration,
-            amount: price.toLocaleString(),
+            amount: formatSum(transaction.amount),
           },
         }),
       );

@@ -1,4 +1,6 @@
 {
+  "card": "🏟 <b>{name}</b>\n{adminStatus}\n\n📍 <b>Location:</b> {location}\n🏷 <b>Type:</b> {type}\n👥 <b>Players:</b> {count}\n📐 <b>Size:</b> {size}\n\n💰 <b>Price:</b> {price}\n💳 <b>Payment:</b> {payments}\n📞 <b>Phone:</b> {phone}\n\n⚙️ <b>Status:</b> {status}\n🗓 <b>Created:</b> {created}\n🔄 <b>Updated:</b> {updated}",
+
   "locate": "📍 Location:",
   "dictance": "🛣️ Distance:",
   "count": "👥 Количество игроков:",
@@ -16,5 +18,11 @@
   "no": "No",
   "active": "Active",
   "inactive": "Inactive",
-  "phone": "📞 Phone number:"
+  "phone": "📞 Phone number:",
+
+  "stadium_status": {
+    "approved": "✅ Approved",
+    "pending": "⏳ Pending approval",
+    "rejected": "❌ Rejected"
+  }
 }

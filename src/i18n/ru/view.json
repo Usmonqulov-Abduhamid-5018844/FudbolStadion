@@ -1,4 +1,6 @@
 {
+  "card": "🏟 <b>{name}</b>\n{adminStatus}\n\n📍 <b>Расположение:</b> {location}\n🏷 <b>Тип:</b> {type}\n👥 <b>Количество игроков:</b> {count}\n📐 <b>Размер:</b> {size}\n\n💰 <b>Цена:</b> {price}\n💳 <b>Способ оплаты:</b> {payments}\n📞 <b>Телефон:</b> {phone}\n\n⚙️ <b>Статус работы:</b> {status}\n🗓 <b>Создано:</b> {created}\n🔄 <b>Обновлено:</b> {updated}",
+
   "locate": "📍 Расположение:",
   "distance": "🛣️ Расстояние:",
   "count": "👥 Players count:",
@@ -16,5 +18,11 @@
   "no": "Нет",
   "active": "Активен",
   "inactive": "Неактивен",
-  "phone": "📞 Номер телефона:"
+  "phone": "📞 Номер телефона:",
+
+  "stadium_status": {
+    "approved": "✅ Подтверждён",
+    "pending": "⏳ Ожидает подтверждения",
+    "rejected": "❌ Отклонён"
+  }
 }

@@ -1,4 +1,6 @@
 {
+  "card": "🏟 <b>{name}</b>\n{adminStatus}\n\n📍 <b>Joylashuv:</b> {location}\n🏷 <b>Turi:</b> {type}\n👥 <b>O'yinchilar soni:</b> {count}\n📐 <b>O'lchami:</b> {size}\n\n💰 <b>Narxi:</b> {price}\n💳 <b>To'lov turi:</b> {payments}\n📞 <b>Telefon:</b> {phone}\n\n⚙️ <b>Ishlash holati:</b> {status}\n🗓 <b>Yaratilgan:</b> {created}\n🔄 <b>Yangilangan:</b> {updated}",
+
   "locate": "📍 Joylashuv:",
   "distance": "🛣️ Masofa:",
   "count": "👥 O'yinchilar soni:",
@@ -16,5 +18,11 @@
   "no": "Yo'q",
   "active": "Faol",
   "inactive": "Nofaol",
-  "phone": "📞 Telefon raqam:"
+  "phone": "📞 Telefon raqam:",
+
+  "stadium_status": {
+    "approved": "✅ Tasdiqlangan",
+    "pending": "⏳ Tasdiqlanishi kutilmoqda",
+    "rejected": "❌ Rad etilgan"
+  }
 }

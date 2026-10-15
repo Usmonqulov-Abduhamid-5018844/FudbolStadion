@@ -19,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
 import { NotifikationModule } from './notifikation/notifikation.module';
 import { WeeklyReportModule } from './mail/weekly-report.module';
 import { AppController } from './app.controller';
+import { PaylovModule } from './paylov/paylov.module';
 
 @Module({
   controllers: [AppController],
@@ -30,6 +31,7 @@ import { AppController } from './app.controller';
         watch: true,
       },
       resolvers: [AcceptLanguageResolver, new QueryResolver(['lang'])],
+      logging: false,
     }),
 
     ScheduleModule.forRoot(),
@@ -60,6 +62,7 @@ import { AppController } from './app.controller';
     PaymentModule,
     AdminModule,
     NotifikationModule,
+    PaylovModule,
   ],
 })
 export class AppModule {}

@@ -23,10 +23,12 @@ import {
   Prisma,
   PaymentProvider,
   TransactionStatus,
+  GatewayMethod,
 } from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
 import { getStadionIds } from 'src/helpers/stadions';
 import { scheduleType } from 'src/helpers/interface/enum';
+import { PaylovService } from 'src/paylov/paylov.service';
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -35,6 +37,7 @@ export class UsersService {
     private readonly i18n: I18nService,
     private readonly utils: UtilisService,
     private readonly botService: BotService,
+    private readonly paylov: PaylovService,
   ) {}
 
   async registor(ctx: MyContext, lang: string) {
@@ -3512,7 +3515,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     }
   }
 
-  async searchWorkingStadions(  
+  async searchWorkingStadions(
     ctx: MyContext,
     date: string,
     start_time: string,
@@ -3747,14 +3750,13 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       await ctx.answerCbQuery().catch(() => {});
     }
   }
+
   async BookingPaymentProviders(
     ctx: MyContext,
-    providerKey: string,
+    provider: GatewayMethod,
     lang: string,
   ) {
     try {
-      const provider = providerKey as PaymentProvider;
-
       const pending = ctx.session.pendingBooking;
 
       if (
@@ -3784,33 +3786,28 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             data: {
               stadion_id: pending.stadion_id!,
               user_id: pending.user_id!,
-
               date: pending.bookingData!,
-
               start_time: pending.start_time!,
               end_time: pending.end_time!,
-
               startAt: pending.startAt!,
               endAt: pending.endAt!,
-
               total_price: pending.total_price!,
               payment_method: Pay_method.CARD,
-
               expires_at: new Date(Date.now() + 15 * 60 * 1000),
             },
           });
 
           const transaction = await tx.tranzaktion.create({
             data: {
-              user_id: booking.user_id!,
+              user_id: pending.user_id!,
               booking_id: booking.id,
-
-              system_fee: 0,
-              owner_amount: pending.total_price!,
-
               owner_card_id: pending.owner_card_id!,
-
+              system_fee: 0,
               amount_received: 0,
+              amount: pending.total_price,
+              provider: PaymentProvider.PAYLOV,
+              gateway_method: provider,
+              status: TransactionStatus.PENDING,
             },
           });
 
@@ -3818,29 +3815,42 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         },
       );
 
-      const paymentUrl = await this.utils.generatePaymentUrl({
-        provider: provider,
-        transactionId: transaction.id,
-        amount: pending.total_price,
-        lang,
-        description: this.i18n.translate('booking.payment.description', {
-          lang,
-        }),
-      });
+      let checkoutUrl: string;
+      try {
+        const checkout = await this.paylov.createCheckout({
+          externalId: `BK:${transaction.id}`,
+          amountSom: pending.total_price,
+          method: provider,
+          returnUrl: `https://t.me/${process.env.BOT_USERNAME}?start=paymentBooking_success_${transaction.id}`,
+        });
 
-      if (!paymentUrl) {
+        await this.prisma.tranzaktion.update({
+          where: { id: transaction.id },
+          data: { provider_order_id: String(checkout.order_id) },
+        });
+
+        checkoutUrl = checkout.checkout_url;
+      } catch (err) {
         this.logger.error(
-          `BookingPaymentProviders: noma'lum provider "${providerKey}", booking_id: ${booking.id}`,
+          `Booking #${booking.id} uchun checkout yaratilmadi: ${err instanceof Error ? err.message : err}`,
         );
-        await this.utils.errorFunction(ctx);
+        await this.prisma.$transaction([
+          this.prisma.tranzaktion.update({
+            where: { id: transaction.id },
+            data: { status: TransactionStatus.FAILED },
+          }),
+          this.prisma.booking.update({
+            where: { id: booking.id },
+            data: { expires_at: new Date() },
+          }),
+        ]);
+        await this.utils.errorFunction(ctx, err);
         return;
       }
 
       const message = this.i18n.translate('booking.payment.redirect', {
         lang,
-        args: {
-          total: pending.total_price.toLocaleString(),
-        },
+        args: { total: pending.total_price.toLocaleString() },
       });
 
       await this.utils.safeEditOrReply(ctx, message, {
@@ -3848,7 +3858,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           [
             {
               text: this.i18n.translate('booking.payment.pay_button', { lang }),
-              url: paymentUrl,
+              url: checkoutUrl,
             },
           ],
           [

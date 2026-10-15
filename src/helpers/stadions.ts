@@ -28,3 +28,10 @@ export const getRelatedStadionIds = (stadion: any): number[] => {
 
   return Array.from(ids);
 };
+
+
+export const escapeHtml = (v: unknown): string =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');

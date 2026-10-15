@@ -13,7 +13,6 @@ import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { getPremiumReasonText } from 'src/helpers/reason';
-import { getPaymentCardUrl } from 'src/helpers/url_click';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   DefaultNotificationSettings,
@@ -978,9 +977,8 @@ export class OwnersService {
       switch (data) {
         case '1':
           {
-            await this.utils.deleteClickedMessage(ctx);
-            await this.utils.sendMainMenu(
-              ctx,
+          
+            await ctx.reply(
               this.i18n.translate('menyu_buttons.menu', { lang }),
               Markup.keyboard([
                 [
@@ -995,7 +993,9 @@ export class OwnersService {
               ])
                 .resize()
                 .oneTime(),
+            
             );
+            await this.utils.deleteClickedMessage(ctx);
           }
           break;
         case '2':
@@ -1901,10 +1901,13 @@ export class OwnersService {
               inline_keyboard: [
                 [
                   {
-                    text: this.i18n.translate('peyments.owner_card.empty.add_button', {
-                      lang,
-                    }),
-                    url: getPaymentCardUrl(owner.id),
+                    text: this.i18n.translate(
+                      'peyments.owner_card.empty.add_button',
+                      {
+                        lang,
+                      },
+                    ),
+                    url: "dfg"
                   },
                 ],
                 [backBtn],
@@ -1937,9 +1940,12 @@ export class OwnersService {
         this.i18n.translate('peyments.owner_card.active.text', {
           lang,
           args: {
-            status: this.i18n.translate(`peyments.owner_card.status.${statusKey}`, {
-              lang,
-            }),
+            status: this.i18n.translate(
+              `peyments.owner_card.status.${statusKey}`,
+              {
+                lang,
+              },
+            ),
             type: card.cardType.toUpperCase(),
             last4,
             expire: `${mm}/${yy}`,
@@ -1953,10 +1959,13 @@ export class OwnersService {
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate('peyments.owner_card.active.change_button', {
-                    lang,
-                  }),
-                  url: getPaymentCardUrl(owner.id),
+                  text: this.i18n.translate(
+                    'peyments.owner_card.active.change_button',
+                    {
+                      lang,
+                    },
+                  ),
+                  url: "FGf"
                 },
               ],
               [backBtn],

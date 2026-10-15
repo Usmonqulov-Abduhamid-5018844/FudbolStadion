@@ -1,28 +1,23 @@
-import { PaymentProvider } from './url_wrapper';
+import { GatewayMethod } from '@prisma/client';
 
 export const PAYMENT_PROVIDERS = [
   {
-    key: PaymentProvider.OCTO,
-    icon: '🟠',
-    translationKey: 'premium.payment.providers.octo',
-  },
-  {
-    key: PaymentProvider.CLICK,
+    key: GatewayMethod.CLICK,
     icon: '💳',
     translationKey: 'premium.payment.providers.click',
   },
   {
-    key: PaymentProvider.PAYME,
+    key: GatewayMethod.PAYME,
     icon: '💰',
     translationKey: 'premium.payment.providers.payme',
   },
-  {
-    key: PaymentProvider.PAYNET,
+   {
+    key: GatewayMethod.PAYLOV,
     icon: '🏦',
-    translationKey: 'premium.payment.providers.paynet',
+    translationKey: 'premium.payment.providers.paylov',
   },
   {
-    key: PaymentProvider.UZUM,
+    key: GatewayMethod.UZUM,
     icon: '🟣',
     translationKey: 'premium.payment.providers.uzum',
   },

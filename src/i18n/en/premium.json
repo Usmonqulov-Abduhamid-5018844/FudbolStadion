@@ -27,9 +27,8 @@
     "providers": {
       "click": "Click",
       "payme": "Payme",
-      "paynet": "Paynet",
       "uzum": "Uzum Bank",
-      "octo": "Octo Bank"
+      "paylov": "Paylov"
     },
     "button": "💳 Pay",
     "pay_now": "💳 Click the button below to complete the payment",
@@ -38,7 +37,8 @@
     "pending": "⏳ <b>Payment not yet confirmed.</b>\n\nIf you've already made the payment, please wait a bit. Premium will activate automatically once confirmed.",
     "taking_too_long": "⚠️ <b>Payment confirmation is taking longer than usual.</b>\n\nIf the money has been deducted from your card, don't worry — it will be confirmed soon. If the issue persists, please contact support.",
     "failed": "❌ <b>Payment failed.</b>\n\nThe transaction was canceled or an error occurred. Please try again or check the payment status with your bank/card.",
-    "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Amount paid: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!"
+    "already_success": "✅ <b>Payment confirmed!</b>\n\n💎 <b>Your Premium subscription is active</b>\n\n📦 Plan: <b>{plan}</b>\n⏳ Duration: <b>{duration} days</b>\n💰 Amount paid: <b>{amount} UZS</b>\n\n🎉 You can now enjoy all Premium features!\n❤️ Thank you for your purchase!",
+    "no_methods": "😔 No payment methods are available right now.\nPlease try again later."
   },
   "premium_active": {
     "active": {

@@ -1,4 +1,4 @@
-import { Booking_status } from "@prisma/client";
+import { Booking_status } from '@prisma/client';
 
 export const statusMap = (status: Booking_status, i18n: any, lang: string) =>
   ({
@@ -17,5 +17,8 @@ export const statusMap = (status: Booking_status, i18n: any, lang: string) =>
     }),
     PAID: i18n.translate('bookingHistory.booking_status.paid', { lang }),
     PENDING: i18n.translate('bookingHistory.booking_status.pending', { lang }),
-    REFUND_PENDING: i18n.translate('bookingHistory.booking_status.refund_pending',{lang})
+    REFUND_PENDING: i18n.translate(
+      'bookingHistory.booking_status.refund_pending',
+      { lang },
+    ),
   })[status] || status;

@@ -166,53 +166,6 @@ model Booking {
   @@index([stadion_id, date])
 }
 
-model Tranzaktion {
-  id String @id @default(uuid()) @db.Uuid
-
-  user_id Int
-  user    Users @relation(fields: [user_id], references: [id])
-
-  booking_id Int
-  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-
-  owner_card_id Int
-  owner_cards   Owner_card @relation(fields: [owner_card_id], references: [id])
-
-  system_fee      Int
-  owner_amount    Int
-  amount_received Int
-
-  provider                PaymentProvider?
-  provider_transaction_id String?
-  provider_data           Json?
-
-  refund_status    RefundStatus?
-  refund_id        String?
-  transfer_sum     Int? // to'langan summa (mavjud)
-  refunded_sum     Int? // haqiqatda qaytarilgan summa (mavjud)
-  retained_sum     Int? // ushlab qolingan summa (yangi)
-  retained_percent Decimal? @db.Decimal(10,2) // qo'llangan foiz (yangi)
-
-  status TransactionStatus @default(PENDING)
-
-  currency     String @default("UZS")
-
-  card_masked_pan String?
-  card_type       String?
-  card_vendor     String?
-  card_country    String?
-  risk_level      Int?
-
-  paid_at   DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  @@unique([provider, provider_transaction_id])
-  @@index([user_id])
-  @@index([booking_id])
-  @@index([status])
-}
-
 model Subscription {
   id Int @id @default(autoincrement())
 
@@ -237,6 +190,57 @@ model Subscription {
   @@index([ownerId, isActive])
 }
 
+model Tranzaktion {
+  id String @id @default(uuid()) @db.Uuid
+
+  user_id Int
+  user    Users @relation(fields: [user_id], references: [id])
+
+  booking_id Int
+  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+
+  owner_card_id Int
+  owner_cards   Owner_card @relation(fields: [owner_card_id], references: [id])
+
+  amount          Int? // to'lov yaratilganda so'ralgan summa (webhook'da solishtirish uchun)
+  system_fee      Int
+  amount_received Int
+
+  provider       PaymentProvider?
+  gateway_method GatewayMethod?
+  provider_data  Json?
+
+  provider_order_id   String? // Paylov order_id (order yaratilganda yoziladi)
+  provider_payment_id String? // Paylov payment_id (webhook'da yoziladi)
+
+  refund_status    RefundStatus?
+  refund_id        String?
+  transfer_sum     Int? // to'langan summa
+  refunded_sum     Int? // haqiqatda qaytarilgan summa
+  retained_sum     Int? // ushlab qolingan summa
+  retained_percent Decimal?      @db.Decimal(10, 2) // qo'llangan foiz
+
+  status   TransactionStatus @default(PENDING)
+  currency String            @default("UZS")
+
+  card_masked_pan String?
+  card_type       String?
+  card_vendor     String?
+  card_country    String?
+  risk_level      Int?
+
+  paid_at   DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([provider, provider_order_id])
+  @@unique([provider, provider_payment_id])
+  @@index([user_id])
+  @@index([booking_id])
+  @@index([status, createdAt])
+  @@index([refund_status])
+}
+
 model PremiumTransaction {
   id String @id @default(uuid()) @db.Uuid
 
@@ -251,9 +255,12 @@ model PremiumTransaction {
   amount   Int
   reason   PremiumReason @default(PURCHASE)
 
-  provider                PaymentProvider?
-  provider_transaction_id String?
-  provider_data           Json?
+  provider       PaymentProvider?
+  gateway_method GatewayMethod?
+  provider_data  Json?
+
+  provider_order_id   String? // Paylov order_id
+  provider_payment_id String? // Paylov payment_id
 
   status TransactionStatus @default(PENDING)
 
@@ -271,9 +278,11 @@ model PremiumTransaction {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  @@unique([provider, provider_transaction_id])
+  @@unique([provider, provider_order_id])
+  @@unique([provider, provider_payment_id])
   @@index([owner_id])
   @@index([subscription_id])
+  @@index([status, createdAt])
 }
 
 model sesion {
@@ -450,9 +459,13 @@ enum PremiumReason {
 }
 
 enum PaymentProvider {
+  PAYLOV
+}
+
+enum GatewayMethod {
   CLICK
   PAYME
-  PAYINET
   UZUM
-  OCTO
+  PAYLOV
+  CARD
 }
