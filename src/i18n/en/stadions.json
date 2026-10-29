@@ -22,7 +22,7 @@
   "menu": "🔙 Back to menu",
 
   "stadion_added_success": "🎉 Stadium added successfully.",
-  "not_fount": "❌ No data found!",
+  "not_found": "❌ No data found!",
 
   "stadions_not_found": "❌ Unfortunately, no stadium was found within a 3 km radius of your location. Please try another area or wait.",
 
@@ -58,7 +58,7 @@
   "payments": {
     "alert": "⚠️ The selected payment method is the same as the current one.\nPlease choose a different method.",
 
-    "ownerCard": "💳 To enable online payments, please add your bank card first!\n⚠️ This mode is not available without card details.",
+    "ownerCard": "💳 To enable online payments, first connect your payout account and wait for it to be activated!\n⚠️ This mode can't be enabled until your payout account is active.",
 
     "cardToCash": "🚫 This stadium has active bookings with online payments!\n💳 Switching to cash payments is not allowed.",
 

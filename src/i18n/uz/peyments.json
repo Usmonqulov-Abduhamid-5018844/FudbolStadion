@@ -3,7 +3,7 @@
   "cash": "💵 Naqt",
   "both": "💳💵 Ikkalasi",
 
-  "change_card_block": "💳 Ushbu stadion uchun karta ulangan emas.\n\n👤 Stadion egasi karta qo‘shmaguncha CARD rejimi ishlamaydi.\n\n➡️ Iltimos, boshqa to‘lov usulidan foydalaning.",
+ "change_card_block": "💳 Bu stadionda karta orqali to‘lov hozircha mavjud emas.\n\nStadion egasi onlayn to‘lovni yoqmagan.",
 
   "owner_card": {
     "status": {

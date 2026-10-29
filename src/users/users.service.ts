@@ -26,8 +26,8 @@ import {
   GatewayMethod,
 } from '@prisma/client';
 import { formatDate } from 'src/helpers/dateFormat';
-import { getStadionIds } from 'src/helpers/stadions';
-import { scheduleType } from 'src/helpers/interface/enum';
+import { canPayByCard, getStadionIds } from 'src/helpers/stadions';
+import { ErrorContext, scheduleType } from 'src/helpers/interface/enum';
 import { PaylovService } from 'src/paylov/paylov.service';
 @Injectable()
 export class UsersService {
@@ -77,17 +77,34 @@ export class UsersService {
         ctx.session.step = 'finish';
         try {
           const data = {
-            username: String(ctx.from?.username),
+            username: ctx.from?.username ?? '',
             full_name: String(ctx.session.user_registor.full_name),
             phone: String(ctx.session.user_registor.phone),
             chatID: String(ctx.from!.id),
           };
-          const user = await this.prisma.users.create({ data: { ...data } });
+          const user = await this.prisma.users.upsert({
+            where: { chatID: data.chatID },
+            update: {
+              full_name: data.full_name,
+              phone: data.phone,
+              username: data.username,
+            },
+            create: data,
+          });
 
           if (ctx.session.advertisement_step === 'advertisement_register') {
             const sesionData = await this.prisma.sesion.findUnique({
               where: { chat_id: user.chatID },
             });
+            if (!sesionData?.advertisementId) {
+              ctx.session.advertisement_step = null;
+              await this.utils.errorFunction(
+                ctx,
+                new Error("Session da advertisementId yo'q"),
+                ErrorContext.USER,
+              );
+              return;
+            }
             const advertisement = await this.prisma.advertisement.findUnique({
               where: { id: Number(sesionData?.advertisementId) },
               include: {
@@ -96,7 +113,13 @@ export class UsersService {
             });
             if (!advertisement) {
               ctx.session.advertisement_step = null;
-              await this.utils.errorFunction(ctx);
+              await this.utils.errorFunction(
+                ctx,
+                new Error(
+                  `Advertisement topilmadi: id=${sesionData?.advertisementId}`,
+                ),
+                ErrorContext.USER,
+              );
               return;
             }
             ctx.session.advertisement_step = null;
@@ -124,7 +147,7 @@ export class UsersService {
               .oneTime(),
           );
         } catch (error) {
-          await this.utils.errorFunction(ctx);
+          await this.utils.errorFunction(ctx, error, ErrorContext.USER);
         }
       }
     }
@@ -355,11 +378,7 @@ export class UsersService {
               this.logger.warn(
                 `sesion yetarliy emas: ${JSON.stringify(pending)}`,
               );
-              await this.utils.errorFunction(
-                ctx,
-                undefined,
-                'back_user_Payments',
-              );
+              await this.utils.errorFunction(ctx, undefined, ErrorContext.USER);
               break;
             }
             await this.bookingPayments(
@@ -622,12 +641,8 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                   item.id,
                   item.payment_method,
                   item.stadion.payments_type,
-                  item.date,
-                  item.start_time,
-                  item.end_time,
                   item.startAt,
                   item.endAt,
-                  Number(item.total_price),
                   page,
                   limit,
                   total,
@@ -746,8 +761,6 @@ ${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang 
                       take: 1,
                       select: {
                         refunded_sum: true,
-                        retained_sum: true,
-                        retained_percent: true,
                         refund_status: true,
                       },
                     },
@@ -832,14 +845,6 @@ ${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(i
                   if (item.status === 'REFUNDED' && tx.refunded_sum != null) {
                     message += `
 ${this.i18n.translate('bookingHistory.booking.refunded', { lang })}: ${formatPrice(tx.refunded_sum)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}\n`;
-
-                    if (
-                      tx.retained_sum != null &&
-                      Number(tx.retained_sum) > 0
-                    ) {
-                      message += `
-${this.i18n.translate('bookingHistory.booking.retained', { lang })}: ${formatPrice(tx.retained_sum)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })} (${tx.retained_percent ?? 0}%)\n`;
-                    }
                   }
 
                   if (item.status === 'REFUND_PENDING') {
@@ -2139,10 +2144,10 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       );
 
       let scheduleStart = special.start_time;
-      const currentTime = this.utils.currentTashkentTimeRoundedUp();
+      const currentTime = this.utils.currentLocalTimeRoundedUp();
 
       const nowInstant = new Date();
-      const isSameCalendarDay = this.utils.isSameTashkentDay(
+      const isSameCalendarDay = this.utils.isSameLocalDay(
         startOfDay,
         nowInstant,
       );
@@ -2419,10 +2424,10 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         Number(day),
       );
 
-      const currentTime = this.utils.currentTashkentTimeRoundedUp();
+      const currentTime = this.utils.currentLocalTimeRoundedUp();
       let scheduleStart = scheduleDate.start_time;
 
-      const isSameCalendarDay = this.utils.isSameTashkentDay(
+      const isSameCalendarDay = this.utils.isSameLocalDay(
         startOfDay,
         new Date(),
       );
@@ -2677,7 +2682,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
-          owner: { include: { ownerCard: true } },
+          owner: { select: { payout_status: true, paylov_partner_id: true } },
           children: true,
           parent: true,
         },
@@ -2810,8 +2815,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         return;
       }
 
-      const cardId = stadion.owner?.ownerCard?.id;
-      const hasCard = !!cardId;
+      const hasCard = canPayByCard(stadion.payments_type, stadion.owner);
 
       const user = await this.prisma.users.findUnique({
         where: {
@@ -2867,7 +2871,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           end_time: end_time,
           startAt: startAt,
           endAt: endAt,
-          owner_card_id: cardId,
           payment_method: Pay_method.CARD,
           total_price: total,
           user_id: user.id,
@@ -3041,7 +3044,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             end_time: end_time,
             startAt: startAt,
             endAt: endAt,
-            owner_card_id: cardId,
             payment_method: Pay_method.CARD,
             total_price: total,
             user_id: user.id,
@@ -3340,9 +3342,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         where: { id: stadionId },
         include: {
           owner: {
-            include: {
-              ownerCard: { select: { id: true } },
-            },
+            select: { payout_status: true, paylov_partner_id: true },
           },
         },
       });
@@ -3350,8 +3350,8 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         await this.utils.errorFunction(ctx);
         return;
       }
-      const cardId = stadion?.owner?.ownerCard?.id;
-      const hasCard = !!cardId;
+
+      const hasCard = canPayByCard(stadion.payments_type, stadion.owner);
       if (!hasCard) {
         await this.utils.errorFunction(ctx);
         return;
@@ -3438,7 +3438,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
               endAt,
               bookingData: date,
               payment_method: Pay_method.CARD,
-              owner_card_id: cardId,
               stadion_id: stadionId,
               user_id: user.id,
               total_price: total,
@@ -3470,7 +3469,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
                 payment_method: paymentMethodText,
               },
             });
-            console.log(ctx.session.pendingBooking);
             await this.utils.safeEditOrReply(
               ctx,
               message,
@@ -3511,7 +3509,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         }
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx, error, 'bookingPayments');
+      await this.utils.errorFunction(ctx, error, ErrorContext.BOOKING);
     }
   }
 
@@ -3745,7 +3743,7 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         },
       );
     } catch (error) {
-      await this.utils.errorFunction(ctx, error, 'searchWorkingStadions');
+      await this.utils.errorFunction(ctx, error);
     } finally {
       await ctx.answerCbQuery().catch(() => {});
     }
@@ -3768,7 +3766,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         !pending.bookingData ||
         !pending.endAt ||
         !pending.startAt ||
-        !pending.owner_card_id ||
         !pending.payment_method ||
         !pending.total_price ||
         !pending.user_id
@@ -3801,9 +3798,6 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
             data: {
               user_id: pending.user_id!,
               booking_id: booking.id,
-              owner_card_id: pending.owner_card_id!,
-              system_fee: 0,
-              amount_received: 0,
               amount: pending.total_price,
               provider: PaymentProvider.PAYLOV,
               gateway_method: provider,

@@ -1,10 +1,10 @@
 {
-    "user_stadion_booking": "🏟️ Stadion band qilish",
-    "stadion": "🏟 Stadionlarim",
-    "bron": "📅 Bronlar",
-    "settings": "⚙️ Sozlamalar",
-    "help": "❓ Yordam",
+  "user_stadion_booking": "🏟️ Stadion band qilish",
+  "stadion": "🏟 Stadionlarim",
+  "bron": "📅 Bronlar",
+  "settings": "⚙️ Sozlamalar",
+  "help": "❓ Yordam",
 
-    "menu": "📋 Menyu",
-    "card": "💳 Karta ma’lumotlari"
+  "menu": "📋 Menyu",
+  "card": "💳 To’lov hisobi"
 }

@@ -1,16 +1,5 @@
-import {
-  BadRequestException,
-  Injectable,
-  OnModuleInit,
-  Logger,
-} from '@nestjs/common';
-import {
-  Booking_status,
-  Pay_method,
-  PaymentProvider,
-  Payments,
-  RefundStatus,
-} from '@prisma/client';
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Booking_status, Pay_method, Payments, Prisma } from '@prisma/client';
 import { subDays } from 'date-fns';
 import { I18nService } from 'nestjs-i18n';
 import { InjectBot } from 'nestjs-telegraf';
@@ -28,20 +17,32 @@ import {
 } from 'src/helpers/interface';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Telegraf } from 'telegraf';
-import { InlineKeyboardButton, ParseMode } from 'telegraf/types';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import {
-  generateOctoBookingPaymentUrl,
-  refundOctoPayment,
-} from 'src/helpers/url_octo';
+  InlineKeyboardButton,
+  InlineKeyboardMarkup,
+  ParseMode,
+} from 'telegraf/types';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { Decimal } from '@prisma/client/runtime/library';
-
-export const APP_TZ = 'Asia/Tashkent';
+import { escapeHtml } from 'src/helpers/stadions';
+import { formatDate, formatDateTime } from 'src/helpers/dateFormat';
+import { AlertService } from 'src/alert/alert.service';
+import {
+  AlertType,
+  CONTEXT_ALERT,
+  ErrorContext,
+  ErrorLevel,
+} from 'src/helpers/interface/enum';
+import { APP_TZ } from 'src/helpers/dateFormat';
 
 export interface TimeSlot {
   start: string;
   end: string;
 }
+const MAX_FIELD_LENGTH = 100;
+const ALERT_TITLE_MESSAGE_LENGTH = 80;
+const SUPPORTED_LANGS = ['uz', 'ru', 'en'] as const;
+const DEFAULT_LANG = 'uz';
 
 @Injectable()
 export class UtilisService implements OnModuleInit {
@@ -50,62 +51,86 @@ export class UtilisService implements OnModuleInit {
     @InjectBot() private readonly Bot: Telegraf,
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
+    private readonly alert: AlertService,
   ) {}
-  async onModuleInit() {
-    await this.Bot.telegram.setMyCommands([
-      {
-        command: '/start',
-        description: 'start',
-      },
-    ]);
+
+  private normalizeLang(raw?: string | null): string {
+    const code = raw?.toLowerCase().split('-')[0];
+    return code && (SUPPORTED_LANGS as readonly string[]).includes(code)
+      ? code
+      : DEFAULT_LANG;
   }
-  async isChecket(chatID: string, ctx: MyContext) {
-    const lang = await this.langs(ctx);
+  private shouldFallbackToReply(error: unknown): boolean {
+    const msg = error instanceof Error ? error.message : String(error);
+    // Bir xil tugma qayta bosildi: matn o'zgarmagan, dublikat xabar yubormaymiz
+    if (msg.includes('message is not modified')) return false;
+    this.logger.debug(`editMessageText fallback: ${msg.slice(0, 200)}`);
+    return true;
+  }
+
+  async onModuleInit() {
     try {
-      const owner = await this.prisma.owners.findUnique({ where: { chatID } });
-      if (owner) {
-        return true;
-      }
-      const user = await this.prisma.users.findUnique({ where: { chatID } });
-      if (user) {
-        return false;
-      }
+      await this.Bot.telegram.setMyCommands([
+        { command: 'start', description: 'start' },
+      ]);
     } catch (error) {
-      ctx.reply(`${this.i18n.translate('error.error', { lang })}`);
+      this.logger.error(
+        'setMyCommands xatosi',
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
-  async langs(ctx: MyContext) {
+
+  async isChecket(
+    chatID: string,
+    ctx: MyContext,
+  ): Promise<'owner' | 'user' | 'none' | 'error'> {
+    try {
+      const owner = await this.prisma.owners.findUnique({
+        where: { chatID },
+        select: { id: true },
+      });
+      if (owner) return 'owner';
+
+      const user = await this.prisma.users.findUnique({
+        where: { chatID },
+        select: { id: true },
+      });
+      return user ? 'user' : 'none';
+    } catch (error) {
+      await this.errorFunction(ctx, error, ErrorContext.COMMON);
+      return 'error';
+    }
+  }
+  async langs(ctx: MyContext): Promise<string> {
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return DEFAULT_LANG;
+
     try {
       const data = await this.prisma.sesion.findUnique({
-        where: { chat_id: String(ctx.from?.id) },
+        where: { chat_id: String(telegramId) },
+        select: { lang: true },
       });
-      if (data) {
-        return String(data.lang);
-      } else {
-        return String(ctx.from?.language_code);
-      }
+      return this.normalizeLang(data?.lang ?? ctx.from?.language_code);
     } catch (error) {
-      await this.errorFunction(ctx);
-      return String(ctx.from?.language_code);
+      this.logger.debug(
+        `langs: sesion o'qilmadi, Telegram tiliga o'tildi: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return this.normalizeLang(ctx.from?.language_code);
     }
   }
 
   async safeEditOrReply(
     ctx: MyContext,
     text: string,
-    keyboard?: any,
+    keyboard?: InlineKeyboardMarkup,
     parse_mode: ParseMode = 'HTML',
   ) {
     try {
-      await ctx.editMessageText(text, {
-        parse_mode,
-        reply_markup: keyboard,
-      });
-    } catch (e) {
-      const send = await ctx.reply(text, {
-        parse_mode,
-        reply_markup: keyboard,
-      });
+      await ctx.editMessageText(text, { parse_mode, reply_markup: keyboard });
+    } catch (error) {
+      if (!this.shouldFallbackToReply(error)) return;
+      await ctx.reply(text, { parse_mode, reply_markup: keyboard });
     }
   }
 
@@ -117,7 +142,8 @@ export class UtilisService implements OnModuleInit {
         parse_mode: 'HTML',
         ...back_owner_Keyboard(this.i18n, String(lang)),
       });
-    } catch {
+    } catch (error) {
+      if (!this.shouldFallbackToReply(error)) return;
       await ctx.reply(text, {
         parse_mode: 'HTML',
         ...back_owner_Keyboard(this.i18n, String(lang)),
@@ -132,7 +158,8 @@ export class UtilisService implements OnModuleInit {
         parse_mode: 'HTML',
         ...back_user_Keyboard(this.i18n, String(lang)),
       });
-    } catch {
+    } catch (error) {
+      if (!this.shouldFallbackToReply(error)) return;
       await ctx.reply(text, {
         parse_mode: 'HTML',
         ...back_user_Keyboard(this.i18n, String(lang)),
@@ -147,7 +174,8 @@ export class UtilisService implements OnModuleInit {
         text,
         helpMenuKeyboard_Owner(this.i18n, String(lang)),
       );
-    } catch (e) {
+    } catch (error) {
+      if (!this.shouldFallbackToReply(error)) return;
       await ctx.reply(text, helpMenuKeyboard_Owner(this.i18n, String(lang)));
     }
   }
@@ -158,7 +186,8 @@ export class UtilisService implements OnModuleInit {
         text,
         helpMenuKeyboard_Users(this.i18n, String(lang)),
       );
-    } catch (e) {
+    } catch (error) {
+      if (!this.shouldFallbackToReply(error)) return;
       await ctx.reply(text, helpMenuKeyboard_Users(this.i18n, String(lang)));
     }
   }
@@ -171,88 +200,39 @@ export class UtilisService implements OnModuleInit {
     return this.toMinutesRaw(time);
   }
 
-  bookingTimeCalculate(startAt: Date, lang: string = 'ru') {
-    const { totalMinutes, daysLeft, hoursLeft, minutesLeft } =
-      this.timeUntil(startAt);
-
-    let timeLeftText = '';
-
-    if (daysLeft > 0) {
-      timeLeftText = this.i18n.translate(
-        'booking.time_left.days_hours_minutes',
-        {
-          lang,
-          args: {
-            days: daysLeft,
-            hours: hoursLeft,
-            minutes: minutesLeft,
-          },
-        },
-      );
-    } else if (hoursLeft > 0) {
-      timeLeftText = this.i18n.translate('booking.time_left.hours_minutes', {
+  private formatTimeLeft(totalMinutes: number, lang: string): string {
+    const t = Math.max(0, totalMinutes);
+    const days = Math.floor(t / 1440);
+    const hours = Math.floor((t % 1440) / 60);
+    const minutes = t % 60;
+    if (days > 0)
+      return this.i18n.translate('booking.time_left.days_hours_minutes', {
         lang,
-        args: {
-          hours: hoursLeft,
-          minutes: minutesLeft,
-        },
+        args: { days, hours, minutes },
       });
-    } else {
-      timeLeftText = this.i18n.translate('booking.time_left.minutes_only', {
+    if (hours > 0)
+      return this.i18n.translate('booking.time_left.hours_minutes', {
         lang,
-        args: {
-          minutes: minutesLeft,
-        },
+        args: { hours, minutes },
       });
-    }
-
-    return { timeLeftText, totalMinutes, daysLeft, hoursLeft, minutesLeft };
+    return this.i18n.translate('booking.time_left.minutes_only', {
+      lang,
+      args: { minutes },
+    });
   }
 
-  premium_End_time(end_time: Date, lang: string = 'ru') {
-    const entTime = new Date(end_time);
+  bookingTimeCalculate(startAt: Date, lang = 'ru') {
+    const t = this.timeUntil(startAt);
+    return { ...t, timeLeftText: this.formatTimeLeft(t.totalMinutes, lang) };
+  }
 
-    const now = new Date();
-    const diffMs = entTime.getTime() - now.getTime();
-
-    const totalMinutes = Math.floor(diffMs / 60000);
-
-    const daysLeft = Math.floor(totalMinutes / 1440);
-    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
-    const minutesLeft = totalMinutes % 60;
-
-    let timeLeftText = '';
-
-    if (daysLeft > 0) {
-      timeLeftText = this.i18n.translate(
-        'booking.time_left.days_hours_minutes',
-        {
-          lang,
-          args: {
-            days: daysLeft,
-            hours: hoursLeft,
-            minutes: minutesLeft,
-          },
-        },
-      );
-    } else if (hoursLeft > 0) {
-      timeLeftText = this.i18n.translate('booking.time_left.hours_minutes', {
-        lang,
-        args: {
-          hours: hoursLeft,
-          minutes: minutesLeft,
-        },
-      });
-    } else {
-      timeLeftText = this.i18n.translate('booking.time_left.minutes_only', {
-        lang,
-        args: {
-          minutes: minutesLeft,
-        },
-      });
-    }
-
-    return { timeLeftText };
+  premium_End_time(end_time: Date, lang = 'ru') {
+    const { totalMinutes } = this.timeUntil(new Date(end_time));
+    return {
+      timeLeftText: this.formatTimeLeft(totalMinutes, lang),
+      expired: totalMinutes <= 0,
+      totalMinutes,
+    };
   }
 
   booking_status_handler(
@@ -260,12 +240,8 @@ export class UtilisService implements OnModuleInit {
     id: number,
     booking_peyments: Pay_method,
     stadion_peyments: Payments,
-    data: Date,
-    start_time: string,
-    end_time: string,
     startAt: Date,
     endAt: Date,
-    price: number,
     page: number,
     limit: number,
     total: number,
@@ -279,73 +255,59 @@ export class UtilisService implements OnModuleInit {
       startAt,
       lang,
     );
-    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(endAt, lang);
+    const { totalMinutes: endMinutes } = this.timeUntil(endAt);
 
-    const backBtn = {
-      text: this.i18n.translate('schedule.back', { lang }),
-      callback_data: 'back_user_5',
-    };
+    const t = (key: string): string => this.i18n.translate(key, { lang });
 
+    const backBtn = { text: t('schedule.back'), callback_data: 'back_user_5' };
     const cancelBtn = {
-      text: this.i18n.translate('booking.cancel', { lang }),
+      text: t('booking.cancel'),
       callback_data: `booking_confirm_cancelChecking_${id}`,
     };
-
     const confirmBtn = {
-      text: this.i18n.translate('booking.confirm', { lang }),
+      text: t('booking.confirm'),
       callback_data: `booking_confirm_confirm_${id}`,
     };
-
     const changePaymentBtn = {
-      text: this.i18n.translate('booking.change_payment_method', { lang }),
+      text: t('booking.change_payment_method'),
       callback_data: `booking_confirm_selectPeyments_${id}`,
     };
-
     const qrBtn = {
-      text: this.i18n.translate('booking.qr_button', { lang }),
+      text: t('booking.qr_button'),
       callback_data: `booking_confirm_QR_${id}`,
     };
-
     const payBtn = {
-      text: this.i18n.translate('booking.pay_by_card', { lang }),
+      text: t('booking.pay_by_card'),
       callback_data: `booking_confirm_paymentChange-${page}_${id}`,
     };
 
     if (status === 'PENDING') {
       if (booking_peyments === 'CASH') {
-        if (stadion_peyments === 'GIBRID') {
-          buttons.push([changePaymentBtn]);
-        }
+        if (stadion_peyments === 'GIBRID') buttons.push([changePaymentBtn]);
         buttons.push([confirmBtn, cancelBtn]);
       }
-
-      if (booking_peyments === 'CARD' && payBtn) {
+      if (booking_peyments === 'CARD') {
         buttons.push([payBtn, cancelBtn]);
       }
     }
 
-    if (['CONFIRMED', 'PAID'].includes(status)) {
+    if (status === 'CONFIRMED' || status === 'PAID') {
       if (check_in) {
         if (isSinglePage) buttons.push([backBtn]);
         return buttons;
       }
 
-      if (totalMinutes > 120) {
+      if (canCancelBooking(totalMinutes)) {
         if (booking_peyments === 'CASH' && stadion_peyments === 'GIBRID') {
           buttons.push([changePaymentBtn]);
         }
-
-        if (status !== 'PAID' && booking_peyments === 'CARD' && payBtn) {
+        if (status !== 'PAID' && booking_peyments === 'CARD') {
           buttons.push([payBtn]);
         }
-
         buttons.push([cancelBtn]);
       } else if (totalMinutes > 0) {
         buttons.push([
-          {
-            text: this.i18n.translate(timeLeftText, { lang }),
-            callback_data: `booking_confirm_alerd_${id}`,
-          },
+          { text: timeLeftText, callback_data: `booking_confirm_alerd_${id}` },
           qrBtn,
         ]);
       } else if (endMinutes >= 0) {
@@ -353,72 +315,156 @@ export class UtilisService implements OnModuleInit {
       }
     }
 
-    if (isSinglePage) {
-      buttons.push([backBtn]);
-    }
+    if (isSinglePage) buttons.push([backBtn]);
 
     return buttons;
   }
-  async errorFunction(ctx: MyContext, error?: unknown, context?: string) {
-    const lang = await this.langs(ctx);
 
-    const userId = ctx.from?.id;
-    const username = ctx.from?.username;
-    const chatId = ctx.chat?.id;
+  ///////////////Error function
+  private classify(error: unknown, context?: ErrorContext): ErrorLevel {
+    if (context === ErrorContext.SILENT) return 'silent';
+    const msg = error instanceof Error ? error.message : '';
+
+    if (msg.includes('message is not modified')) return 'ignore';
+    if (msg.includes('query is too old')) return 'ignore';
+    if (msg.includes('query ID is invalid')) return 'ignore';
+    if (msg.includes('bot was blocked by the user')) return 'blocked';
+    if (msg.includes('user is deactivated')) return 'blocked';
+    if (msg.includes('chat not found')) return 'blocked';
+
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002' || error.code === 'P2025') return 'warn';
+    }
+
+    if (context && CONTEXT_ALERT[context] !== undefined) return 'critical';
+    return 'error';
+  }
+
+  private buildContextInfo(ctx: MyContext, context?: string): string {
     const callbackData =
       ctx.callbackQuery && 'data' in ctx.callbackQuery
         ? ctx.callbackQuery.data
         : undefined;
+
     const messageText =
       ctx.message && 'text' in ctx.message ? ctx.message.text : undefined;
 
-    const contextInfo = [
-      context ? `context: ${context}` : null,
-      userId ? `userId: ${userId}` : null,
-      username ? `username: @${username}` : null,
-      chatId ? `chatId: ${chatId}` : null,
-      callbackData ? `callback_data: ${callbackData}` : null,
-      messageText ? `message: ${messageText}` : null,
+    return [
+      context && `context: ${context}`,
+      ctx.from?.id && `userId: ${ctx.from.id}`,
+      ctx.from?.username && `username: @${ctx.from.username}`,
+      ctx.chat?.id && `chatId: ${ctx.chat.id}`,
+      callbackData && `callback_data: ${callbackData}`,
+      messageText && `message: ${this.maskSensitive(messageText)}`,
     ]
       .filter(Boolean)
       .join(' | ');
+  }
 
-    if (error instanceof Error) {
-      this.logger.error(
-        `Xatolik yuz berdi [${contextInfo}]: ${error.message}`,
-        error.stack,
-      );
-    } else if (error) {
-      this.logger.error(
-        `Xatolik yuz berdi [${contextInfo}]: ${JSON.stringify(error)}`,
-      );
-    } else {
-      this.logger.error(`Xatolik yuz berdi [${contextInfo}]`);
+  private maskSensitive(text: string): string {
+    const masked = text.replace(/\+?\d[\d\s()-]{7,}\d/g, (m) => {
+      const digits = m.replace(/\D/g, '');
+      return `${digits.slice(0, 3)}***${digits.slice(-2)}`;
+    });
+    return masked.length > MAX_FIELD_LENGTH
+      ? `${masked.slice(0, MAX_FIELD_LENGTH)}...`
+      : masked;
+  }
+
+  private errorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (error === undefined || error === null) return '';
+    if (typeof error === 'string') return error;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
     }
+  }
+
+  private async safeLang(ctx: MyContext): Promise<string> {
+    try {
+      return await this.langs(ctx);
+    } catch {
+      return 'uz';
+    }
+  }
+
+  async errorFunction(
+    ctx: MyContext,
+    error?: unknown,
+    context?: ErrorContext,
+  ): Promise<void> {
+    if (ctx.callbackQuery) {
+      ctx.answerCbQuery().catch(() => undefined);
+    }
+
+    let level: ErrorLevel = 'error';
+    let contextInfo = '';
 
     try {
-      await ctx.reply(this.i18n.translate('error.error', { lang }), {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'errorBack_1',
-              },
-            ],
-          ],
-        },
-      });
-    } catch (replyError) {
+      level = this.classify(error, context);
+      if (level !== 'silent') {
+        contextInfo = this.buildContextInfo(ctx, context);
+        const message = this.errorMessage(error);
+        const logText = `Xatolik [${contextInfo}]: ${message}`;
+
+        if (level === 'ignore') {
+          this.logger.debug(logText);
+        } else if (level === 'blocked' || level === 'warn') {
+          this.logger.warn(logText);
+        } else {
+          this.logger.error(
+            logText,
+            error instanceof Error ? error.stack : undefined,
+          );
+        }
+
+        if (level === 'critical') {
+          this.alert
+            .notify(
+              `Critical: ${context ?? 'unknown'} | ${message.slice(0, ALERT_TITLE_MESSAGE_LENGTH)}`,
+              `${contextInfo}\n${message}`,
+              (context && CONTEXT_ALERT[context]) ?? AlertType.ERROR,
+            )
+            .catch(() => undefined);
+        }
+      }
+    } catch (internalError) {
       this.logger.error(
-        `errorFunction: foydalanuvchiga xabar yuborib bo'lmadi [${contextInfo}]`,
-        replyError instanceof Error ? replyError.stack : replyError,
+        'errorFunction ichida xatolik',
+        internalError instanceof Error
+          ? internalError.stack
+          : String(internalError),
       );
     }
 
-    if (ctx.callbackQuery) {
-      await ctx.answerCbQuery().catch(() => {});
+    if (level === 'ignore' || level === 'blocked') return;
+
+    const lang = await this.safeLang(ctx);
+
+    let errorText: string;
+    let backText: string;
+    try {
+      errorText = this.i18n.translate('error.error', { lang });
+      backText = this.i18n.translate('schedule.back', { lang });
+    } catch {
+      errorText = 'Xatolik yuz berdi. Qayta urinib ko‘ring.';
+      backText = '⬅️';
     }
+
+    await ctx
+      .reply(errorText, {
+        reply_markup: {
+          inline_keyboard: [[{ text: backText, callback_data: 'errorBack_1' }]],
+        },
+      })
+      .catch((replyError: unknown) => {
+        this.logger.error(
+          `errorFunction: userga xabar yuborib bo'lmadi [${contextInfo}]`,
+          replyError instanceof Error ? replyError.stack : String(replyError),
+        );
+      });
   }
 
   ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
@@ -430,29 +476,30 @@ export class UtilisService implements OnModuleInit {
     type: string,
     callback_data: string,
   ) {
+    const t = (key: string): string => this.i18n.translate(key, { lang });
     const button: InlineKeyboardButton[][] = [];
-    const makeCb = (action: string) =>
-      `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
 
-    const { totalMinutes } = this.bookingTimeCalculate(booking.startAt, lang);
+    const makeCb = (action: string) => {
+      const cb = `bookingChild_${action}_${booking.id}_${page}_${type}_${callback_data}`;
+      if (Buffer.byteLength(cb) > 64) {
+        this.logger.error(`callback_data 64 baytdan oshdi: ${cb}`);
+      }
+      return cb;
+    };
 
-    const { totalMinutes: endMinutes } = this.bookingTimeCalculate(
-      booking.endAt,
-      lang,
-    );
+    const { totalMinutes } = this.timeUntil(booking.startAt);
+    const { totalMinutes: endMinutes } = this.timeUntil(booking.endAt);
 
     const detailBtn = {
-      text: this.i18n.translate('owner_booking.buttons.detail', { lang }),
+      text: t('owner_booking.buttons.detail'),
       callback_data: makeCb('detail'),
     };
-
     const checkInBtn = {
-      text: this.i18n.translate('owner_booking.buttons.check_in', { lang }),
+      text: t('owner_booking.buttons.check_in'),
       callback_data: makeCb('checkin'),
     };
-
     const cancelBtn = {
-      text: this.i18n.translate('owner_booking.buttons.cancel', { lang }),
+      text: t('owner_booking.buttons.cancel'),
       callback_data: makeCb('cancel'),
     };
 
@@ -494,10 +541,8 @@ export class UtilisService implements OnModuleInit {
         break;
     }
 
-    const filterTypes = ['7days', '30days', 'allFilter'];
     let backCb: string;
-
-    if (filterTypes.includes(type)) {
+    if (callback_data === 'bookingFilter') {
       const ownerId = booking.stadion.owner?.id ?? booking.stadion.owner_id;
       backCb = `bookingAllData_STADION.${booking.stadion.id}_${ownerId}_${page}`;
     } else if (type.startsWith('STATUS.')) {
@@ -506,26 +551,25 @@ export class UtilisService implements OnModuleInit {
       backCb = 'back_owner_7';
     }
 
-    button.push([
-      {
-        text: this.i18n.translate('schedule.back', { lang }),
-        callback_data: backCb,
-      },
-    ]);
+    button.push([{ text: t('schedule.back'), callback_data: backCb }]);
 
     return button;
   }
+
+  async deleteClickedMessage(ctx: MyContext) {
+    const query = ctx.callbackQuery;
+    const id =
+      query && 'message' in query ? query.message?.message_id : undefined;
+    if (id) await ctx.deleteMessage(id).catch(() => undefined);
+  }
+
   async clearSessionMessages(ctx: MyContext) {
     if (ctx.session.ownerActiveBooking?.length) {
-      try {
-        await ctx.deleteMessages(ctx.session.ownerActiveBooking);
-      } catch {}
+      await ctx
+        .deleteMessages(ctx.session.ownerActiveBooking)
+        .catch(() => undefined);
       ctx.session.ownerActiveBooking = [];
     }
-  }
-  async deleteClickedMessage(ctx: MyContext) {
-    const id = (ctx.callbackQuery as any)?.message?.message_id;
-    if (id) await ctx.deleteMessage(id).catch(() => {});
   }
 
   async sendPagination(
@@ -536,48 +580,50 @@ export class UtilisService implements OnModuleInit {
     lang: string,
     callback: string,
   ) {
-    const totalPages = Math.ceil(total / limit);
-    if (page === 1 && totalPages === 1) return;
+    try {
+      const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
+      if (totalPages <= 1) return;
 
-    const buttons: InlineKeyboardButton[] = [];
+      const buttons: InlineKeyboardButton[] = [];
 
-    if (page > 1) {
+      if (page > 1) {
+        buttons.push({
+          text: this.i18n.translate('stadions.Previous', { lang }),
+          callback_data: `${callback}_${page - 1}`,
+        });
+      }
+
       buttons.push({
-        text: this.i18n.translate('stadions.Previous', { lang }),
-        callback_data: `${callback}_${page - 1}`,
+        text: `${page} / ${totalPages}`,
+        callback_data: 'ignore',
       });
+
+      if (page < totalPages) {
+        buttons.push({
+          text: this.i18n.translate('stadions.Next', { lang }),
+          callback_data: `${callback}_${page + 1}`,
+        });
+      }
+
+      const send = await ctx.reply(
+        this.i18n.translate('stadions.Select', { lang }),
+        { reply_markup: { inline_keyboard: [buttons] } },
+      );
+
+      ctx.session.ownerActiveBooking ??= [];
+      ctx.session.ownerActiveBooking.push(send.message_id);
+    } catch (error) {
+      await this.errorFunction(ctx, error, ErrorContext.COMMON);
     }
-
-    buttons.push({
-      text: `${page} / ${totalPages}`,
-      callback_data: 'ignore',
-    });
-
-    if (page < totalPages) {
-      buttons.push({
-        text: this.i18n.translate('stadions.Next', { lang }),
-        callback_data: `${callback}_${page + 1}`,
-      });
-    }
-
-    const send = await ctx.reply(
-      this.i18n.translate('stadions.Select', { lang }),
-      {
-        reply_markup: { inline_keyboard: [buttons] },
-      },
-    );
-
-    ctx.session.ownerActiveBooking ??= [];
-    ctx.session.ownerActiveBooking.push(send.message_id);
   }
 
   ////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
 
   async growthBooking(ctx: MyContext, ownerId: number, lang: string) {
     try {
-      const now = new Date();
+      const z = toZonedTime(new Date(), APP_TZ);
       const base = new Date(
-        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+        Date.UTC(z.getFullYear(), z.getMonth(), z.getDate()),
       );
       const current = await this.prisma.booking.count({
         where: {
@@ -621,55 +667,55 @@ export class UtilisService implements OnModuleInit {
 
       return text;
     } catch (error) {
-      await this.errorFunction(ctx);
+      await this.errorFunction(ctx, error, ErrorContext.OWNER);
+      return '';
     }
   }
 
+  private localeOf(lang: string): string {
+    return lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-US' : 'uz-UZ';
+  }
+
   groupByDay(bookings: { date: Date }[], lang: string) {
-    const locale = lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-US' : 'uz-UZ';
+    const locale = this.localeOf(lang);
     const map: Record<string, number> = {};
 
     bookings.forEach((b) => {
       const day = b.date.toLocaleDateString(locale, {
         day: '2-digit',
         month: 'long',
+        timeZone: 'UTC',
       });
-
       map[day] = (map[day] || 0) + 1;
     });
 
-    return Object.entries(map).map(([label, value]) => ({
-      label,
-      value,
-    }));
+    return Object.entries(map).map(([label, value]) => ({ label, value }));
   }
 
   fillLast7Days(data: { label: string; value: number }[], lang: string) {
-    const locale = lang === 'ru' ? 'ru-RU' : lang === 'en' ? 'en-US' : 'uz-UZ';
+    const locale = this.localeOf(lang);
+    const today = toZonedTime(new Date(), APP_TZ);
     const days: string[] = [];
 
     for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-
-      const label = d.toLocaleDateString(locale, {
-        day: '2-digit',
-        month: 'long',
-      });
-
-      days.push(label);
+      const d = new Date(
+        Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() - i),
+      );
+      days.push(
+        d.toLocaleDateString(locale, {
+          day: '2-digit',
+          month: 'long',
+          timeZone: 'UTC',
+        }),
+      );
     }
 
     const map = Object.fromEntries(data.map((d) => [d.label, d.value]));
-
-    return days.map((day) => ({
-      label: day,
-      value: map[day] || 0,
-    }));
+    return days.map((day) => ({ label: day, value: map[day] || 0 }));
   }
 
   progressChart(data: { label: string; value: number }[], lang: string) {
-    const max = Math.max(...data.map((d) => d.value));
+    const max = Math.max(1, ...data.map((d) => d.value));
 
     const unit = this.i18n.translate('owner_booking.unit_count', { lang });
 
@@ -715,7 +761,7 @@ export class UtilisService implements OnModuleInit {
       return { type: 'phone', value: phone };
     }
 
-    if (/^\d{1,15}$/.test(value)) {
+    if (/^\d{1,8}$/.test(value)) {
       return { type: 'id', value: Number(value) };
     }
 
@@ -723,23 +769,26 @@ export class UtilisService implements OnModuleInit {
   }
 
   addDays(plan: string) {
+    const PLAN_DAYS: Record<string, number> = {
+      MONTH_1: 30,
+      MONTH_3: 90,
+      YEAR_1: 365,
+    };
+    const days = PLAN_DAYS[plan];
+    if (!days) throw new Error(`Unknown plan: ${plan}`);
+
     const date = new Date();
-
-    if (plan === 'MONTH_1') date.setDate(date.getDate() + 30);
-    if (plan === 'MONTH_3') date.setDate(date.getDate() + 90);
-    if (plan === 'YEAR_1') date.setDate(date.getDate() + 365);
-
+    date.setDate(date.getDate() + days);
     return date;
   }
 
   formatPrice = (plan: keyof typeof PREMIUM_PLANS, lang: string) => {
     const p = PREMIUM_PLANS[plan];
-    const currency = CURRENCY_LABELS[lang];
+    const currency = CURRENCY_LABELS[lang] ?? CURRENCY_LABELS[DEFAULT_LANG];
     if (p.discount) {
-      return `${p.price.toLocaleString()} ${currency}\n\n❌ <s>${p.discount.toLocaleString()} ${currency}</s>`;
+      return `${formatSum(p.price)} ${currency}\n\n❌ <s>${formatSum(p.discount)} ${currency}</s>`;
     }
-
-    return `${p.price.toLocaleString()} ${currency}`;
+    return `${formatSum(p.price)} ${currency}`;
   };
   //////////////////////////////////////////////////////////////////////
 
@@ -769,6 +818,12 @@ export class UtilisService implements OnModuleInit {
     end: string,
     intervalMinutes = 60,
   ): Promise<TimeSlot[]> {
+    if (!Number.isFinite(intervalMinutes) || intervalMinutes <= 0) {
+      throw new Error(
+        `generateSlots: intervalMinutes noto'g'ri (${intervalMinutes})`,
+      );
+    }
+
     const slots: TimeSlot[] = [];
     const { endRel: finish } = this.normalizeRange(start, end);
 
@@ -832,16 +887,16 @@ export class UtilisService implements OnModuleInit {
     return rounded;
   }
 
-  currentTashkentTimeRoundedUp(): string {
+  currentLocalTimeRoundedUpInfo(): { time: string; isNextDay: boolean } {
     const z = toZonedTime(new Date(), APP_TZ);
     let h = z.getHours();
-    const m = z.getMinutes();
-    const s = z.getSeconds();
-    if (m > 0 || s > 0) {
-      h += 1;
-    }
-    h = h % 24;
-    return `${String(h).padStart(2, '0')}:00`;
+    if (z.getMinutes() > 0 || z.getSeconds() > 0) h += 1;
+    const isNextDay = h >= 24;
+    return { time: `${String(h % 24).padStart(2, '0')}:00`, isNextDay };
+  }
+
+  currentLocalTimeRoundedUp(): string {
+    return this.currentLocalTimeRoundedUpInfo().time;
   }
 
   calculateTotalPrice(
@@ -901,7 +956,7 @@ export class UtilisService implements OnModuleInit {
     return new Date(referenceInstant.getTime() + relMinutes * 60000);
   }
 
-  tashkentInstant(baseDate: Date, time: string): Date {
+  localInstant(baseDate: Date, time: string): Date {
     const year = baseDate.getUTCFullYear();
     const month = baseDate.getUTCMonth();
     const day = baseDate.getUTCDate();
@@ -911,7 +966,7 @@ export class UtilisService implements OnModuleInit {
     return fromZonedTime(isoLocal, APP_TZ);
   }
 
-  isSameTashkentDay(a: Date, b: Date): boolean {
+  isSameLocalDay(a: Date, b: Date): boolean {
     const za = toZonedTime(a, APP_TZ);
     const zb = toZonedTime(b, APP_TZ);
     return (
@@ -920,7 +975,7 @@ export class UtilisService implements OnModuleInit {
       za.getDate() === zb.getDate()
     );
   }
-  currentTashkentTime(): string {
+  currentLocalTime(): string {
     const z = toZonedTime(new Date(), APP_TZ);
     return `${String(z.getHours()).padStart(2, '0')}:${String(z.getMinutes()).padStart(2, '0')}`;
   }
@@ -950,20 +1005,7 @@ export class UtilisService implements OnModuleInit {
   }
 
   bookingTimeCalculateRaw(date: Date, start_time: string) {
-    const bookingDate = new Date(date);
-    const [hours, minutes] = start_time.split(':').map(Number);
-
-    bookingDate.setHours(hours, minutes, 0, 0);
-    const now = new Date();
-    const diffMs = bookingDate.getTime() - now.getTime();
-
-    const totalMinutes = Math.floor(diffMs / 60000);
-
-    const daysLeft = Math.floor(totalMinutes / 1440);
-    const hoursLeft = Math.floor((totalMinutes % 1440) / 60);
-    const minutesLeft = totalMinutes % 60;
-
-    return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
+    return this.timeUntil(this.localInstant(date, start_time));
   }
 
   timeUntil(startAt: Date) {
@@ -978,97 +1020,123 @@ export class UtilisService implements OnModuleInit {
     return { totalMinutes, daysLeft, hoursLeft, minutesLeft };
   }
 
-  // async refundPayment(
-  //   provider: PaymentProvider,
-  //   providerTransactionId: string,
-  //   amount: number,
-  // ): Promise<{ status: RefundStatus; refund_id: string | null }> {
-  //   try {
-  //     switch (provider) {
-  //       case PaymentProvider.PAYLOV: {
-  //         const result = await refundOctoPayment(providerTransactionId, amount);
-  //         return {
-  //           status: this.mapRefundStatus(result.status),
-  //           refund_id: result.refund_id,
-  //         };
-  //       }
+  private get adminChatIds(): string[] {
+    const raw = [process.env.ADMIN_CHAT_ID, process.env.SUPPER_ADMIN]
+      .filter(Boolean)
+      .join(',');
+    return [
+      ...new Set(
+        raw
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ),
+    ];
+  }
 
-  //       default:
-  //         this.logger.error(
-  //           `Noma'lum provider uchun refund so'raldi: ${provider} (tx: ${providerTransactionId})`,
-  //         );
-  //         return { status: RefundStatus.FAILED, refund_id: null };
-  //     }
-  //   } catch (error) {
-  //     this.logger.error(
-  //       `Refund xatosi: provider=${provider}, tx=${providerTransactionId}`,
-  //       error instanceof Error ? error.stack : error,
-  //     );
-  //     return { status: RefundStatus.FAILED, refund_id: null };
-  //   }
-  // }
+  async notifyAdmins(text: string): Promise<void> {
+    const ids = this.adminChatIds;
+    if (ids.length === 0) {
+      this.logger.warn(
+        'Admin chat ID lar .env da topilmadi, xabar yuborilmadi',
+      );
+      return;
+    }
 
-  // private mapRefundStatus(
-  //   status: 'succeeded' | 'pending' | 'failed',
-  // ): RefundStatus {
-  //   const map: Record<string, RefundStatus> = {
-  //     succeeded: RefundStatus.SUCCEEDED,
-  //     pending: RefundStatus.PENDING,
-  //     failed: RefundStatus.FAILED,
-  //   };
-  //   return map[status] ?? RefundStatus.FAILED;
-  // }
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        this.Bot.telegram.sendMessage(id, text, { parse_mode: 'HTML' }),
+      ),
+    );
 
+    const failed = results.flatMap((r, i) =>
+      r.status === 'rejected'
+        ? [
+            `Admin ${ids[i]}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`,
+          ]
+        : [],
+    );
+
+    if (failed.length) {
+      this.logger.error(failed.join(' | '));
+      await this.alert.notify(
+        'Adminga xabar yuborilmadi',
+        failed.join('\n'),
+        AlertType.ERROR,
+      );
+    }
+  }
+
+  async refountadministratorSent(p: {
+    bookingId: number;
+    stadionName?: string;
+    date: Date;
+    startTime: string;
+    endTime: string;
+    amount: number;
+    transactionId: string;
+    orderId: string | null;
+    paymentId: string;
+    paidAt?: Date | null;
+    userName?: string | null;
+    username?: string | null;
+    userChatId?: string | number | bigint | null;
+    phone?: string | null;
+  }): Promise<void> {
+    const userLines = [
+      p.userName
+        ? p.userChatId
+          ? `• <a href="tg://user?id=${p.userChatId}">${escapeHtml(p.userName)}</a>`
+          : `• ${escapeHtml(p.userName)}`
+        : null,
+      p.username
+        ? `• <a href="https://t.me/${escapeHtml(p.username)}">@${escapeHtml(p.username)}</a>`
+        : null,
+      p.phone ? `• 📞 <code>${escapeHtml(p.phone)}</code>` : null,
+      p.userChatId ? `• 🆔 <code>${p.userChatId}</code>` : null,
+    ].filter(Boolean);
+
+    const details = [
+      "<i>Paylov kabineti orqali, to'liq summa</i>",
+      '',
+      `📅 <b>Bron #${p.bookingId}</b>${p.stadionName ? ` · ${escapeHtml(p.stadionName)}` : ''}`,
+      `🗓 ${formatDate(p.date, 'uz')}`,
+      `⏰ ${p.startTime}–${p.endTime}`,
+      '',
+      `💰 <b>${formatSum(p.amount)} so'm</b>`,
+      '',
+      '👤 <b>Mijoz</b>',
+      ...(userLines.length ? userLines : ["• noma'lum"]),
+      '',
+      '🔎 <b>Kabinetda qidirish uchun</b>',
+      `<blockquote>Payment: <code>${escapeHtml(p.paymentId)}</code>\nOrder: <code>${escapeHtml(p.orderId ?? '-')}</code>\nTranzaksiya: <code>${escapeHtml(p.transactionId)}</code>${
+        p.paidAt ? `\nTo'langan: ${formatDateTime(p.paidAt, 'uz')}` : ''
+      }</blockquote>`,
+      '',
+      "👉 <i>Paylov kabinetida shu to'lovni topib, to'liq qaytaring.</i>",
+    ].join('\n');
+
+    const sent = await this.alert.notify(
+      `<b>Qaytarish kerak</b> · Bron #${p.bookingId}`,
+      details,
+      AlertType.REFUND,
+      { parseMode: 'HTML' },
+    );
+    if (!sent)
+      await this.notifyAdmins(`💸 <b>Qaytarish kerak</b>\n\n${details}`);
+  }
+
+  todayLocal(): Date {
+    const z = toZonedTime(new Date(), APP_TZ);
+    return new Date(Date.UTC(z.getFullYear(), z.getMonth(), z.getDate()));
+  }
 }
 
-export const MIN_CANCEL_HOURS_BEFORE = 2;
-
-export const MAX_CANCEL_HOURS_BEFORE = 24;
-
-export const CANCEL_INTERVAL_HOURS = 1;
-
-export const MAX_RETAINED_PERCENT = 50;
-
-export const PERCENT_DRIFT_TOLERANCE = 5;
-
-export const getCompensationPercent = (totalMinutes: number): number => {
-  const hours = totalMinutes / 60;
-
-  if (hours >= MAX_CANCEL_HOURS_BEFORE) {
-    return 0;
-  }
-  if (hours <= MIN_CANCEL_HOURS_BEFORE) {
-    return MAX_RETAINED_PERCENT;
-  }
-  const totalIntervals =
-    (MAX_CANCEL_HOURS_BEFORE - MIN_CANCEL_HOURS_BEFORE) / CANCEL_INTERVAL_HOURS;
-
-  const intervalsPassed = Math.floor(
-    (MAX_CANCEL_HOURS_BEFORE - hours) / CANCEL_INTERVAL_HOURS,
-  );
-
-  const percentPerInterval = MAX_RETAINED_PERCENT / totalIntervals;
-
-  const percent = intervalsPassed * percentPerInterval;
-  return Math.min(Math.round(percent * 100) / 100, MAX_RETAINED_PERCENT);
-};
+export const MIN_CANCEL_HOURS_BEFORE = 5;
 
 export const canCancelBooking = (totalMinutes: number): boolean =>
   totalMinutes >= MIN_CANCEL_HOURS_BEFORE * 60;
 
-export const calculateCancelRefund = (
-  paidAmount: number,
-  totalMinutes: number,
-) => {
-  const percent = getCompensationPercent(totalMinutes);
-  const retained = Math.round((paidAmount * percent) / 100);
-  return {
-    paidAmount,
-    retained,
-    refundable: paidAmount - retained,
-    percent,
-  };
-};
 export const formatSum = (value: number | Decimal): string =>
   Number(value)
     .toLocaleString('ru-RU')

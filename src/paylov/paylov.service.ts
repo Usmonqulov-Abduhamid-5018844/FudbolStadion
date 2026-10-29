@@ -104,7 +104,7 @@ export class PaylovService {
           'X-Timestamp': ts,
           'X-Signature': signature,
         },
-        body: method === 'POST' ? body : undefined, // imzolangan aynan shu string yuboriladi
+        body: method === 'POST' ? body : undefined,
         signal: AbortSignal.timeout(15_000),
       });
     } catch (e) {
@@ -122,18 +122,18 @@ export class PaylovService {
     return JSON.parse(text) as T;
   }
 
-  /** Foydalanuvchiga ko'rsatiladigan faol usullar (5 daqiqa keshlanadi) */
   async getActiveMethods(): Promise<PaylovMethod[]> {
     const now = Date.now();
     if (this.methodsCache && now - this.methodsCache.at < 5 * 60_000) {
       return this.methodsCache.data;
     }
     try {
+      
       const all = await this.request<PaylovMethod[]>(
         'GET',
         '/payments/providers',
       );
-
+      
       const data = all
         .filter(
           (m) => m.is_active && !HIDDEN_METHODS.includes(normalize(m.name)),
@@ -141,6 +141,7 @@ export class PaylovService {
         .map((m) => ({ ...m, name: normalize(m.name) }))
         .sort((a, b) => a.sort_order - b.sort_order);
       this.methodsCache = { at: now, data };
+
       return data;
     } catch {
       this.logger.warn("Usullar ro'yxati olinmadi, zaxira ro'yxat ishlatildi");
@@ -154,26 +155,34 @@ export class PaylovService {
    * method: faqat faol usullardan biri bo'lishi shart (soxta callback_data'dan himoya).
    */
   async createCheckout(p: {
-    externalId: string; // "BK:<uuid>" yoki "PR:<uuid>"
+    externalId: string;
     amountSom: number;
     method: string;
     returnUrl: string;
   }): Promise<PaylovCheckoutResponse & { checkout_url: string }> {
     const active = await this.getActiveMethods();
-    if (!active.some((m) => m.name === normalize(p.method))) {
+    const method = normalize(p.method);
+
+    if (!active.some((m) => m.name === method)) {
       throw new BadRequestException("Bu to'lov usuli mavjud emas");
     }
+
     if (!Number.isInteger(p.amountSom) || p.amountSom <= 0) {
       throw new BadRequestException("Noto'g'ri summa");
     }
 
+    // const provider = ['paylov', 'uzum'].includes(method)
+    //   ? method.charAt(0).toUpperCase() + method.slice(1)
+    //   : method;
+
+      
     const res = await this.request<PaylovCheckoutResponse>(
       'POST',
       '/integrations/checkout',
       {
         external_id: p.externalId,
-        amount: p.amountSom * 100, // tiyinda
-        payment_provider: p.method,
+        amount: p.amountSom * 100,
+        payment_provider: method,
         return_url: p.returnUrl,
       },
     );
@@ -182,6 +191,7 @@ export class PaylovService {
       this.logger.error(`checkout_url yo'q: ${JSON.stringify(res)}`);
       throw new BadGatewayException("To'lov havolasi olinmadi");
     }
+
     return res as PaylovCheckoutResponse & { checkout_url: string };
   }
 }

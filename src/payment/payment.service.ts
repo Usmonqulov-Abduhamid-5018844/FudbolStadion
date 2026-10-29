@@ -12,7 +12,7 @@ import { PaylovWebhookDto } from './dto/create-paylov.dto';
 import { Telegraf } from 'telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
-import { formatSum } from 'src/utils/utile.service';
+import { formatSum, UtilisService } from 'src/utils/utile.service';
 import { escapeHtml } from 'src/helpers/stadions';
 import { InjectBot } from 'nestjs-telegraf';
 @Injectable()
@@ -20,7 +20,8 @@ export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   constructor(
     private readonly prisma: PrismaService,
-   @InjectBot() private readonly bot: Telegraf<MyContext>
+    private readonly utils: UtilisService,
+   
 
   ) {}
 
@@ -603,34 +604,6 @@ async paylovFailed(externalId: string, data: PaylovWebhookDto) {
 
 
 
-private get adminChatIds(): string[] {
-  const raw = [process.env.ADMIN_CHAT_ID, process.env.SUPPER_ADMIN]
-    .filter(Boolean)
-    .join(',');
-  return [...new Set(raw.split(',').map((s) => s.trim()).filter(Boolean))];
-}
-
-private async notifyAdmins(text: string): Promise<void> {
-  const ids = this.adminChatIds;
-  if (ids.length === 0) {
-    this.logger.warn("Admin chat ID lar .env da topilmadi, xabar yuborilmadi");
-    return;
-  }
-
-  const results = await Promise.allSettled(
-    ids.map((id) =>
-      this.bot.telegram.sendMessage(id, text, { parse_mode: 'HTML' }),
-    ),
-  );
-
-  results.forEach((r, i) => {
-    if (r.status === 'rejected') {
-      this.logger.error(
-        `Admin ${ids[i]} ga xabar yuborilmadi: ${r.reason instanceof Error ? r.reason.message : r.reason}`,
-      );
-    }
-  });
-}
 
 async paylovRefunded(externalId: string, data: PaylovWebhookDto) {
   const isBooking = externalId.startsWith('BK:');
@@ -673,7 +646,7 @@ async paylovRefunded(externalId: string, data: PaylovWebhookDto) {
     `PAYLOV QAYTARISH: ${externalId}, order=${data.order_id}, payment=${data.payment_id}, amount=${data.amount}, status=${dbStatus}`,
   );
 
-  await this.notifyAdmins(
+  await this.utils.notifyAdmins(
     [
       "⚠️ <b>Paylov: to'lov qaytarildi / bekor qilindi</b>",
       '',

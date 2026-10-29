@@ -1,29 +1,33 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AdvertisementStatus, Payments, Prisma } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
-import { toZonedTime, format } from 'date-fns-tz';
+import { toZonedTime, format, formatInTimeZone } from 'date-fns-tz';
 import { I18nService } from 'nestjs-i18n';
 import { BotService } from 'src/bot/bot.service';
+import { APP_TZ } from 'src/helpers/dateFormat';
 import { ADVERTISEMENT } from 'src/common/constants/advertisement.constants';
 import { statusMap } from 'src/helpers/bookingStatus';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { formatDate } from 'src/helpers/dateFormat';
 import { IBooking, PLAN_LABELS, Premium_price } from 'src/helpers/interface';
+import { ErrorContext } from 'src/helpers/interface/enum';
 import { isEmailFormat } from 'src/helpers/isEmailChecked';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { getPremiumReasonText } from 'src/helpers/reason';
+import { canOwnerAcceptCard, escapeHtml } from 'src/helpers/stadions';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
   DefaultNotificationSettings,
   NotificationLabels,
   NotificationSettings_type,
 } from 'src/types/notifikation';
-import { UtilisService } from 'src/utils/utile.service';
+import { formatSum, UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
 
 @Injectable()
 export class OwnersService {
+  private readonly logger = new Logger(OwnersService.name)
   constructor(
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
@@ -107,7 +111,7 @@ export class OwnersService {
 
           ctx.session.owner_registor.email = ctx.message.text;
           ctx.session.owner_registor.step = 'phone';
-          ctx.reply(this.i18n.translate('registor.phone', { lang }), {
+         await ctx.reply(this.i18n.translate('registor.phone', { lang }), {
             reply_markup: {
               keyboard: [
                 [
@@ -1597,386 +1601,297 @@ export class OwnersService {
 
   ///////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
 
-  async owner_Bron(ctx: MyContext, lang: string) {
-    try {
-      const ownerData = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-        include: {
-          ownerCard: {
-            select: {
-              id: true,
-            },
-          },
-          stadions: {
-            select: {
-              id: true,
-            },
-          },
-        },
-      });
-      if (!ownerData) {
-        return await this.utils.errorFunction(ctx);
-      }
-      if (!ownerData.stadions.length) {
-        await ctx.reply(
-          this.i18n.translate('owner_booking.no_stadion', { lang }),
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: 'back_owner_1',
-                  },
-                ],
-              ],
-            },
-          },
-        );
-        return;
-      }
-      await this.utils.safeEditOrReply(
+async owner_Bron(ctx: MyContext, lang: string) {
+  try {
+    const t = (key: string): string => this.i18n.translate(key, { lang });
+
+    const ownerData = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+      select: { id: true, _count: { select: { stadions: true } } },
+    });
+    if (!ownerData) {
+      await this.utils.errorFunction(
         ctx,
-        this.i18n.translate('owner_booking.booking_menu.title', { lang }),
-        {
+        new Error(`Owner topilmadi: chatID=${ctx.from?.id}`),
+        ErrorContext.OWNER,
+      );
+      return;
+    }
+
+    if (ownerData._count.stadions === 0) {
+      await ctx.reply(t('owner_booking.no_stadion'), {
+        reply_markup: {
           inline_keyboard: [
-            [
-              {
-                text: this.i18n.translate('admin.bron', { lang }),
-                callback_data: `Newbooking_owners_${ownerData.id}_${lang}`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.active',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_active_${ownerData.id}_1`,
-              },
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.pending',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_pending_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.today',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_today_${ownerData.id}_1`,
-              },
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.tomorrow',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_tomorrow_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.upcoming',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_upcoming_${ownerData.id}_1`,
-              },
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.now',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_now_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.all',
-                  { lang },
-                ),
-                callback_data: `bookingAllData_all_${ownerData.id}_1`,
-              },
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.cancelled',
-                  { lang },
-                ),
-                callback_data: `ownerBooking_cancelled_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.stats',
-                  { lang },
-                ),
-                callback_data: `BookingOwner_statistica_stats_${ownerData.id}`,
-              },
-              {
-                text: this.i18n.translate(
-                  'owner_booking.booking_menu.buttons.search',
-                  { lang },
-                ),
-                callback_data: `bookingAllData_search_${ownerData.id}_1`,
-              },
-            ],
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: `back_owner_1`,
-              },
-            ],
+            [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
           ],
         },
-      );
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
-  }
-  async sendBookingMessage(
-    ctx: MyContext,
-    booking: IBooking,
-    page: number,
-    lang: string,
-    type: string,
-    callback_data: string,
-  ) {
-    try {
-      const button = this.utils.buildOwnerBookingButtons(
-        booking,
-        page,
-        lang,
-        type,
-        callback_data,
-      );
-
-      const sent = await ctx.reply(
-        this.i18n.translate('owner_booking.details', {
-          lang,
-          args: {
-            id: booking.id,
-            date: formatDate(booking.date, lang),
-            time: `${booking.start_time} - ${booking.end_time}`,
-            stadium: booking.stadion.name,
-            region: booking.stadion.region.name,
-            user: booking.user ? booking.user.full_name : booking.customer_name,
-            status: statusMap(booking.status, this.i18n, lang),
-            check_in: booking.check_in
-              ? this.i18n.translate('owner_booking.check_in', { lang })
-              : this.i18n.translate('owner_booking.not_check_in', { lang }),
-          },
-        }),
-        {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: button,
-          },
-        },
-      );
-      ctx.session.ownerActiveBooking ??= [];
-      ctx.session.ownerActiveBooking.push(sent.message_id);
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-      console.log(error);
-    }
-  }
-  async bookingDetails(
-    ctx: MyContext,
-    bookingId: number,
-    page: number = 1,
-    lang: string,
-    type: string,
-    callback_data: string,
-  ) {
-    try {
-      const isFilterType = ['7days', '30days', 'active', 'allFilter'].includes(
-        type,
-      );
-      callback_data = isFilterType ? 'bookingFilter' : callback_data;
-
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
-        include: {
-          stadion: {
-            select: {
-              name: true,
-              owner_id: true,
-              region: { select: { name: true } },
-              region_items: { select: { name: true } },
-            },
-          },
-          user: {
-            select: {
-              full_name: true,
-              phone: true,
-              username: true,
-            },
-          },
-        },
       });
+      return;
+    }
 
-      if (!booking) return this.utils.errorFunction(ctx);
-      const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
-        booking.startAt,
-        lang,
-      );
+    const id = ownerData.id;
+    const btn = (key: string, callback_data: string) => ({
+      text: t(key),
+      callback_data,
+    });
+    const menu = (name: string) => `owner_booking.booking_menu.buttons.${name}`;
 
-      const message = this.i18n.translate('owner_booking.full_details', {
-        lang,
-        args: {
-          id: booking.id,
-          stadium: booking.stadion.name,
-          region: `${booking.stadion.region.name} / ${booking.stadion.region_items.name}`,
-          date: format(booking.date, 'dd.MM.yyyy'),
-          time: `${booking.start_time} - ${booking.end_time}`,
-          time_left:
-            totalMinutes > 0
-              ? timeLeftText
-              : this.i18n.translate('bookingHistory.time_expired', { lang }),
-          user: booking.user ? booking.user.full_name : booking.customer_name,
-          phone: `${booking.user ? `+${booking.user.phone}` : booking.customer_phone}`,
-          username: booking.user?.username
-            ? `🔗 @${booking.user.username}`
-            : '_',
-          price: new Intl.NumberFormat('uz-UZ').format(
-            Number(booking.total_price),
-          ),
-          payment: getPaymentText(
-            booking.payment_method,
-            this.i18n.translate('peyments', { lang }),
-          ),
-          status: statusMap(booking.status, this.i18n, lang),
-          created_at: format(booking.createdAt, 'dd.MM.yyyy HH:mm'),
-          check_in: booking.check_in
-            ? this.i18n.translate('owner_booking.check_in', { lang })
-            : this.i18n.translate('owner_booking.not_check_in', { lang }),
-        },
-      });
-
-      await this.utils.safeEditOrReply(ctx, message, {
-        inline_keyboard: [
-          [
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: `${callback_data}_${type}_${isFilterType ? booking.stadion_id : booking.stadion.owner_id}_${page}`,
-            },
-          ],
+    await this.utils.safeEditOrReply(ctx, t('owner_booking.booking_menu.title'), {
+      inline_keyboard: [
+        [btn('admin.bron', `Newbooking_owners_${id}_${lang}`)],
+        [
+          btn(menu('active'), `ownerBooking_active_${id}_1`),
+          btn(menu('pending'), `ownerBooking_pending_${id}_1`),
         ],
-      });
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
+        [
+          btn(menu('today'), `ownerBooking_today_${id}_1`),
+          btn(menu('tomorrow'), `ownerBooking_tomorrow_${id}_1`),
+        ],
+        [
+          btn(menu('upcoming'), `ownerBooking_upcoming_${id}_1`),
+          btn(menu('now'), `ownerBooking_now_${id}_1`),
+        ],
+        [
+          btn(menu('all'), `bookingAllData_all_${id}_1`),
+          btn(menu('cancelled'), `ownerBooking_cancelled_${id}_1`),
+        ],
+        [
+          btn(menu('stats'), `BookingOwner_statistica_stats_${id}`),
+          btn(menu('search'), `bookingAllData_search_${id}_1`),
+        ],
+        [btn('schedule.back', 'back_owner_1')],
+      ],
+    });
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
   }
+}
 
+/**
+ * Atayin try/catch yo'q: xato chaqiruvchi handlerga chiqadi va u yerda bir marta
+ * errorFunction ga yuboriladi. Bu metodni chaqiradigan har bir joyda try/catch bo'lishi shart.
+ */
+async sendBookingMessage(
+  ctx: MyContext,
+  booking: IBooking,
+  page: number,
+  lang: string,
+  type: string,
+  callback_data: string,
+): Promise<void> {
+  const t = (key: string): string => this.i18n.translate(key, { lang });
+
+  const button = this.utils.buildOwnerBookingButtons(
+    booking,
+    page,
+    lang,
+    type,
+    callback_data,
+  );
+
+  const sent = await ctx.reply(
+    this.i18n.translate('owner_booking.details', {
+      lang,
+      args: {
+        id: booking.id,
+        date: formatDate(booking.date, lang),
+        time: `${booking.start_time} - ${booking.end_time}`,
+        stadium: escapeHtml(booking.stadion.name),
+        region: escapeHtml(booking.stadion.region.name),
+        user: escapeHtml(
+          booking.user?.full_name ?? booking.customer_name ?? '—',
+        ),
+        status: statusMap(booking.status, this.i18n, lang),
+        check_in: booking.check_in
+          ? t('owner_booking.check_in')
+          : t('owner_booking.not_check_in'),
+      },
+    }),
+    { parse_mode: 'HTML', reply_markup: { inline_keyboard: button } },
+  );
+
+  ctx.session.ownerActiveBooking ??= [];
+  ctx.session.ownerActiveBooking.push(sent.message_id);
+}
+
+async bookingDetails(
+  ctx: MyContext,
+  bookingId: number,
+  page: number,
+  lang: string,
+  type: string,
+  callback_data: string,
+) {
+  try {
+    const t = (key: string): string => this.i18n.translate(key, { lang });
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        stadion: {
+          select: {
+            name: true,
+            owner_id: true,
+            region: { select: { name: true } },
+            region_items: { select: { name: true } },
+          },
+        },
+        user: { select: { full_name: true, phone: true, username: true } },
+      },
+    });
+
+    if (!booking) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error(`Bron topilmadi: ${bookingId}`),
+        ErrorContext.OWNER,
+      );
+      return;
+    }
+
+    const { totalMinutes, timeLeftText } = this.utils.bookingTimeCalculate(
+      booking.startAt,
+      lang,
+    );
+
+    const withPlus = (p: string) => (p.startsWith('+') ? p : `+${p}`);
+    const phone = booking.user?.phone
+      ? withPlus(booking.user.phone)
+      : (booking.customer_phone ?? '—');
+
+    const message = this.i18n.translate('owner_booking.full_details', {
+      lang,
+      args: {
+        id: booking.id,
+        stadium: escapeHtml(booking.stadion.name),
+        region: `${escapeHtml(booking.stadion.region.name)} / ${escapeHtml(booking.stadion.region_items.name)}`,
+        date: this.utils.formatCalendarDate(booking.date),
+        time: `${booking.start_time} - ${booking.end_time}`,
+        time_left:
+          totalMinutes > 0 ? timeLeftText : t('bookingHistory.time_expired'),
+        user: escapeHtml(
+          booking.user?.full_name ?? booking.customer_name ?? '—',
+        ),
+        phone: escapeHtml(phone),
+        username: booking.user?.username
+          ? `🔗 @${escapeHtml(booking.user.username)}`
+          : '_',
+        price: formatSum(booking.total_price),
+        payment: getPaymentText(
+          booking.payment_method,
+          this.i18n.translate('peyments', { lang }),
+        ),
+        status: statusMap(booking.status, this.i18n, lang),
+        created_at: formatInTimeZone(
+          booking.createdAt,
+          APP_TZ,
+          'dd.MM.yyyy HH:mm',
+        ),
+        check_in: booking.check_in
+          ? t('owner_booking.check_in')
+          : t('owner_booking.not_check_in'),
+      },
+    });
+
+    // bookingFilter ro'yxati stadion ID si bilan, qolganlari egasi ID si bilan ishlaydi
+    const backId =
+      callback_data === 'bookingFilter'
+        ? booking.stadion_id
+        : booking.stadion.owner_id;
+
+    await this.utils.safeEditOrReply(ctx, message, {
+      inline_keyboard: [
+        [
+          {
+            text: t('schedule.back'),
+            callback_data: `${callback_data}_${type}_${backId}_${page}`,
+          },
+        ],
+      ],
+    });
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
+  }
+}
   ////////////////////⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️⬆️////////////////////////////////
 
-  async owner_card(ctx: MyContext, lang: string) {
-    try {
-      const owner = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-      });
-      if (!owner) return await this.utils.errorFunction(ctx);
+async owner_payout(ctx: MyContext, lang: string) {
+  try {
+    const owner = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+      select: {
+        id: true,
+        payout_status: true,
+        paylov_partner_id: true,
+      },
+    });
+    if (!owner) return await this.utils.errorFunction(ctx);
 
-      const card = await this.prisma.owner_card.findUnique({
-        where: { owner_id: owner.id },
-      });
+    const backBtn = {
+      text: this.i18n.translate('schedule.back', { lang }),
+      callback_data: 'back_owner_1',
+    };
 
-      const backBtn = {
-        text: this.i18n.translate('schedule.back', { lang }),
-        callback_data: 'back_owner_1',
-      };
+    const connectUrl = process.env.PAYLOV_CONNECT_URL;
 
-      if (!card) {
-        await ctx.reply(
-          this.i18n.translate('peyments.owner_card.empty.text', { lang }),
-          {
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate(
-                      'peyments.owner_card.empty.add_button',
-                      {
-                        lang,
-                      },
-                    ),
-                    url: "dfg"
-                  },
-                ],
-                [backBtn],
-              ],
+    const connectRow = connectUrl
+      ? [
+          [
+            {
+              text: this.i18n.translate(
+                'peyments.owner_payout.connect_button',
+                { lang },
+              ),
+              url: connectUrl,
             },
-          },
-        );
-        return;
-      }
+          ],
+        ]
+      : [];
 
-      const last4 = card.cardMask.replace(/\D/g, '').slice(-4) || '••••';
-      const mm = card.expireMonth.padStart(2, '0');
-      const yy = card.expireYear.slice(-2);
-      const fullYear =
-        card.expireYear.length === 2
-          ? 2000 + Number(card.expireYear)
-          : Number(card.expireYear);
-
-      const isExpired =
-        new Date(fullYear, Number(card.expireMonth), 0, 23, 59, 59) <
-        new Date();
-
-      const statusKey = isExpired
-        ? 'expired'
-        : card.isActive
-          ? 'active'
-          : 'inactive';
-
+    if (!owner.paylov_partner_id) {
       await ctx.reply(
-        this.i18n.translate('peyments.owner_card.active.text', {
-          lang,
-          args: {
-            status: this.i18n.translate(
-              `peyments.owner_card.status.${statusKey}`,
-              {
-                lang,
-              },
-            ),
-            type: card.cardType.toUpperCase(),
-            last4,
-            expire: `${mm}/${yy}`,
-            provider: card.provider.toUpperCase(),
-            added: formatDate(card.createdAt, lang),
-          },
-        }),
+        this.i18n.translate('peyments.owner_payout.empty.text', { lang }),
         {
           parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate(
-                    'peyments.owner_card.active.change_button',
-                    {
-                      lang,
-                    },
-                  ),
-                  url: "FGf"
-                },
-              ],
-              [backBtn],
-            ],
-          },
+          reply_markup: { inline_keyboard: [...connectRow, [backBtn]] },
         },
       );
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
+      return;
     }
+
+    const isActive = canOwnerAcceptCard(owner);
+    const statusKey = isActive
+      ? 'active'
+      : String(owner.payout_status).toLowerCase();
+
+    const partnerId = owner.paylov_partner_id;
+    const maskedPartnerId =
+      partnerId.length > 4 ? `•••• ${partnerId.slice(-4)}` : partnerId;
+
+    await ctx.reply(
+      this.i18n.translate('peyments.owner_payout.info.text', {
+        lang,
+        args: {
+          status: this.i18n.translate(
+            `peyments.owner_payout.status.${statusKey}`,
+            { lang, defaultValue: String(owner.payout_status) },
+          ),
+          partnerId: maskedPartnerId,
+        },
+      }),
+      {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [...(isActive ? [] : connectRow), [backBtn]],
+        },
+      },
+    );
+  } catch (error) {
+    this.logger.error('owner_payout failed', error);
+    await this.utils.errorFunction(ctx);
   }
+}
+
   async handleDataFilter(
     ctx: MyContext,
     text: string,
@@ -2377,7 +2292,7 @@ export class OwnersService {
         ],
       });
     } catch (error) {
-      await this.utils.errorFunction(ctx, error, 'owner prwmium');
+      await this.utils.errorFunction(ctx, error);
     }
   }
   async renderNotification(ctx: MyContext, ownerId: number, lang: string) {

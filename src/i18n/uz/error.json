@@ -21,5 +21,8 @@
 
   "invalid_range_error": "❌ Iltimos, 6 dan katta va 20 dan kichik son kiriting",
 
-  "invalid_action": "❗ Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\n\nIltimos, botdagi mavjud tugmalardan foydalaning."
+  "invalid_action": "❗ Siz faqat tugmalar orqali tanlov qilishingiz mumkin.\n\nIltimos, botdagi mavjud tugmalardan foydalaning.",
+
+  "contact_not_own": "Iltimos, faqat o‘zingizning raqamingizni yuboring (pastdagi tugma orqali).",
+  "already_checked_in": "Bu bron allaqachon tasdiqlangan (check-in qilingan)."
 }

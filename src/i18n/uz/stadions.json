@@ -23,7 +23,7 @@
 
   "stadion_added_success": "🎉 Stadionni muvofiyaqatli qo'shdingiz.",
 
-  "not_fount": "❌ Ma'lumot topilmadi!",
+  "not_found": "❌ Ma'lumot topilmadi!",
 
   "stadions_not_found": "❌ Afsuski, sizning joylashuvingiz atrofida 3 km radiusda stadion topilmadi. Iltimos, boshqa hududni tanlang yoki biroz kuting.",
 
@@ -41,7 +41,7 @@
 
   "Previous": "⬅️ Oldingi",
   "Next": "Keyingi ➡️",
- "Select": "📄 Kerakli sahifani tanlang:",
+  "Select": "📄 Kerakli sahifani tanlang:",
 
   "booking_history_empty": "📭 Sizda hozircha bronlar tarixi mavjud emas.\n\nSiz hali birorta stadionni bron qilmagansiz.\n\nYangi bron qilish uchun menyudan stadion tanlab, qulay vaqtni band qiling ⚽",
   "no_active_bookings": "📭 Sizda hozircha faol bronlar mavjud emas.\n\nHozircha siz hech qanday stadionni bron qilmagansiz yoki barcha bronlaringiz yakunlangan.\n\nYangi bron qilish uchun menyudan stadion tanlang va qulay vaqtni band qiling ⚽",
@@ -58,7 +58,7 @@
   "payments": {
     "alert": "⚠️ Tanlangan to‘lov usuli avvalgisi bilan bir xil.\nIltimos, boshqa usulni tanlang.",
 
-    "ownerCard": "💳 Onlayn to‘lovni faollashtirish uchun avval o‘z bank kartangizni qo‘shing!\n⚠️ Karta ma’lumotisiz bu rejimni yoqib bo‘lmaydi.",
+    "ownerCard": "💳 Onlayn to’lovni faollashtirish uchun avval to’lov hisobingizni ulang va u faol bo’lishini kuting!\n⚠️ To’lov hisobi faol bo’lmasa, bu rejimni yoqib bo’lmaydi.",
 
     "cardToCash": "🚫 Bu stadionda onlayn to‘lov orqali qilingan faol bronlar mavjud!\n💳 Naqd to‘lovga o‘tish mumkin emas, chunki mavjud bronlar raqamli to‘lov asosida yaratilgan.",
 

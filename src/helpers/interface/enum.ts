@@ -47,11 +47,55 @@ export type PaylovWebhook = {
 };
 
 export enum PaylovState {
-  CANCELLED = -2,                 // to'lovdan keyin bekor/qaytarilgan
-  CANCELLED_BEFORE_PAYMENT = -1,  // pul yechilmagan
+  CANCELLED = -2, // to'lovdan keyin bekor/qaytarilgan
+  CANCELLED_BEFORE_PAYMENT = -1, // pul yechilmagan
   CREATED = 0,
   INITIATING = 1,
   SUCCESS = 2,
 }
 
 export const normalize = (s: string) => s.trim().toLowerCase();
+
+
+export type ErrorLevel =
+  | 'ignore'
+  | 'blocked'
+  | 'warn'
+  | 'error'
+  | 'critical'
+  | 'silent';
+
+
+export enum AlertType {
+  ERROR = 'error',
+  PAYMENT = 'payment',
+  SECURITY = 'security',
+  REFUND = 'refund',
+  PREMIUM = 'premium',
+  BOOKING = 'booking',
+  NEW_OWNER = 'newOwner',
+}
+
+export enum ErrorContext {
+  PAYMENT = 'payment',
+  WEBHOOK = 'webhook',
+  REFUND = 'refund',
+  PREMIUM = 'premium',
+  SECURITY = 'security',
+  BOOKING = 'booking',
+
+  USER = 'user',
+  OWNER = 'owner',
+  ADMIN = 'admin',
+  STADION = 'stadion',
+  COMMON = 'common',
+  SILENT = 'silent',
+}
+export const CONTEXT_ALERT: Partial<Record<ErrorContext, AlertType>> = {
+  [ErrorContext.PAYMENT]: AlertType.PAYMENT,
+  [ErrorContext.WEBHOOK]: AlertType.PAYMENT,
+  [ErrorContext.REFUND]: AlertType.REFUND,
+  [ErrorContext.PREMIUM]: AlertType.PREMIUM,
+  [ErrorContext.SECURITY]: AlertType.SECURITY,
+  [ErrorContext.BOOKING]: AlertType.ERROR,
+};

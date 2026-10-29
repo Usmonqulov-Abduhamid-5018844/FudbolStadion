@@ -19,5 +19,7 @@
   "only_number_error": "❌ Please enter numbers only (e.g., 10)",
 
   "invalid_range_error": "❌ Please enter a number greater than 6 and less than 20",
-  "invalid_action": "❗ You can only make selections using the buttons.\n\nPlease use the buttons available in the bot."
+  "invalid_action": "❗ You can only make selections using the buttons.\n\nPlease use the buttons available in the bot.",
+  "contact_not_own":"Please send your own number using the button below.",
+  "already_checked_in": "This booking has already been checked in."
 }

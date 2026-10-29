@@ -7,25 +7,29 @@ import { Markup } from 'telegraf';
 import { InlineKeyboardButton } from 'telegraf/types';
 import { getPaymentText } from 'src/helpers/peyments_type';
 import { formatSum, UtilisService } from 'src/utils/utile.service';
-import {
-  EStadion_type,
-  IStadion,
-  PLAN_LABELS,
-  PREMIUM_PLANS,
-} from 'src/helpers/interface';
+import { EStadion_type, IStadion, PLAN_LABELS } from 'src/helpers/interface';
 import { getLocation } from 'src/helpers/lokationSeorch';
 import { stadionTypeLabel } from 'src/helpers/lokationSeorch';
 import { AdminService } from 'src/admin/admin.service';
 import { RequiredChanne, RequiredChannel } from 'src/types/notifikation';
 import { formatDate } from 'src/helpers/dateFormat';
 import { AdvertisementClickSource, TransactionStatus } from '@prisma/client';
-import { PaymentGuardResult } from 'src/helpers/interface/enum';
-import { escapeHtml } from 'src/helpers/stadions';
+import {
+  AlertType,
+  ErrorContext,
+  PaymentGuardResult,
+} from 'src/helpers/interface/enum';
+import { canOwnerAcceptCard, escapeHtml } from 'src/helpers/stadions';
+import { AlertService } from 'src/alert/alert.service';
 
 @Injectable()
 export class BotService {
   private readonly logger = new Logger(BotService.name);
   private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
+    .split(',')
+    .filter(Boolean)
+    .map(Number);
+  private readonly SuperAdminChatid = (process.env.SUPPER_ADMIN ?? '')
     .split(',')
     .filter(Boolean)
     .map(Number);
@@ -39,113 +43,169 @@ export class BotService {
     private readonly i18n: I18nService,
     private readonly utils: UtilisService,
     private readonly adminService: AdminService,
+    private readonly alert: AlertService,
   ) {}
+
+  private isSuperAdmin(ctx: MyContext): boolean {
+  const id = ctx.from?.id;
+  return id !== undefined && this.SuperAdminChatid.includes(Number(id));
+}
+
+private isAdmin(ctx: MyContext): boolean {
+  const id = ctx.from?.id;
+  return (
+    this.isSuperAdmin(ctx) ||
+    (id !== undefined && this.AdminChatid.includes(Number(id)))
+  );
+}
 
   async start(ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
-    ctx.session = ctx.session || {};
-    const send = await ctx.reply(
-      this.i18n.translate('common.START', { lang }),
-      Markup.inlineKeyboard([
-        [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
-        [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
-        [Markup.button.callback(`🇬🇧 English`, `lang_en`)],
-      ]),
-    );
-    ctx.session.kalanConfirment ??= [];
-    ctx.session.kalanConfirment.push(send.message_id);
+    try {
+      ctx.session = ctx.session || {};
+      const send = await ctx.reply(
+        this.i18n.translate('common.START', { lang }),
+        Markup.inlineKeyboard([
+          [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
+          [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
+          [Markup.button.callback(`🇬🇧 English`, `lang_en`)],
+        ]),
+      );
+      ctx.session.kalanConfirment ??= [];
+      ctx.session.kalanConfirment.push(send.message_id);
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+    }
   }
-
   async checket(ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
+    try {
+      const requiredChannels = await this.getRequiredChannels(ctx);
 
-    const requiredChannels = await this.getRequiredChannels(ctx);
+      ctx.session.kalanConfirment ??= [];
+      if (requiredChannels.length) {
+        const channels = await this.createInviteLinks(ctx, requiredChannels);
 
-    ctx.session.kalanConfirment ??= [];
-    if (requiredChannels.length) {
-      const channels = await this.createInviteLinks(ctx, requiredChannels);
+        const inline_keyboard: InlineKeyboardButton[][] = [
+          ...channels.map((channel, index) => [
+            Markup.button.url(
+              channel.title ??
+                this.i18n.translate('admin.channel.default_name', {
+                  lang,
+                  args: { number: index + 1 },
+                }),
+              channel.inviteLink!,
+            ),
+          ]),
+          [
+            Markup.button.callback(
+              this.i18n.translate('admin.channel.check', { lang }),
+              'check_required_channels',
+            ),
+          ],
+        ];
+        if (ctx.session.kalanConfirment.length) {
+          await ctx.deleteMessages(ctx.session.kalanConfirment).catch(() => {});
+          ctx.session.kalanConfirment = [];
+        }
 
-      const inline_keyboard: InlineKeyboardButton[][] = [
-        ...channels.map((channel, index) => [
-          Markup.button.url(
-            channel.title ??
-              this.i18n.translate('admin.channel.default_name', {
-                lang,
-                args: { number: index + 1 },
-              }),
-            channel.inviteLink!,
+        const send = await ctx.reply(
+          this.i18n.translate('admin.channel.join_required', { lang }),
+          { reply_markup: { inline_keyboard } },
+        );
+        ctx.session.kalanConfirment.push(send.message_id);
+        return;
+      }
+
+      if (ctx.session.linkes?.length) {
+        await Promise.allSettled(
+          ctx.session.linkes.map((link) =>
+            ctx.telegram.revokeChatInviteLink(link.channelId, link.inviteLink),
           ),
-        ]),
-        [
-          Markup.button.callback(
-            this.i18n.translate('admin.channel.check', { lang }),
-            'check_required_channels',
-          ),
-        ],
-      ];
+        );
+        ctx.session.linkes = [];
+      }
       if (ctx.session.kalanConfirment.length) {
-        await ctx.deleteMessages(ctx.session.kalanConfirment).catch(() => {});
+        await ctx
+          .deleteMessages(ctx.session.kalanConfirment)
+          .catch(() => undefined);
         ctx.session.kalanConfirment = [];
       }
 
-      const send = await ctx.reply(
-        this.i18n.translate('admin.channel.join_required', { lang }),
-        { reply_markup: { inline_keyboard } },
-      );
-      ctx.session.kalanConfirment.push(send.message_id);
-      return;
-    }
-
-    if (ctx.session.linkes?.length) {
-      await Promise.allSettled(
-        ctx.session.linkes.map((link) =>
-          ctx.telegram.revokeChatInviteLink(link.channelId, link.inviteLink),
-        ),
-      );
-      ctx.session.linkes = [];
-    }
-    if (ctx.session.kalanConfirment.length) {
-      await ctx.deleteMessages(ctx.session.kalanConfirment).catch(() => {});
-      ctx.session.kalanConfirment = [];
-    }
-
-    const owners = await this.prisma.owners.findUnique({
-      where: { chatID: String(ctx.from?.id) },
-    });
-    if (!owners) {
-      const users = await this.prisma.users.findUnique({
+      const owners = await this.prisma.owners.findUnique({
         where: { chatID: String(ctx.from?.id) },
       });
-      if (!users) {
-        if (ctx.from && this.AdminChatid.includes(ctx.from.id)) {
-          const send = await ctx.reply(
-            '🛠 Admin Panel',
-            Markup.removeKeyboard(),
-          );
-          ctx.session.admin_messageId = send.message_id;
-          return this.adminService.admin_paneli(ctx, lang);
-        }
+      if (!owners) {
+        const users = await this.prisma.users.findUnique({
+          where: { chatID: String(ctx.from?.id) },
+        });
+        if (!users) {
+          if (ctx.from && this.isAdmin(ctx)) {
+            const send = await ctx.reply(
+              '🛠 Admin Panel',
+              Markup.removeKeyboard(),
+            );
+            ctx.session.admin_messageId = send.message_id;
+            return this.adminService.admin_paneli(ctx, lang);
+          }
 
-        ctx.session.step = 'registor';
-        ctx.reply(
-          this.i18n.translate('registor.title', { lang }),
+          ctx.session.step = 'registor';
+          await ctx.reply(
+            this.i18n.translate('registor.title', { lang }),
+            Markup.keyboard([
+              [`💼 ${this.i18n.translate('registor.button.0', { lang })}`],
+              [`🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`],
+            ])
+              .oneTime()
+              .resize(),
+          );
+          return;
+        }
+        if (!ctx.session.user_registor)
+          ctx.session.user_registor = {
+            full_name: null,
+            step: null,
+            id: 0,
+            phone: null,
+          };
+        ctx.session.user_registor.id = users.id;
+        const welcomeMessage = this.i18n.translate('common.HELLO', {
+          lang,
+          args: {
+            name: isCkecked(ctx.from?.first_name)
+              ? ctx.from?.first_name
+              : this.i18n.translate('common.firstName', { lang }),
+          },
+        });
+        await ctx.reply(
+          `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
+            lang,
+          })}`,
           Markup.keyboard([
-            [`💼 ${this.i18n.translate('registor.button.0', { lang })}`],
-            [`🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`],
+            [
+              this.i18n.translate('menyu_buttons.user_stadion_booking', {
+                lang,
+              }),
+            ],
+            [
+              this.i18n.translate('menyu_buttons.settings', { lang }),
+              this.i18n.translate('menyu_buttons.help', { lang }),
+            ],
           ])
-            .oneTime()
-            .resize(),
+            .resize()
+            .oneTime(),
         );
         return;
       }
-      if (!ctx.session.user_registor)
-        ctx.session.user_registor = {
+      if (!ctx.session.owner_registor)
+        ctx.session.owner_registor = {
+          email: null,
           full_name: null,
-          step: null,
           id: 0,
           phone: null,
+          step: null,
         };
-      ctx.session.user_registor.id = users.id;
+      ctx.session.owner_registor.id = owners.id;
       const welcomeMessage = this.i18n.translate('common.HELLO', {
         lang,
         args: {
@@ -159,54 +219,23 @@ export class BotService {
           lang,
         })}`,
         Markup.keyboard([
-          [this.i18n.translate('menyu_buttons.user_stadion_booking', { lang })],
+          [
+            this.i18n.translate('menyu_buttons.stadion', { lang }),
+            this.i18n.translate('menyu_buttons.bron', { lang }),
+          ],
           [
             this.i18n.translate('menyu_buttons.settings', { lang }),
             this.i18n.translate('menyu_buttons.help', { lang }),
           ],
+          [this.i18n.translate('menyu_buttons.card', { lang })],
         ])
           .resize()
           .oneTime(),
       );
-      return;
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
-    if (!ctx.session.owner_registor)
-      ctx.session.owner_registor = {
-        email: null,
-        full_name: null,
-        id: 0,
-        phone: null,
-        step: null,
-      };
-    ctx.session.owner_registor.id = owners.id;
-    const welcomeMessage = this.i18n.translate('common.HELLO', {
-      lang,
-      args: {
-        name: isCkecked(ctx.from?.first_name)
-          ? ctx.from?.first_name
-          : this.i18n.translate('common.firstName', { lang }),
-      },
-    });
-    await ctx.reply(
-      `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
-        lang,
-      })}`,
-      Markup.keyboard([
-        [
-          this.i18n.translate('menyu_buttons.stadion', { lang }),
-          this.i18n.translate('menyu_buttons.bron', { lang }),
-        ],
-        [
-          this.i18n.translate('menyu_buttons.settings', { lang }),
-          this.i18n.translate('menyu_buttons.help', { lang }),
-        ],
-        [this.i18n.translate('menyu_buttons.card', { lang })],
-      ])
-        .resize()
-        .oneTime(),
-    );
   }
-
   async getRequiredChannels(ctx: MyContext): Promise<RequiredChanne[]> {
     if (!ctx.from) return [];
 
@@ -233,7 +262,10 @@ export class BotService {
           type: chat.type,
         });
       } catch (e) {
-        console.error(e);
+        this.logger.error(
+          `Kanal tekshirilmadi: channel=${channelId} user=${userId}`,
+          e instanceof Error ? e.stack : String(e),
+        );
       }
     }
 
@@ -265,10 +297,9 @@ export class BotService {
 
     return result;
   }
-
   async createStadion(ctx: MyContext, type: EStadion_type) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const data = {
         name: String(ctx.session.stadion.name),
         latitude: Number(ctx.session.stadion.latitude),
@@ -284,26 +315,29 @@ export class BotService {
         payments_type: ctx.session.stadion.payments_type,
         mini: type === EStadion_type.SMOL,
       };
-      let stadion: any;
       const owner = await this.prisma.owners.findUnique({
         where: { chatID: String(ctx.from?.id) },
-        include: {
-          ownerCard: true,
-        },
+        select: { id: true, payout_status: true, paylov_partner_id: true },
       });
       if (!owner) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Owner topilmadi: chatID=${ctx.from?.id}`),
+          ErrorContext.OWNER,
+        );
         return;
       }
-      if (data.payments_type === 'CARD' && !owner.ownerCard) {
-        stadion = await this.prisma.stadion.create({
-          data: { ...data, owner_id: owner.id, working_status: false },
-        });
-      } else {
-        stadion = await this.prisma.stadion.create({
-          data: { ...data, owner_id: owner.id },
-        });
-      }
+
+      const canAcceptCard = canOwnerAcceptCard(owner);
+      const blockedByCard = data.payments_type === 'CARD' && !canAcceptCard;
+
+      const stadion = await this.prisma.stadion.create({
+        data: {
+          ...data,
+          owner_id: owner.id,
+          ...(blockedByCard ? { payments_type: 'CASH' as const } : {}),
+        },
+      });
 
       await ctx.reply(
         this.i18n.translate('stadions.stadion_added_success', { lang }),
@@ -321,16 +355,12 @@ export class BotService {
 
       return this.all_data(ctx, stadion.id);
     } catch (error) {
-      console.log(error);
-
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
     }
   }
-
   async renderScheduleMenu(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
-
     try {
+      const lang = await this.utils.langs(ctx);
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         select: { day_of_week: true },
@@ -369,15 +399,12 @@ export class BotService {
             },
           ],
         ];
-        try {
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('schedule.schedules.manager_weekli', { lang }),
-            { inline_keyboard: inlineKeyboard },
-          );
-        } catch (error) {
-          await this.utils.errorFunction(ctx);
-        }
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('schedule.schedules.manager_weekli', { lang }),
+          { inline_keyboard: inlineKeyboard },
+        );
         return;
       } else if (existingSchedules.length) {
         inlineKeyboard = [
@@ -414,15 +441,11 @@ export class BotService {
             },
           ],
         ];
-        try {
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('schedule.schedules.manager_weekli', { lang }),
-            { inline_keyboard: inlineKeyboard },
-          );
-        } catch (error) {
-          ctx.reply(this.i18n.translate('error.error', { lang }));
-        }
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.i18n.translate('schedule.schedules.manager_weekli', { lang }),
+          { inline_keyboard: inlineKeyboard },
+        );
 
         return;
       } else {
@@ -443,24 +466,20 @@ export class BotService {
           },
         ]);
       }
-      try {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('schedule.schedules.craed_week', { lang }),
-          { inline_keyboard: inlineKeyboard },
-        );
-      } catch (error) {
-        await this.utils.errorFunction(ctx);
-      }
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('schedule.schedules.craed_week', { lang }),
+        { inline_keyboard: inlineKeyboard },
+      );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
     }
   }
 
   async renderSchedule_week(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
-
     try {
+      const lang = await this.utils.langs(ctx);
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         select: { day_of_week: true },
@@ -496,23 +515,18 @@ export class BotService {
           },
         ]);
       }
-      try {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('schedule.schedules.craed_week', { lang }),
-          { inline_keyboard: inlineKeyboard },
-        );
-      } catch (error) {
-        await this.utils.errorFunction(ctx);
-      }
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('schedule.schedules.craed_week', { lang }),
+        { inline_keyboard: inlineKeyboard },
+      );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
     }
   }
-
   async viewSchedule(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const schedule = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         orderBy: { day_of_week: 'asc' },
@@ -557,12 +571,12 @@ export class BotService {
         return this.renderScheduleMenu(ctx, stadion_id);
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
   async stadion_off_days(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const stadion_off_day = await this.prisma.stadion_off_days.findMany({
         where: { stadion_id },
         orderBy: { createdAt: 'asc' },
@@ -613,23 +627,19 @@ export class BotService {
           },
         ],
       );
-      try {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('schedule.off_day.off', { lang }),
-          { inline_keyboard: button },
-        );
-      } catch (error) {
-        await this.utils.errorFunction(ctx);
-      }
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('schedule.off_day.off', { lang }),
+        { inline_keyboard: button },
+      );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
-
   async stadion_special(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const data = await this.prisma.stadion_special_schedule.findMany({
         where: { stadion_id },
       });
@@ -679,22 +689,18 @@ export class BotService {
           },
         ],
       );
-      try {
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('schedule.specile_days', { lang }),
-          { inline_keyboard: button },
-        );
-      } catch (error) {
-        await this.utils.errorFunction(ctx);
-      }
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.i18n.translate('schedule.specile_days', { lang }),
+        { inline_keyboard: button },
+      );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
   async location(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -744,17 +750,14 @@ export class BotService {
         });
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     } finally {
-      await ctx
-        .answerCbQuery()
-        .then(() => {})
-        .catch();
+      await ctx.answerCbQuery().catch(() => undefined);
     }
   }
   async stadion_price(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -813,12 +816,12 @@ export class BotService {
         );
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
   async stadion_image(ctx: MyContext, stadion_id: number) {
-    const lang = await this.utils.langs(ctx);
     try {
+      const lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -876,18 +879,14 @@ export class BotService {
         );
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     } finally {
-      await ctx
-        .answerCbQuery()
-        .then(() => {})
-        .catch();
+      await ctx.answerCbQuery().catch(() => undefined);
     }
   }
   async all_data(ctx: MyContext, stadion_id: number) {
-    let lang = await this.utils.langs(ctx);
-
     try {
+      let lang = await this.utils.langs(ctx);
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
         include: {
@@ -905,7 +904,12 @@ export class BotService {
       });
 
       if (!stadion) {
-        return ctx.reply(this.i18n.translate('stadions.not_found', { lang }));
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion topilmadi: stadionID=${stadion_id}`),
+          ErrorContext.STADION,
+        );
+        return;
       }
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
@@ -1008,9 +1012,11 @@ export class BotService {
         await sendText();
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     } finally {
-      await ctx.answerCbQuery();
+      if (ctx.callbackQuery) {
+        await ctx.answerCbQuery().catch(() => undefined);
+      }
     }
   }
   async handlePayload(ctx: MyContext, payload: string) {
@@ -1040,7 +1046,11 @@ export class BotService {
         }),
       ]);
       if (!advertisement) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Advertisement topilmadi: id=${adId}`),
+          ErrorContext.USER,
+        );
         return;
       }
       if (owner) {
@@ -1061,22 +1071,26 @@ export class BotService {
         });
 
         if (!userClicked) {
-          await this.prisma.advertisementClick.create({
-            data: {
-              advertisementId: adId,
-              userId: user.id,
-              source: AdvertisementClickSource.CHANNEL,
-            },
-          });
-
-          await this.prisma.advertisement.update({
-            where: { id: adId },
-            data: {
-              clickCount: {
-                increment: 1,
+          const { count } = await this.prisma.advertisementClick.createMany({
+            data: [
+              {
+                advertisementId: adId,
+                userId: user.id,
+                source: AdvertisementClickSource.CHANNEL,
               },
-            },
+            ],
+            skipDuplicates: true,
           });
+          if (count > 0) {
+            await this.prisma.advertisement.update({
+              where: { id: adId },
+              data: {
+                clickCount: {
+                  increment: 1,
+                },
+              },
+            });
+          }
         }
         await this.advertisementBooking(ctx, lang, advertisement.stadion);
         return;
@@ -1097,10 +1111,9 @@ export class BotService {
       ctx.session.advertisement_step = 'advertisement';
       await this.start(ctx);
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
-
   async advertisementBooking(ctx: MyContext, lang: string, stadion: IStadion) {
     try {
       if (ctx.callbackQuery) {
@@ -1128,15 +1141,15 @@ export class BotService {
       }
 
       const message = `
-  🏟 <b>${stadion.name}</b>\n
+  🏟 <b>${escapeHtml(stadion.name)}</b>\n
   ${this.i18n.translate('view.locate', { lang })} ${locationText}
   ${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
   ${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
   ${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
   ${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
   ${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
-  ${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-  ${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
+  ${this.i18n.translate('view.phone', { lang })} ${escapeHtml(owner?.phone ?? '-')}
+  ${this.i18n.translate('view.status', { lang })} <b>${statusText}</b>
   ${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt, lang)}</b>
   ${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt, lang)}</b>
   `;
@@ -1206,10 +1219,9 @@ export class BotService {
         await sendText();
       }
     } catch (error) {
-      await ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
-
   private async guardTransactionStatus(
     ctx: MyContext,
     lang: string,
@@ -1229,6 +1241,11 @@ export class BotService {
     }
 
     if (!requesterChatId || requesterChatId !== String(ctx.from?.id)) {
+      void this.alert.notify(
+        `Boshqa userning tranzaksiyasiga urinish | user=${ctx.from?.id}`,
+        `tur=${i18nPrefix}\ntransactionId=${transaction}`,
+        AlertType.SECURITY,
+      );
       await reply('not_found');
       return 'unauthorized';
     }
@@ -1253,7 +1270,6 @@ export class BotService {
         return 'failed';
     }
   }
-
   async handlePayloadSucces(ctx: MyContext, payload: string) {
     try {
       const transactionId = payload.slice('paymentPremium_success_'.length);
@@ -1286,10 +1302,9 @@ export class BotService {
       );
       return this.checket(ctx);
     } catch (error) {
-      await this.utils.errorFunction(ctx, error);
+      await this.utils.errorFunction(ctx, error, ErrorContext.PREMIUM);
     }
   }
-
   async handlePayload_bookingSuccess(ctx: MyContext, payload: string) {
     try {
       const transactionId = payload.slice('paymentBooking_success_'.length);
@@ -1310,10 +1325,11 @@ export class BotService {
       if (result !== 'ok' || !transaction) return;
 
       if (!transaction.booking) {
-        this.logger.error(
-          `handlePayload_bookingSuccess: transaction ${transaction.id} uchun booking topilmadi`,
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Tranzaksiya ${transaction.id} uchun booking topilmadi`),
+          ErrorContext.PAYMENT,
         );
-        await this.utils.errorFunction(ctx);
         return;
       }
 
@@ -1332,7 +1348,7 @@ export class BotService {
 
       return this.checket(ctx);
     } catch (error) {
-      await this.utils.errorFunction(ctx, error);
+      await this.utils.errorFunction(ctx, error, ErrorContext.PAYMENT);
     }
   }
 }

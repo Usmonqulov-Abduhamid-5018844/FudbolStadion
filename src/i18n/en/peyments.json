@@ -3,7 +3,7 @@
   "cash": "💵 Cash",
   "both": "💳💵 Both",
 
-  "change_card_block": "💳 No card is connected for this stadium.\n\n👤 CARD mode will be available only after the stadium owner adds a payment card.\n\n➡️ Please choose another payment method.",
+  "change_card_block": "💳 Card payment isn't available for this stadium yet.\n\nThe owner hasn't enabled online payments.",
 
   "owner_card": {
     "status": {

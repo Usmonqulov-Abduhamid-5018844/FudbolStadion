@@ -20,6 +20,7 @@ import { NotifikationModule } from './notifikation/notifikation.module';
 import { WeeklyReportModule } from './mail/weekly-report.module';
 import { AppController } from './app.controller';
 import { PaylovModule } from './paylov/paylov.module';
+import { AlertModule } from './alert/alert.module';
 
 @Module({
   controllers: [AppController],
@@ -63,6 +64,7 @@ import { PaylovModule } from './paylov/paylov.module';
     AdminModule,
     NotifikationModule,
     PaylovModule,
+    AlertModule,
   ],
 })
 export class AppModule {}

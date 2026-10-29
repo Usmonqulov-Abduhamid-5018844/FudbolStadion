@@ -8,22 +8,28 @@ datasource db {
 }
 
 model Owners {
-  id                   Int                  @id @default(autoincrement())
+  id                   Int      @id @default(autoincrement())
   full_name            String
   username             String?
-  chatID               String               @unique
+  chatID               String   @unique
   phone                String
-  status               Admin_S              @default(PENDING)
-  email                String               @unique
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  status               Admin_S  @default(PENDING)
+  email                String   @unique
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
   notificationSettings Json
-  ownerCard            Owner_card?
-  stadions             Stadion[]
-  notification         Notification[]
-  subscriptions        Subscription[]
-  premiumTransactions  PremiumTransaction[]
-  advertisements       Advertisement[]
+
+  legal_type        PayoutLegalType?
+  payout_status     PayoutStatus     @default(NONE)
+  paylov_partner_id String?          @unique // Paylov bergan sub partner ID
+  payout_note       String? // admin izohi (rad sababi va h.k.)
+  payout_updated_at DateTime?
+
+  stadions            Stadion[]
+  notification        Notification[]
+  subscriptions       Subscription[]
+  premiumTransactions PremiumTransaction[]
+  advertisements      Advertisement[]
 }
 
 model Users {
@@ -122,21 +128,6 @@ model Region_item {
   @@unique([name, region_id])
 }
 
-model Owner_card {
-  id           Int           @id @default(autoincrement())
-  owner_id     Int           @unique
-  createdAt    DateTime      @default(now())
-  cardMask     String
-  cardToken    String
-  cardType     String
-  expireMonth  String
-  expireYear   String
-  isActive     Boolean
-  provider     String
-  owner        Owners        @relation(fields: [owner_id], references: [id], onDelete: Cascade)
-  tranzaktions Tranzaktion[]
-}
-
 model Booking {
   id               Int            @id @default(autoincrement())
   user_id          Int?
@@ -167,74 +158,52 @@ model Booking {
 }
 
 model Subscription {
-  id Int @id @default(autoincrement())
-
-  ownerId Int
-  owner   Owners @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-
-  plan PremiumPlan
-
-  startDate DateTime
-
-  endDate DateTime
-
-  reason PremiumReason @default(PURCHASE)
-
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
+  id                  Int                  @id @default(autoincrement())
+  ownerId             Int
+  owner               Owners               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  plan                PremiumPlan
+  startDate           DateTime
+  endDate             DateTime
+  reason              PremiumReason        @default(PURCHASE)
+  isActive            Boolean              @default(true)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
   premiumTransactions PremiumTransaction[]
 
   @@index([ownerId, isActive])
 }
 
 model Tranzaktion {
-  id String @id @default(uuid()) @db.Uuid
-
-  user_id Int
-  user    Users @relation(fields: [user_id], references: [id])
-
-  booking_id Int
-  booking    Booking @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-
-  owner_card_id Int
-  owner_cards   Owner_card @relation(fields: [owner_card_id], references: [id])
-
-  amount          Int? // to'lov yaratilganda so'ralgan summa (webhook'da solishtirish uchun)
-  system_fee      Int
-  amount_received Int
-
-  provider       PaymentProvider?
-  gateway_method GatewayMethod?
-  provider_data  Json?
-
-  provider_order_id   String? // Paylov order_id (order yaratilganda yoziladi)
-  provider_payment_id String? // Paylov payment_id (webhook'da yoziladi)
-
-  refund_status    RefundStatus?
-  refund_id        String?
-  transfer_sum     Int? // to'langan summa
-  refunded_sum     Int? // haqiqatda qaytarilgan summa
-  retained_sum     Int? // ushlab qolingan summa
-  retained_percent Decimal?      @db.Decimal(10, 2) // qo'llangan foiz
-
-  status   TransactionStatus @default(PENDING)
-  currency String            @default("UZS")
-
-  card_masked_pan String?
-  card_type       String?
-  card_vendor     String?
-  card_country    String?
-  risk_level      Int?
-
-  paid_at   DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id               String           @id @default(uuid()) @db.Uuid
+  user_id          Int
+  user             Users            @relation(fields: [user_id], references: [id])
+  booking_id       Int
+  booking          Booking          @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+  provider         PaymentProvider?
+  gateway_method   GatewayMethod?
+  provider_data    Json?
+  amount           Int?
+  owner_amount     Int?
+  platform_amount  Int? 
+  split_status     SplitStatus      @default(NONE)
+  split_partner_id String?
+  split_sent_at    DateTime?
+  split_data       Json?
+  split_error      String?
+  provider_order_id   String?
+  provider_payment_id String?
+  refund_status       RefundStatus?
+  refunded_sum        Int?
+  refunded_at         DateTime?
+  status              TransactionStatus @default(PENDING)
+  currency            String            @default("UZS")
+  paid_at             DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   @@unique([provider, provider_order_id])
   @@unique([provider, provider_payment_id])
+  @@index([split_status, paid_at])
   @@index([user_id])
   @@index([booking_id])
   @@index([status, createdAt])
@@ -242,41 +211,32 @@ model Tranzaktion {
 }
 
 model PremiumTransaction {
-  id String @id @default(uuid()) @db.Uuid
-
-  owner_id Int
-  owner    Owners @relation(fields: [owner_id], references: [id], onDelete: Cascade)
-
-  subscription_id Int?
-  subscription    Subscription? @relation(fields: [subscription_id], references: [id], onDelete: Restrict)
-
-  duration Int
-  plan     PremiumPlan
-  amount   Int
-  reason   PremiumReason @default(PURCHASE)
-
-  provider       PaymentProvider?
-  gateway_method GatewayMethod?
-  provider_data  Json?
-
+  id                  String            @id @default(uuid()) @db.Uuid
+  owner_id            Int
+  owner               Owners            @relation(fields: [owner_id], references: [id], onDelete: Cascade)
+  subscription_id     Int?
+  subscription        Subscription?     @relation(fields: [subscription_id], references: [id], onDelete: Restrict)
+  duration            Int
+  plan                PremiumPlan
+  amount              Int
+  reason              PremiumReason     @default(PURCHASE)
+  provider            PaymentProvider?
+  gateway_method      GatewayMethod?
+  provider_data       Json?
   provider_order_id   String? // Paylov order_id
   provider_payment_id String? // Paylov payment_id
-
-  status TransactionStatus @default(PENDING)
-
-  currency     String @default("UZS")
-  transfer_sum Int?
-  refunded_sum Int?
-
-  card_masked_pan String?
-  card_type       String?
-  card_vendor     String?
-  card_country    String?
-  risk_level      Int?
-
-  paid_at   DateTime?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  status              TransactionStatus @default(PENDING)
+  currency            String            @default("UZS")
+  transfer_sum        Int?
+  refunded_sum        Int?
+  card_masked_pan     String?
+  card_type           String?
+  card_vendor         String?
+  card_country        String?
+  risk_level          Int?
+  paid_at             DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   @@unique([provider, provider_order_id])
   @@unique([provider, provider_payment_id])
@@ -468,4 +428,26 @@ enum GatewayMethod {
   UZUM
   PAYLOV
   CARD
+}
+
+enum SplitStatus {
+  NONE // hali kerak emas (o'yin tugamagan yoki naqd)
+  PENDING // yuborishga tayyor / navbatda
+  SENT // Paylov qabul qildi
+  FAILED // xato, qayta urinish yoki admin kerak
+  SKIPPED // split kerak emas (eski bronlar, bekor qilinganlar, ega partnersiz)
+}
+
+enum PayoutLegalType {
+  COMPANY // MChJ
+  SOLE_PROPRIETOR // YaTT
+  SELF_EMPLOYED // o'zini o'zi band qilgan
+}
+
+enum PayoutStatus {
+  NONE // ariza berilmagan (faqat naqd)
+  SUBMITTED // ega anketani to'ldirdi
+  CONTRACT_PENDING // hujjatlar Paylovga yuborildi, shartnoma kutilmoqda
+  ACTIVE // sub partner ID olingan, karta to'lovi yoqilgan
+  REJECTED // Paylov rad etdi
 }

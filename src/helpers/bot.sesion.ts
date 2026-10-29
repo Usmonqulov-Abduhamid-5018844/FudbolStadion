@@ -6,6 +6,7 @@ export interface ISession {
   name: string | null;
   lang: string | null;
   step: string | null;
+  admin_photoMessageId: number | null;
   ownerId: number | null;
   currentPage: string | null;
   ownerMenuMessageId: number | null;
@@ -112,7 +113,6 @@ export interface PendingBookingSession {
   endAt: Date | null;
   total_price: number | null;
   payment_method: string | null;
-  owner_card_id: number | null;
   type?: scheduleType | null;
   pricePerHur?: number | null;
   noshowCount?: number | null;

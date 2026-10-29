@@ -215,7 +215,9 @@
     "empty": "🏟 This owner has no stadiums yet.",
     "title": "🏟 <b>Stadium list</b>"
   },
-  "admin_only": "⛔ This section is for administrators only!\n\n🔐 You do not have sufficient permissions to access this section. If you believe you should have administrator access, please contact the system administrator.",
+  "admin_only": "⛔ This section is for administrators only!\n\n🔐 You don’t have permission to access it. If you believe you should be an admin, contact the system administrator.",
+
+  "super_admin_only": "⛔ This action is for super administrators only!\n\n🔐 You don’t have permission to perform it. If needed, contact the system administrator.",
 
   "bron": "📞 Enter booking manually",
 
