@@ -2767,113 +2767,115 @@ export class BotUpdate {
     }
   }
   @Action(/^add_stadion/)
-async add_stadion(@Ctx() ctx: MyContext) {
-  try {
-    const lang = await this.utils.langs(ctx);
-    const t = this.tr(lang);
+  async add_stadion(@Ctx() ctx: MyContext) {
+    try {
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
 
-    const owner = await this.prisma.owners.findUnique({
-      where: { chatID: String(ctx.from?.id) },
-      select: { status: true },
-    });
-    if (!owner) {
-      await this.deny(ctx, lang);
-      return;
-    }
-    if (owner.status === 'BLOCKED') {
-      await this.alertBox(ctx, t('stadions.blocked.cannot_add_stadium'));
-      return;
-    }
-    if (owner.status === 'PENDING') {
-      await this.alertBox(ctx, t('stadions.pending.cannot_add_stadium'));
-      return;
-    }
+      const owner = await this.prisma.owners.findUnique({
+        where: { chatID: String(ctx.from?.id) },
+        select: { status: true },
+      });
+      if (!owner) {
+        await this.deny(ctx, lang);
+        return;
+      }
+      if (owner.status === 'BLOCKED') {
+        await this.alertBox(ctx, t('stadions.blocked.cannot_add_stadium'));
+        return;
+      }
+      if (owner.status === 'PENDING') {
+        await this.alertBox(ctx, t('stadions.pending.cannot_add_stadium'));
+        return;
+      }
 
-    const regions = await this.prisma.region.findMany();
-    if (!regions.length) {
-      await this.utils.errorFunction(
-        ctx,
-        new Error('Regionlar hali yaratilmagan (npm run prisma qilish kerak)'),
-        ErrorContext.STADION,
-      );
-      return;
+      const regions = await this.prisma.region.findMany();
+      if (!regions.length) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error(
+            'Regionlar hali yaratilmagan (npm run prisma qilish kerak)',
+          ),
+          ErrorContext.STADION,
+        );
+        return;
+      }
+
+      const buttons: InlineKeyboardButton[][] = regions.map((r) => [
+        { text: r.name, callback_data: `region_${r.id}` },
+      ]);
+      buttons.push([
+        { text: t('stadions.back'), callback_data: 'back_owner_2' },
+      ]);
+
+      await this.utils.safeEditOrReply(ctx, t('stadions.stadion_region'), {
+        inline_keyboard: buttons,
+      });
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    } finally {
+      await ctx.answerCbQuery().catch(() => undefined);
     }
+  }
 
-    const buttons: InlineKeyboardButton[][] = regions.map((r) => [
-      { text: r.name, callback_data: `region_${r.id}` },
-    ]);
-    buttons.push([
-      { text: t('stadions.back'), callback_data: 'back_owner_2' },
-    ]);
-
-    await this.utils.safeEditOrReply(ctx, t('stadions.stadion_region'), {
-      inline_keyboard: buttons,
-    });
-  } catch (error) {
-    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
-  } finally {
+  @Action(/^region_(\d+)$/)
+  async region_items(@Ctx() ctx: MyContext) {
     await ctx.answerCbQuery().catch(() => undefined);
-  }
-}
+    try {
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
+      const regionId = Number((ctx.match as RegExpMatchArray)[1]);
 
-@Action(/^region_(\d+)$/)
-async region_items(@Ctx() ctx: MyContext) {
-  await ctx.answerCbQuery().catch(() => undefined);
-  try {
-    const lang = await this.utils.langs(ctx);
-    const t = this.tr(lang);
-    const regionId = Number((ctx.match as RegExpMatchArray)[1]);
+      const items = await this.prisma.region_item.findMany({
+        where: { region_id: regionId },
+      });
+      if (!items.length) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Region ${regionId} uchun tumanlar yo'q`),
+          ErrorContext.STADION,
+        );
+        return;
+      }
 
-    const items = await this.prisma.region_item.findMany({
-      where: { region_id: regionId },
-    });
-    if (!items.length) {
-      await this.utils.errorFunction(
-        ctx,
-        new Error(`Region ${regionId} uchun tumanlar yo'q`),
-        ErrorContext.STADION,
-      );
-      return;
+      const stadion = this.ensureStadionSession(ctx);
+      stadion.region_id = regionId;
+      stadion.step = 1;
+
+      const buttons: InlineKeyboardButton[][] = items.map((item) => [
+        { text: item.name, callback_data: `regions_item_${item.id}` },
+      ]);
+      buttons.push([
+        { text: t('stadions.back'), callback_data: 'back_owner_3' },
+      ]);
+
+      await this.utils.safeEditOrReply(ctx, t('stadions.region_items'), {
+        inline_keyboard: buttons,
+      });
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
-
-    const stadion = this.ensureStadionSession(ctx);
-    stadion.region_id = regionId;
-    stadion.step = 1;
-
-    const buttons: InlineKeyboardButton[][] = items.map((item) => [
-      { text: item.name, callback_data: `regions_item_${item.id}` },
-    ]);
-    buttons.push([
-      { text: t('stadions.back'), callback_data: 'back_owner_3' },
-    ]);
-
-    await this.utils.safeEditOrReply(ctx, t('stadions.region_items'), {
-      inline_keyboard: buttons,
-    });
-  } catch (error) {
-    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
   }
-}
 
-@Action(/^regions_item_(\d+)$/)
-async onStadions(@Ctx() ctx: MyContext) {
-  await ctx.answerCbQuery().catch(() => undefined);
-  try {
-    const lang = await this.utils.langs(ctx);
-    const regionItemId = Number((ctx.match as RegExpMatchArray)[1]);
+  @Action(/^regions_item_(\d+)$/)
+  async onStadions(@Ctx() ctx: MyContext) {
+    await ctx.answerCbQuery().catch(() => undefined);
+    try {
+      const lang = await this.utils.langs(ctx);
+      const regionItemId = Number((ctx.match as RegExpMatchArray)[1]);
 
-    const stadion = this.ensureStadionSession(ctx);
-    ctx.session.stadion_step = ctx.session.stadion_step || null;
+      const stadion = this.ensureStadionSession(ctx);
+      ctx.session.stadion_step = ctx.session.stadion_step || null;
 
-    stadion.region_item_id = regionItemId;
-    stadion.step = 2;
-    await ctx.reply(this.tr(lang)('stadions.name'));
-    ctx.session.stadion_step = 'stadion';
-    stadion.name = 'N';
-  } catch (error) {
-    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+      stadion.region_item_id = regionItemId;
+      stadion.step = 2;
+      await ctx.reply(this.tr(lang)('stadions.name'));
+      ctx.session.stadion_step = 'stadion';
+      stadion.name = 'N';
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    }
   }
-}
 
   @Action(/^toggleNotification\|(\w+)\|(\d+)$/)
   async toggleNotification(@Ctx() ctx: MyContext) {
@@ -3567,8 +3569,6 @@ async onStadions(@Ctx() ctx: MyContext) {
   }
   /////////////////////////////////////  ADMIN PANELi  /////////////////////////////////////
 
-  /*   ParseAction */
-
   private static readonly HELP_OWNER = new Map<string, string>([
     ['HELP_ABOUT', 'help.help.about'],
     ['HELP_START', 'help.help.start'],
@@ -4146,7 +4146,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
       }
 
-      // ---------- Owner: jadval ----------
       case 'schedule': {
         const id = this.idOf(data);
         if (!(await this.allowStadion(ctx, lang, id))) return;
@@ -4279,7 +4278,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
       }
 
-      // ---------- Owner: dam olish va maxsus kunlar ----------
       case 'off_stadion': {
         const id = this.idOf(data);
         if (!(await this.allowStadion(ctx, lang, id))) return;
@@ -4350,10 +4348,9 @@ async onStadions(@Ctx() ctx: MyContext) {
           where: { id: specialId },
         });
         await this.botService.stadion_special(ctx, id);
-        return; // eski kodda break yo'q edi: 'lokation' ga o'tib ketardi
+        return;
       }
 
-      // ---------- Owner: lokatsiya, narx, rasm ----------
       case 'update_location': {
         const id = this.idOf(data);
         if (!(await this.allowStadion(ctx, lang, id))) return;
@@ -4387,7 +4384,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
       }
 
-      // ---------- Owner: sozlamalar ----------
       case 'language': {
         const id = this.idOf(data);
         if (!(await this.allowOwner(ctx, lang, id))) return;
@@ -4444,7 +4440,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
       }
 
-      // ---------- Owner: premium ----------
       case 'ownerPremium': {
         const id = this.idOf(data);
         if (!(await this.allowOwner(ctx, lang, id))) return;
@@ -4520,7 +4515,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
       }
 
-      // ---------- Owner: reklama ----------
       case 'advertising': {
         const ownerId = this.idOf(data);
         if (!(await this.allowOwner(ctx, lang, ownerId))) return;
@@ -4599,7 +4593,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         await this.ownerService.advertisement_created(ctx, lang);
         return;
 
-      // ---------- Owner: bildirishnomalar ----------
       case 'notification':
       case 'notification_back': {
         const id = this.idOf(data);
@@ -4740,7 +4733,6 @@ async onStadions(@Ctx() ctx: MyContext) {
         return;
     }
   }
-  /*   ParseAction */
 
   @On('contact')
   async onContact(@Ctx() ctx: MyContext): Promise<void> {

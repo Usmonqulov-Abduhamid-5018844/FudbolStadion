@@ -1053,6 +1053,10 @@ private isAdmin(ctx: MyContext): boolean {
         );
         return;
       }
+      if(this.isAdmin(ctx)){
+       await ctx.reply(this.i18n.translate("booking.booking_user_only",{lang}))
+        return
+      }
       if (owner) {
         await ctx.reply(
           this.i18n.translate('advertisement.owner_cannot_book', { lang }),

@@ -130,5 +130,7 @@
   "cancel_yes": "✅ Ha, bekor qilish",
   "refund_pending": "⏳ <b>Qaytarim so‘rovingiz qabul qilindi!</b>\n\n💳 Hozirda to‘lov tizimi tomonidan qaytarim holati tekshirilmoqda.\n🔄 Natija avtomatik ravishda tekshirib boriladi.\n\n🕐 Iltimos, biroz kuting. Natija aniqlangach, sizga xabar beriladi.",
 
-  "cancel_condition_changed": "⏳ Kechikish tufayli shart biroz o'zgardi. Iltimos, «Bekor qilish» tugmasini qaytadan bosing — yangi shartlar ko'rsatiladi."
+  "cancel_condition_changed": "⏳ Kechikish tufayli shart biroz o'zgardi. Iltimos, «Bekor qilish» tugmasini qaytadan bosing — yangi shartlar ko'rsatiladi.",
+
+  "booking_user_only": "⚠️ Siz hozir administrator akkauntidasiz.\n\nBron qilish uchun oddiy foydalanuvchi akkauntidan kirishingiz kerak."
 }

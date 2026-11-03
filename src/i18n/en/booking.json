@@ -127,5 +127,7 @@
   "cancel_yes": "✅ Yes, cancel",
   "refund_pending": "⏳ <b>Your refund request has been accepted!</b>\n\n💳 The payment system is currently checking the refund status.\n🔄 The status will be checked automatically.\n\n🕐 Please wait. You will be notified as soon as the result is available.",
 
-  "cancel_condition_changed": "⏳ The condition changed slightly due to the delay. Please tap “Cancel” again — the updated terms will be shown."
+  "cancel_condition_changed": "⏳ The condition changed slightly due to the delay. Please tap “Cancel” again — the updated terms will be shown.",
+
+  "booking_user_only": "⚠️ You are currently using an administrator account.\n\nTo make a booking, please log in with a regular user account."
 }
