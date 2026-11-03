@@ -109,7 +109,6 @@ export class AdminService {
     private readonly notificationService: NotifikationService,
   ) {}
 
-  // ===================== YORDAMCHI METODLAR =====================
 
   private tr(lang: string) {
     return (key: string, args?: Record<string, unknown>): string =>
@@ -132,7 +131,6 @@ export class AdminService {
     ctx.session.confirment_messageId = null;
   }
 
-  /** Stadion tafsilotlari xabarlarini (rasm + matn) o'chiradi. */
   private async clearAdminDetailMessages(ctx: MyContext): Promise<void> {
     const ids = [
       ctx.session.admin_photoMessageId,
@@ -387,9 +385,6 @@ export class AdminService {
     });
   }
 
-  // ===================== ADMIN PANELI =====================
-
-  /** Boshqa joydan ham chaqiriladi, shuning uchun o'z try/catch i bor. */
   async admin_paneli(ctx: MyContext, lang: string): Promise<void> {
     try {
       const t = this.tr(lang);
@@ -533,7 +528,6 @@ export class AdminService {
     }
   }
 
-  // ===================== STADIONLAR =====================
 
   async stadium_status(
     ctx: MyContext,
@@ -545,7 +539,6 @@ export class AdminService {
     const t = this.tr(lang);
     const currentPage = Math.max(1, Number(page) || 1);
 
-    // ro'yxatlarga qaytilganda egasi tafsilotlari holati eskirib qolmasin
     this.resetOwnerDetailsSession(ctx);
 
     if (
@@ -777,7 +770,6 @@ export class AdminService {
     ctx.session.currentPage = currentPage;
     ctx.session.historyPage = historyPage;
   }
-
 
   async AdminPanel_owner(
     ctx: MyContext,
@@ -1346,7 +1338,6 @@ export class AdminService {
         throw new Error(`AdminOwner_select: noma'lum status: ${status}`);
     }
   }
-
 
   async ownerPremiumReason(
     ctx: MyContext,

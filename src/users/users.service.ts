@@ -29,6 +29,42 @@ import { formatDate } from 'src/helpers/dateFormat';
 import { canPayByCard, getStadionIds } from 'src/helpers/stadions';
 import { ErrorContext, scheduleType } from 'src/helpers/interface/enum';
 import { PaylovService } from 'src/paylov/paylov.service';
+
+const TASHKENT_TZ = 'Asia/Tashkent';
+const NEARBY_RADIUS_METERS = 3000;
+const NEARBY_LIMIT = 5;
+const NEARBY_CANDIDATES_LIMIT = 500;
+const CHEAP_PRICE_MAX = 500_000;
+const CASH_BOOKING_TTL_MS = 30 * 60 * 1000;
+const CARD_BOOKING_TTL_MS = 15 * 60 * 1000;
+const SLOTS_PER_ROW = 2;
+
+type TimeSlot = { start: string; end: string };
+type StadionForSlots = Parameters<typeof getStadionIds>[0];
+type PendingBooking = MyContext['session']['pendingBooking'];
+
+/** Tanlangan vaqt boshqa user tomonidan band qilinganini bildiradi */
+class SlotTakenError extends Error {
+  constructor() {
+    super('Slot band qilingan');
+    this.name = 'SlotTakenError';
+  }
+}
+
+const escapeHtml = (value: string | number | null | undefined): string =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+const formatPrice = (price?: number | string | Decimal | null): string =>
+  price ? new Intl.NumberFormat('uz-UZ').format(Number(price)) : '❌';
+
+const toMinutes = (time: string): number => {
+  const [hour, minute] = time.split(':').map(Number);
+  return hour * 60 + minute;
+};
+
 @Injectable()
 export class UsersService {
   private readonly logger = new Logger(UsersService.name);
@@ -40,25 +76,202 @@ export class UsersService {
     private readonly paylov: PaylovService,
   ) {}
 
-  async registor(ctx: MyContext, lang: string) {
-    ctx.session = ctx.session || {};
-    ctx.session.step = 'user_registor';
+  // ───────────────────────── Umumiy yordamchilar ─────────────────────────
 
-    ctx.session.user_registor.step = 'full_name';
-    ctx.reply(this.i18n.translate('registor.name', { lang }));
+  private t(lang: string, key: string, args?: Record<string, unknown>): string {
+    return this.i18n.translate(key, { lang, args });
+  }
+
+  private backButton(lang: string, callback_data: string): InlineKeyboardButton[] {
+    return [{ text: this.t(lang, 'schedule.back'), callback_data }];
+  }
+
+  private paginationRow(
+    lang: string,
+    page: number,
+    totalPages: number,
+    callback: (page: number) => string,
+  ): InlineKeyboardButton[] {
+    const row: InlineKeyboardButton[] = [];
+    if (page > 1) {
+      row.push({
+        text: this.t(lang, 'stadions.Previous'),
+        callback_data: callback(page - 1),
+      });
+    }
+    row.push({ text: `${page} / ${totalPages}`, callback_data: 'ignore' });
+    if (page < totalPages) {
+      row.push({
+        text: this.t(lang, 'stadions.Next'),
+        callback_data: callback(page + 1),
+      });
+    }
+    return row;
+  }
+
+  /** Callback query bo'lsa unga javob beradi, xato bersa e'tibor bermaydi */
+  private async answerCb(
+    ctx: MyContext,
+    text?: string,
+    showAlert = false,
+  ): Promise<void> {
+    if (!ctx.callbackQuery) return;
+    await ctx
+      .answerCbQuery(text, showAlert ? { show_alert: true } : undefined)
+      .catch(() => undefined);
+  }
+
+  private async findCurrentUser(ctx: MyContext) {
+    if (!ctx.from) return null;
+    return this.prisma.users.findUnique({
+      where: { chatID: String(ctx.from.id) },
+    });
+  }
+
+  /** User ko'rishi mumkin bo'lgan stadionlar sharti */
+  private visibleStadionWhere(): Prisma.StadionWhereInput {
+    return {
+      working_status: true,
+      admin_status: AdminStatus.APPROVED,
+      owner: { status: Admin_S.ACTIVE },
+      OR: [
+        { stadionChedules: { some: {} } },
+        { parent: { stadionChedules: { some: {} } } },
+      ],
+    };
+  }
+
+  private countNoShows(userId: number, stadionId: number): Promise<number> {
+    return this.prisma.booking.count({
+      where: {
+        user_id: userId,
+        stadion_id: stadionId,
+        status: { in: ['NOSHOW', 'REFUNDED'] },
+      },
+    });
+  }
+
+  private isSlotConflict(error: unknown): boolean {
+    if (error instanceof SlotTakenError) return true;
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === 'P2002' || error.code === 'P2034')
+    );
+  }
+
+  /** Vaqt oralig'i bo'shligini tekshiradi, band bo'lsa SlotTakenError tashlaydi */
+  private async assertSlotFree(
+    db: Prisma.TransactionClient,
+    stadionIds: number[],
+    startAt: Date,
+    endAt: Date,
+  ): Promise<void> {
+    const clash = await db.booking.findFirst({
+      where: {
+        stadion_id: { in: stadionIds },
+        status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+        startAt: { lt: endAt },
+        endAt: { gt: startAt },
+      },
+      select: { id: true },
+    });
+    if (clash) throw new SlotTakenError();
+  }
+
+  /**
+   * Bo'shlikni tekshirish va yaratishni bitta Serializable tranzaksiyada bajaradi.
+   * Ikki user bir vaqtda bosganda bittasi SlotTakenError yoki P2034 oladi.
+   */
+  private runGuarded<T>(
+    stadion: StadionForSlots,
+    startAt: Date,
+    endAt: Date,
+    create: (tx: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        await this.assertSlotFree(tx, getStadionIds(stadion), startAt, endAt);
+        return create(tx);
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+  }
+
+  private async notifyNoFreeSlots(
+    ctx: MyContext,
+    lang: string,
+    backCallback: string,
+  ): Promise<void> {
+    const text = this.t(lang, 'booking.no_free_slots');
+    if (ctx.callbackQuery) {
+      try {
+        await ctx.answerCbQuery(text, { show_alert: true });
+        return;
+      } catch {
+        // alert ko'rsatib bo'lmadi, oddiy xabar yuboramiz
+      }
+    }
+    await ctx.reply(text, {
+      reply_markup: { inline_keyboard: [this.backButton(lang, backCallback)] },
+    });
+  }
+
+  private async handleBookingFailure(
+    ctx: MyContext,
+    lang: string,
+    error: unknown,
+    backCallback: string,
+    context: ErrorContext = ErrorContext.BOOKING,
+  ): Promise<void> {
+    if (this.isSlotConflict(error)) {
+      await this.notifyNoFreeSlots(ctx, lang, backCallback);
+      return;
+    }
+    await this.utils.errorFunction(ctx, error, context);
+  }
+
+  // ───────────────────────── Ro'yxatdan o'tish ─────────────────────────
+
+  async registor(ctx: MyContext, lang: string) {
+    try {
+      ctx.session = ctx.session || {};
+      ctx.session.step = 'user_registor';
+      ctx.session.user_registor = ctx.session.user_registor || {
+        id: null,
+        full_name: null,
+        phone: null,
+        step: null,
+      };
+      ctx.session.user_registor.step = 'full_name';
+      await ctx.reply(this.t(lang, 'registor.name'));
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+    }
   }
 
   async registor_step(ctx: MyContext, lang: string) {
-    if (ctx.message && 'text' in ctx.message) {
-      if (ctx.session.user_registor.step === 'full_name') {
-        ctx.session.user_registor.full_name = ctx.message.text;
-        ctx.session.user_registor.step = 'phone';
-        await ctx.reply(this.i18n.translate('registor.phone', { lang }), {
+    try {
+      const registration = ctx.session.user_registor;
+      if (!registration) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error("user_registor session yo'q"),
+          ErrorContext.USER,
+        );
+        return;
+      }
+
+      if (ctx.message && 'text' in ctx.message) {
+        if (registration.step !== 'full_name') return;
+
+        registration.full_name = ctx.message.text.trim();
+        registration.step = 'phone';
+        await ctx.reply(this.t(lang, 'registor.phone'), {
           reply_markup: {
             keyboard: [
               [
                 {
-                  text: this.i18n.translate('registor.send_phone', { lang }),
+                  text: this.t(lang, 'registor.send_phone'),
                   request_contact: true,
                 },
               ],
@@ -67,270 +280,243 @@ export class UsersService {
             one_time_keyboard: true,
           },
         });
-
         return;
       }
-    } else if (ctx.message && 'contact' in ctx.message) {
-      if (ctx.session.user_registor.step === 'phone') {
-        ctx.session.user_registor.phone = ctx.message.contact.phone_number;
-        ctx.session.user_registor.step = null;
-        ctx.session.step = 'finish';
-        try {
-          const data = {
-            username: ctx.from?.username ?? '',
-            full_name: String(ctx.session.user_registor.full_name),
-            phone: String(ctx.session.user_registor.phone),
-            chatID: String(ctx.from!.id),
-          };
-          const user = await this.prisma.users.upsert({
-            where: { chatID: data.chatID },
-            update: {
-              full_name: data.full_name,
-              phone: data.phone,
-              username: data.username,
-            },
-            create: data,
-          });
 
-          if (ctx.session.advertisement_step === 'advertisement_register') {
-            const sesionData = await this.prisma.sesion.findUnique({
-              where: { chat_id: user.chatID },
-            });
-            if (!sesionData?.advertisementId) {
-              ctx.session.advertisement_step = null;
-              await this.utils.errorFunction(
-                ctx,
-                new Error("Session da advertisementId yo'q"),
-                ErrorContext.USER,
-              );
-              return;
-            }
-            const advertisement = await this.prisma.advertisement.findUnique({
-              where: { id: Number(sesionData?.advertisementId) },
-              include: {
-                stadion: { include: { region: true, region_items: true } },
-              },
-            });
-            if (!advertisement) {
-              ctx.session.advertisement_step = null;
-              await this.utils.errorFunction(
-                ctx,
-                new Error(
-                  `Advertisement topilmadi: id=${sesionData?.advertisementId}`,
-                ),
-                ErrorContext.USER,
-              );
-              return;
-            }
-            ctx.session.advertisement_step = null;
-            return this.botService.advertisementBooking(
-              ctx,
-              lang,
-              advertisement.stadion,
-            );
-          }
+      if (ctx.message && 'contact' in ctx.message) {
+        if (registration.step !== 'phone' || !ctx.from) return;
 
-          await ctx.reply(
-            this.i18n.translate('registor.finish', { lang }),
-            Markup.keyboard([
-              [
-                this.i18n.translate('menyu_buttons.user_stadion_booking', {
-                  lang,
-                }),
-              ],
-              [
-                this.i18n.translate('menyu_buttons.settings', { lang }),
-                this.i18n.translate('menyu_buttons.help', { lang }),
-              ],
-            ])
-              .resize()
-              .oneTime(),
-          );
-        } catch (error) {
-          await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+        const contact = ctx.message.contact;
+        // Boshqa odamning kontaktini yuborish mumkin emas
+        if (contact.user_id && contact.user_id !== ctx.from.id) {
+          await ctx.reply(this.t(lang, 'error.phone_invalid'));
+          return;
         }
+
+        const data = {
+          username: ctx.from.username ?? '',
+          full_name: String(registration.full_name),
+          phone: String(contact.phone_number),
+          chatID: String(ctx.from.id),
+        };
+        const user = await this.prisma.users.upsert({
+          where: { chatID: data.chatID },
+          update: {
+            full_name: data.full_name,
+            phone: data.phone,
+            username: data.username,
+          },
+          create: data,
+        });
+
+        // Session faqat DB muvaffaqiyatli yozilgandan keyin o'zgaradi
+        registration.id = user.id;
+        registration.phone = data.phone;
+        registration.step = null;
+        ctx.session.step = 'finish';
+
+        if (ctx.session.advertisement_step === 'advertisement_register') {
+          await this.continueAdvertisementBooking(ctx, lang, user.chatID);
+          return;
+        }
+
+        await ctx.reply(
+          this.t(lang, 'registor.finish'),
+          Markup.keyboard([
+            [this.t(lang, 'menyu_buttons.user_stadion_booking')],
+            [
+              this.t(lang, 'menyu_buttons.settings'),
+              this.t(lang, 'menyu_buttons.help'),
+            ],
+          ])
+            .resize()
+            .oneTime(),
+        );
       }
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
-  async userMenyu(ctx: MyContext, lang: string) {
-    ctx.reply(
-      this.i18n.translate('menyu_buttons.menu', {
-        lang,
-      }),
-      Markup.keyboard([
-        [this.i18n.translate('menyu_buttons.user_stadion_booking', { lang })],
-        [
-          this.i18n.translate('menyu_buttons.settings', { lang }),
-          this.i18n.translate('menyu_buttons.help', { lang }),
-        ],
-      ])
-        .resize()
-        .oneTime(),
-    );
+
+  private async continueAdvertisementBooking(
+    ctx: MyContext,
+    lang: string,
+    chatID: string,
+  ): Promise<void> {
+    const sesionData = await this.prisma.sesion.findUnique({
+      where: { chat_id: chatID },
+    });
+    const advertisementId = Number(sesionData?.advertisementId);
+
+    if (!sesionData?.advertisementId || Number.isNaN(advertisementId)) {
+      ctx.session.advertisement_step = null;
+      await this.utils.errorFunction(
+        ctx,
+        new Error("Session da advertisementId yo'q"),
+        ErrorContext.USER,
+      );
+      return;
+    }
+
+    const advertisement = await this.prisma.advertisement.findUnique({
+      where: { id: advertisementId },
+      include: { stadion: { include: { region: true, region_items: true } } },
+    });
+    ctx.session.advertisement_step = null;
+
+    if (!advertisement) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error(`Advertisement topilmadi: id=${advertisementId}`),
+        ErrorContext.USER,
+      );
+      return;
+    }
+    await this.botService.advertisementBooking(ctx, lang, advertisement.stadion);
   }
+
+  async userMenyu(ctx: MyContext, lang: string) {
+    try {
+      await ctx.reply(
+        this.t(lang, 'menyu_buttons.menu'),
+        Markup.keyboard([
+          [this.t(lang, 'menyu_buttons.user_stadion_booking')],
+          [
+            this.t(lang, 'menyu_buttons.settings'),
+            this.t(lang, 'menyu_buttons.help'),
+          ],
+        ])
+          .resize()
+          .oneTime(),
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+    }
+  }
+
+  // ───────────────────────── Sozlamalar ─────────────────────────
 
   async settings(ctx: MyContext, lang: string) {
     try {
-      const user = await this.prisma.users.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-      });
+      const user = await this.findCurrentUser(ctx);
       if (!user) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`User topilmadi: chatID=${ctx.from?.id}`),
+          ErrorContext.USER,
+        );
         return;
       }
 
-      ctx.reply(this.i18n.translate('settings.title', { lang }), {
+      await ctx.reply(this.t(lang, 'settings.title'), {
         reply_markup: {
           inline_keyboard: [
             [
               {
-                text: this.i18n.translate('settings.language', { lang }),
+                text: this.t(lang, 'settings.language'),
                 callback_data: 'user_language',
               },
             ],
             [
               {
-                text: this.i18n.translate('settings.phone', { lang }),
+                text: this.t(lang, 'settings.phone'),
                 callback_data: 'user_phone',
               },
             ],
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'back_user_1',
-              },
-            ],
+            this.backButton(lang, 'back_user_1'),
           ],
         },
       });
       ctx.session.step = null;
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
+
+  private phoneKeyboard(lang: string): InlineKeyboardButton[][] {
+    return [
+      [{ text: this.t(lang, 'success.edit'), callback_data: 'user_editPhone' }],
+      this.backButton(lang, 'back_user_2'),
+    ];
+  }
+
   async userUpdate_phone(ctx: MyContext, lang: string, text: string) {
     try {
-      const phone = text;
-
+      const phone = text.trim().replace(/[\s()-]/g, '');
       const phoneRegex = /^(?:\+998|998)?[0-9]{9}$/;
 
       if (!phone || !phoneRegex.test(phone)) {
-        ctx.reply(this.i18n.translate('error.phone_invalid', { lang }));
+        await ctx.reply(this.t(lang, 'error.phone_invalid'));
         return;
       }
 
-      let normalizedPhone = phone;
+      const digits = phone.replace(/^\+/, '');
+      const normalizedPhone = digits.length === 9 ? `+998${digits}` : `+${digits}`;
 
-      if (phone.length === 9) {
-        normalizedPhone = `+998${phone}`;
-      } else if (phone.startsWith('998')) {
-        normalizedPhone = `+${phone}`;
-      }
-
-      ctx.session.user_registor.phone = null;
-
-      await this.prisma.users.update({
+      const user = await this.prisma.users.update({
         where: { chatID: String(ctx.from?.id) },
         data: { phone: normalizedPhone },
       });
-      ctx.reply(this.i18n.translate('success.phone_updated', { lang }));
-      const user = await this.prisma.users.findUnique({
-        where: { chatID: String(ctx.from?.id) },
+      if (ctx.session.user_registor) ctx.session.user_registor.phone = null;
+
+      await ctx.reply(this.t(lang, 'success.phone_updated'));
+      await ctx.reply(`${this.t(lang, 'success.your_phone')} ${user.phone}`, {
+        reply_markup: { inline_keyboard: this.phoneKeyboard(lang) },
       });
-      if (!user) {
-        await ctx.reply(this.i18n.translate('stadions.not_fount', { lang }));
-        return;
-      }
-      await ctx.reply(
-        `${this.i18n.translate('success.your_phone', { lang })} ${user.phone}`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('success.edit', { lang }),
-                  callback_data: 'user_editPhone',
-                },
-              ],
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: 'back_user_2',
-                },
-              ],
-            ],
-          },
-        },
-      );
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
+
+  // ───────────────────────── Ortga tugmalari ─────────────────────────
+
   async userBackSwitch(ctx: MyContext, data: string, lang: string) {
     try {
       if (data.startsWith('payment-')) {
         const page = Number(data.split('-').pop()) || 1;
         if (ctx.session.bookingBrones) {
-          await ctx.deleteMessages(ctx.session.bookingBrones).catch(() => {});
+          await ctx
+            .deleteMessages(ctx.session.bookingBrones)
+            .catch(() => undefined);
           ctx.session.bookingBrones = [];
         }
         return this.userSwitch(ctx, 'stadionBron', lang, page);
       }
+
       switch (data) {
-        case '1': {
+        case '1':
           return this.userMenyu(ctx, lang);
-        }
-        case '2': {
+        case '2':
           return this.settings(ctx, lang);
-        }
-        case '3': {
+        case '3':
+          return this.userBooking(ctx, lang);
+        case '4':
+          return this.userBookingFanc(ctx, lang);
+        case '5': {
+          if (ctx.session.bookingBrones?.length) {
+            await ctx
+              .deleteMessages(ctx.session.bookingBrones)
+              .catch(() => undefined);
+            ctx.session.bookingBrones = [];
+            return;
+          }
           return this.userBooking(ctx, lang);
         }
-        case '4': {
-          return this.userBookingFanc(ctx, lang);
-        }
-        case '5':
-          {
-            if (ctx.session.bookingBrones?.length) {
-              try {
-                await ctx.deleteMessages(ctx.session.bookingBrones);
-                ctx.session.bookingBrones = [];
-              } catch (error) {}
-              ctx.session.bookingBrones = [];
-            } else {
-              return this.userBooking(ctx, lang);
-            }
-          }
-          break;
-        case '6':
-          {
-            if (ctx.session.stadionMessages?.length) {
-              try {
-                await ctx.deleteMessages(ctx.session.stadionMessages);
-                ctx.session.stadionMessages = [];
-              } catch (error) {
-                ctx.session.stadionMessages = [];
-              }
-            }
+        case '6': {
+          if (ctx.session.stadionMessages?.length) {
             await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-            await this.userSwitch(ctx, 'stadionSearch', lang);
+              .deleteMessages(ctx.session.stadionMessages)
+              .catch(() => undefined);
+            ctx.session.stadionMessages = [];
           }
-          break;
+          await this.answerCb(ctx);
+          return this.userSwitch(ctx, 'stadionSearch', lang);
+        }
         case 'help':
-          {
-            try {
-              await this.utils.safeEditHelpMenuReply_User(
-                ctx,
-                this.i18n.translate('user_help.menu.title', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
+          return this.utils.safeEditHelpMenuReply_User(
+            ctx,
+            this.t(lang, 'user_help.menu.title'),
+          );
         case 'Booking': {
           const pending = ctx.session.pendingBooking;
           if (
@@ -341,11 +527,15 @@ export class UsersService {
             !pending.stadion_id ||
             !pending.type
           ) {
-            await this.utils.errorFunction(ctx);
-            this.logger.warn('sesion yetarliy emas');
-            break;
+            // Odatda session eskirgan (bot qayta ishga tushgan yoki eski tugma)
+            await this.utils.errorFunction(
+              ctx,
+              new Error('back=Booking: pendingBooking yetarli emas'),
+              ErrorContext.USER,
+            );
+            return;
           }
-          await this.bookingScheduleFinish(
+          return this.bookingScheduleFinish(
             ctx,
             pending.start_time,
             pending.end_time,
@@ -354,55 +544,54 @@ export class UsersService {
             pending.stadion_id,
             pending.type,
           );
-
-          break;
         }
-        case 'Payments':
-          {
-            const pending = ctx.session.pendingBooking;
-            if (
-              !pending ||
-              !pending.date ||
-              !pending.stadion_id ||
-              !pending.start_time ||
-              !pending.end_time ||
-              !pending.startAt ||
-              !pending.endAt ||
-              !pending.user_id ||
-              !pending.payment_method ||
-              !pending.type ||
-              pending.total_price == null ||
-              pending.pricePerHur == null ||
-              pending.noshowCount == null
-            ) {
-              this.logger.warn(
-                `sesion yetarliy emas: ${JSON.stringify(pending)}`,
-              );
-              await this.utils.errorFunction(ctx, undefined, ErrorContext.USER);
-              break;
-            }
-            await this.bookingPayments(
+        case 'Payments': {
+          const pending = ctx.session.pendingBooking;
+          if (
+            !pending ||
+            !pending.date ||
+            !pending.stadion_id ||
+            !pending.start_time ||
+            !pending.end_time ||
+            !pending.startAt ||
+            !pending.endAt ||
+            !pending.user_id ||
+            !pending.payment_method ||
+            !pending.type ||
+            pending.total_price == null ||
+            pending.pricePerHur == null ||
+            pending.noshowCount == null
+          ) {
+            await this.utils.errorFunction(
               ctx,
-              'card',
-              pending.date,
-              pending.start_time,
-              pending.end_time,
-              pending.stadion_id,
-              pending.pricePerHur,
-              pending.noshowCount,
-              pending.type as scheduleType,
-              lang,
+              new Error('back=Payments: pendingBooking yetarli emas'),
+              ErrorContext.USER,
             );
+            return;
           }
-          break;
-        default: {
-          break;
+          return this.bookingPayments(
+            ctx,
+            'card',
+            pending.date,
+            pending.start_time,
+            pending.end_time,
+            pending.stadion_id,
+            pending.pricePerHur,
+            pending.noshowCount,
+            pending.type as scheduleType,
+            lang,
+          );
         }
+        default:
+          this.logger.debug(`userBackSwitch: noma'lum data: ${data}`);
+          await this.answerCb(ctx);
       }
     } catch (error) {
-      ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
+
+  // ───────────────────────── Asosiy user menyusi (callback "user_*") ─────────────────────────
 
   async userSwitch(
     ctx: MyContext,
@@ -417,976 +606,639 @@ export class UsersService {
         phone: null,
         step: null,
       };
+      const currentPage = Math.max(1, Number(page) || 1);
+
       switch (data) {
-        case 'language':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                ctx.answerCbQuery();
-              } catch (error) {}
-            }
-            ctx.session = ctx.session || {};
-            ctx.reply(
-              this.i18n.translate('common.START', { lang }),
-              Markup.inlineKeyboard([
-                [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
-                [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
-                [Markup.button.callback(`🇬🇧 English`, `lang_en`)],
-                [
-                  Markup.button.callback(
-                    `${this.i18n.translate('schedule.back', { lang })}`,
-                    'back_user_2',
-                  ),
-                ],
-              ]),
-            );
-            ctx.session.step = 'user_langs';
+        case 'language': {
+          await this.answerCb(ctx);
+          await ctx.reply(
+            this.t(lang, 'common.START'),
+            Markup.inlineKeyboard([
+              [Markup.button.callback(`🇺🇿 O'zbekcha`, `lang_uz`)],
+              [Markup.button.callback(`🇷🇺 Русский`, `lang_ru`)],
+              [Markup.button.callback(`🇬🇧 English`, `lang_en`)],
+              [Markup.button.callback(this.t(lang, 'schedule.back'), 'back_user_2')],
+            ]),
+          );
+          ctx.session.step = 'user_langs';
+          return;
+        }
+        case 'phone': {
+          await this.answerCb(ctx);
+          const user = await this.findCurrentUser(ctx);
+          if (!user) {
+            await ctx.reply(this.t(lang, 'stadions.not_fount'));
+            return;
           }
-          break;
-        case 'phone':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
-            const user = await this.prisma.users.findUnique({
-              where: { chatID: String(ctx.from?.id) },
-            });
-            if (!user) {
-              await ctx.reply(
-                this.i18n.translate('stadions.not_fount', { lang }),
-              );
-              return;
-            }
-            await ctx.reply(
-              `${this.i18n.translate('success.your_phone', { lang })} ${user.phone}`,
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('success.edit', { lang }),
-                        callback_data: 'user_editPhone',
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_2',
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-          }
-          break;
-        case 'editPhone':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                ctx.answerCbQuery();
-              } catch (error) {}
-            }
-            ctx.session.user_registor.phone = 'phone';
-            ctx.reply(this.i18n.translate('registor.phone', { lang }));
-          }
-          break;
-        case 'stadionNewBron': {
+          await ctx.reply(`${this.t(lang, 'success.your_phone')} ${user.phone}`, {
+            reply_markup: { inline_keyboard: this.phoneKeyboard(lang) },
+          });
+          return;
+        }
+        case 'editPhone': {
+          await this.answerCb(ctx);
+          ctx.session.user_registor.phone = 'phone';
+          await ctx.reply(this.t(lang, 'registor.phone'));
+          return;
+        }
+        case 'stadionNewBron':
           return this.userBookingFanc(ctx, lang);
-        }
         case 'stadionBron':
-          {
-            try {
-              const limit = 2;
-              const user = await this.prisma.users.findUnique({
-                where: { chatID: String(ctx.from?.id) },
-              });
-              if (!user) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-              const [bookings, total] = await Promise.all([
-                this.prisma.booking.findMany({
-                  where: {
-                    user_id: user.id,
-                    status: {
-                      in: ['CONFIRMED', 'PAID', 'PENDING'],
-                    },
-                  },
-                  orderBy: {
-                    updatedAt: 'desc',
-                  },
-                  include: {
-                    stadion: {
-                      select: {
-                        id: true,
-                        name: true,
-                        latitude: true,
-                        longitude: true,
-                        payments_type: true,
-                        region: {
-                          select: {
-                            name: true,
-                          },
-                        },
-                        region_items: {
-                          select: {
-                            name: true,
-                          },
-                        },
-                      },
-                    },
-                    tranzaktions: {
-                      select: {
-                        id: true,
-                      },
-                    },
-                  },
-
-                  skip: (page - 1) * limit,
-                  take: limit,
-                }),
-                this.prisma.booking.count({
-                  where: {
-                    user_id: user.id,
-                    status: {
-                      in: ['CONFIRMED', 'PAID', 'PENDING'],
-                    },
-                  },
-                }),
-              ]);
-
-              if (!total) {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.no_active_bookings', {
-                    lang,
-                  }),
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'back_user_3',
-                        },
-                      ],
-                    ],
-                  },
-                );
-                return;
-              }
-              try {
-                await ctx.answerCbQuery(
-                  this.i18n.translate('loading.loading', { lang }),
-                );
-              } catch (error) {}
-
-              const Time = (startAt: Date, andAt: Date, lang: string) => {
-                const { timeLeftText, totalMinutes } =
-                  this.utils.bookingTimeCalculate(startAt, lang);
-                const { totalMinutes: endMinutes } =
-                  this.utils.bookingTimeCalculate(andAt, lang);
-
-                if (totalMinutes <= 0 && endMinutes > 0) {
-                  return this.i18n.translate('booking.game_started', { lang });
-                } else if (totalMinutes <= 0) {
-                  return this.i18n.translate('bookingHistory.time_expired', {
-                    lang,
-                  });
-                }
-
-                return timeLeftText;
-              };
-
-              const formatPrice = (price?: number | string | Decimal) => {
-                if (!price) return '❌';
-                return new Intl.NumberFormat('uz-UZ').format(Number(price));
-              };
-
-              if (!ctx.session.bookingBrones) {
-                ctx.session.bookingBrones = [];
-              }
-
-              for (const item of bookings) {
-                const locationText = getLocation(
-                  item.stadion.latitude,
-                  item.stadion.longitude,
-                  item.stadion.region.name,
-                  item.stadion.region_items.name,
-                );
-
-                const message = `${this.i18n.translate('bookingHistory.booking.id', { lang })}: ${item.id}
-
-${this.i18n.translate('bookingHistory.booking.stadion', { lang })}: ${item.stadion.name}
-
-${this.i18n.translate('bookingHistory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
-
-${this.i18n.translate('bookingHistory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
-
-${this.i18n.translate('bookingHistory.booking.remaining_time', { lang })}: ${Time(item.startAt, item.endAt, lang)}
-
-${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}
-
-${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
-
-${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}
-
-${item.check_in ? this.i18n.translate('bookingHistory.booking.check_in', { lang }) + '\n\n' : ''}${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
-`;
-
-                const buttons = this.utils.booking_status_handler(
-                  item.status,
-                  item.id,
-                  item.payment_method,
-                  item.stadion.payments_type,
-                  item.startAt,
-                  item.endAt,
-                  page,
-                  limit,
-                  total,
-                  item.check_in,
-                  lang,
-                );
-
-                const send = await ctx.reply(message, {
-                  parse_mode: 'HTML',
-                  reply_markup: {
-                    inline_keyboard: buttons,
-                  },
-                });
-                ctx.session.bookingBrones.push(send.message_id);
-              }
-
-              const buttons: InlineKeyboardButton[] = [];
-              const totalPages = Math.ceil(total / limit);
-
-              if (!(page === 1 && totalPages === 1)) {
-                if (page > 1) {
-                  buttons.push({
-                    text: this.i18n.translate('stadions.Previous', { lang }),
-                    callback_data: `booking_region_page_stadionBron_${page - 1}`,
-                  });
-                }
-
-                buttons.push({
-                  text: `${page} / ${totalPages}`,
-                  callback_data: 'ignore',
-                });
-
-                if (page < totalPages) {
-                  buttons.push({
-                    text: this.i18n.translate('stadions.Next', { lang }),
-                    callback_data: `booking_region_page_stadionBron_${page + 1}`,
-                  });
-                }
-
-                const send = await ctx.reply(
-                  this.i18n.translate('stadions.Select', { lang }),
-                  {
-                    reply_markup: {
-                      inline_keyboard: [
-                        buttons,
-                        [
-                          {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: 'back_user_5',
-                          },
-                        ],
-                      ],
-                    },
-                  },
-                );
-                ctx.session.bookingBrones.push(send.message_id);
-              }
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-
-          break;
+          return this.showActiveBookings(ctx, lang, currentPage);
         case 'stadionBronHistory':
-          {
-            try {
-              const user = await this.prisma.users.findUnique({
-                where: { chatID: String(ctx.from?.id) },
-              });
-              if (!user) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-              const limit = 4;
-              const [booking, total] = await Promise.all([
-                this.prisma.booking.findMany({
-                  where: {
-                    user_id: user.id,
-                    status: {
-                      in: [
-                        'COMPLETED',
-                        'NOSHOW',
-                        'CANCELED',
-                        'REFUNDED',
-                        'REFUND_PENDING',
-                      ],
-                    },
-                  },
-                  orderBy: {
-                    updatedAt: 'desc',
-                  },
-                  include: {
-                    stadion: {
-                      select: {
-                        id: true,
-                        name: true,
-                        longitude: true,
-                        latitude: true,
-                        region: {
-                          select: {
-                            name: true,
-                          },
-                        },
-                        region_items: {
-                          select: {
-                            name: true,
-                          },
-                        },
-                      },
-                    },
-                    tranzaktions: {
-                      where: { status: TransactionStatus.SUCCESS },
-                      orderBy: { createdAt: 'desc' },
-                      take: 1,
-                      select: {
-                        refunded_sum: true,
-                        refund_status: true,
-                      },
-                    },
-                  },
-                  skip: (page - 1) * limit,
-                  take: limit,
-                }),
-                this.prisma.booking.count({
-                  where: {
-                    user_id: user.id,
-                    status: {
-                      in: [
-                        'COMPLETED',
-                        'NOSHOW',
-                        'CANCELED',
-                        'REFUNDED',
-                        'REFUND_PENDING',
-                      ],
-                    },
-                  },
-                }),
-              ]);
-              if (!total) {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.booking_history_empty', {
-                    lang,
-                  }),
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: 'back_user_3',
-                        },
-                      ],
-                    ],
-                  },
-                );
-                return;
-              }
-              try {
-                await ctx.answerCbQuery(
-                  this.i18n.translate('loading.loading', { lang }),
-                );
-              } catch (error) {}
-              let message = `${this.i18n.translate('bookingHistory.booking.history_title', { lang })}\n\n`;
-
-              const formatPrice = (price?: number | string | Decimal) => {
-                if (!price) return '❌';
-                return new Intl.NumberFormat('uz-UZ').format(Number(price));
-              };
-              for (const item of booking) {
-                let locationText = getLocation(
-                  item.stadion.latitude,
-                  item.stadion.longitude,
-                  item.stadion.region.name,
-                  item.stadion.region_items.name,
-                );
-
-                message += `${this.i18n.translate('bookingHistory.booking.id', { lang })}: ${item.id}
-
-${this.i18n.translate('bookingHistory.booking.stadion', { lang })}: ${item.stadion.name}
-
-${this.i18n.translate('bookingHistory.booking.date', { lang })}: ${format(item.date, 'dd.MM.yyyy')}
-
-${this.i18n.translate('bookingHistory.booking.time', { lang })}: ${item.start_time} - ${item.end_time}
-
-${this.i18n.translate('bookingHistory.booking.price', { lang })}: ${formatPrice(item.total_price)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}
-
-${this.i18n.translate('bookingHistory.booking.payment_type', { lang })}: ${getPaymentText(item.payment_method, this.i18n.translate('peyments', { lang }))}
-
-${this.i18n.translate('bookingHistory.booking.status', { lang })}: ${statusMap(item.status, this.i18n, lang)}\n`;
-
-                if (
-                  (item.status === 'REFUNDED' ||
-                    item.status === 'REFUND_PENDING') &&
-                  item.tranzaktions.length > 0
-                ) {
-                  const tx = item.tranzaktions[0];
-
-                  if (item.status === 'REFUNDED' && tx.refunded_sum != null) {
-                    message += `
-${this.i18n.translate('bookingHistory.booking.refunded', { lang })}: ${formatPrice(tx.refunded_sum)} ${this.i18n.translate('bookingHistory.booking.price_title', { lang })}\n`;
-                  }
-
-                  if (item.status === 'REFUND_PENDING') {
-                    message += `
-${this.i18n.translate('bookingHistory.booking.refund_in_progress', { lang })}\n`;
-                  }
-                }
-                message += `
-${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationText}
-
-━━━━━━━━━━━━━━━━━━━━
-
-`;
-              }
-              const buuton: InlineKeyboardButton[] = [];
-              const totalPages = Math.ceil(total / limit);
-              if (page === 1 && totalPages === 1) {
-              } else {
-                if (page > 1) {
-                  buuton.push({
-                    text: this.i18n.translate('stadions.Previous', { lang }),
-                    callback_data: `booking_region_page_stadionBronHistory_${page - 1}`,
-                  });
-                }
-                buuton.push({
-                  text: `${page} / ${totalPages}`,
-                  callback_data: 'ignore',
-                });
-                if (page < totalPages) {
-                  buuton.push({
-                    text: this.i18n.translate('stadions.Next', { lang }),
-                    callback_data: `booking_region_page_stadionBronHistory_${page + 1}`,
-                  });
-                }
-              }
-
-              await ctx.editMessageText(message, {
-                parse_mode: 'HTML',
-                reply_markup: {
-                  inline_keyboard: [
-                    buuton,
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_3',
-                      },
-                    ],
-                  ],
-                },
-              });
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
+          return this.showBookingHistory(ctx, lang, currentPage);
         case 'stadionFavorite':
-          {
-            const limit = 4;
-            const [favorites, total] = await Promise.all([
-              this.prisma.myFavoriteStadium.findMany({
-                where: {
-                  chat_id: String(ctx.from?.id),
-                  stadion: {
-                    working_status: true,
-                    admin_status: AdminStatus.APPROVED,
-                    owner: {
-                      status: Admin_S.ACTIVE,
-                    },
-                  },
-                },
-                orderBy: {
-                  createdAt: 'desc',
-                },
-                include: {
-                  stadion: {
-                    include: {
-                      region: true,
-                      region_items: true,
-                    },
-                  },
-                },
-                skip: (page - 1) * limit,
-                take: limit,
-              }),
-              this.prisma.myFavoriteStadium.count({
-                where: { chat_id: String(ctx.from?.id) },
-              }),
-            ]);
-            if (!favorites.length) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('booking.stadion.noFavorites', { lang }),
-                {
-                  show_alert: true,
-                },
-              );
-              return;
-            }
-            try {
-              await ctx.answerCbQuery(
-                this.i18n.translate('loading.loading', { lang }),
-              );
-            } catch (error) {}
-            for (const favorite of favorites) {
-              await this.stadionFavorite(ctx, lang, favorite.stadion);
-            }
-            const totalPages = Math.ceil(total / limit);
-            if (page === 1 && totalPages === 1) {
-              return;
-            }
-            const row: InlineKeyboardButton[] = [];
-            if (page > 1) {
-              row.push({
-                text: this.i18n.translate('stadions.Previous', { lang }),
-                callback_data: `booking_region_page_favorit_${page - 1}`,
-              });
-            }
-            row.push({
-              text: `${page} / ${totalPages}`,
-              callback_data: 'ignore',
-            });
-            if (page < totalPages) {
-              row.push({
-                text: this.i18n.translate('stadions.Next', { lang }),
-                callback_data: `booking_region_page_favorit_${page + 1}`,
-              });
-            }
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('stadions.Select', { lang }),
-              {
-                inline_keyboard: [row],
-              },
-            );
-          }
-          break;
-        case 'stadionSearch':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('booking.stadion.search', { lang }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('booking.stadions.nearby', {
-                        lang,
-                      }),
-                      callback_data: 'user_location',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('booking.stadions.by_time', {
-                        lang,
-                      }),
-                      callback_data: 'user_working',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('booking.stadions.by_name', {
-                        lang,
-                      }),
-                      callback_data: 'user_nameSearch',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('booking.stadions.cheap', {
-                        lang,
-                      }),
-                      callback_data: 'user_cheapPrice',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: 'back_user_3',
-                    },
-                  ],
-                ],
-              },
-            );
-          }
-          break;
-        case 'location':
-          {
-            if (ctx.callbackQuery) {
-              try {
-                await ctx.answerCbQuery();
-              } catch (error) {}
-            }
-            await ctx.reply(
-              this.i18n.translate('stadions.location_else', { lang }),
-              {
-                reply_markup: {
-                  keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('stadions.send_location', {
-                          lang,
-                        }),
-                        request_location: true,
-                      },
-                    ],
-                  ],
-                  resize_keyboard: true,
-                  one_time_keyboard: true,
-                },
-              },
-            );
-            ctx.session.booking_step = 'user_location_send';
-          }
-          break;
-        case 'working':
-          {
-            try {
-              try {
-                if (ctx.callbackQuery) {
-                  await ctx.answerCbQuery();
-                }
-              } catch (error) {}
-
-              const tz = 'Asia/Tashkent';
-              const now = toZonedTime(new Date(), tz);
-
-              const todayStr = format(now, 'yyyy-MM-dd');
-              const tomorrowStr = format(
-                new Date(now.getTime() + 86400000),
-                'yyyy-MM-dd',
-              );
-
-              const buttons: any[] = [];
-
-              for (let i = 0; i < 7; i++) {
-                const date = new Date(now);
-                date.setDate(now.getDate() + i);
-
-                const dateStr = format(date, 'yyyy-MM-dd');
-
-                const day = format(date, 'd');
-                const monthNumber = date.getMonth() + 1;
-
-                const weekDay = date.getDay() === 0 ? 7 : date.getDay();
-
-                const monthText = this.i18n.translate(
-                  `schedule.months.${monthNumber}`,
-                  { lang },
-                );
-
-                const weekDayText = this.i18n.translate(
-                  `schedule.week_days.${weekDay}`,
-                  { lang },
-                );
-
-                let dateLabel = `${day} - ${monthText}. ${weekDayText}`;
-
-                if (dateStr === todayStr) {
-                  dateLabel = `${this.i18n.translate('schedule.today', { lang })}. ${weekDayText}`;
-                }
-
-                if (dateStr === tomorrowStr) {
-                  dateLabel = `${this.i18n.translate('schedule.tomorrow', { lang })}. ${weekDayText}`;
-                }
-
-                buttons.push([
+          return this.showFavorites(ctx, lang, currentPage);
+        case 'stadionSearch': {
+          await this.answerCb(ctx);
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.t(lang, 'booking.stadion.search'),
+            {
+              inline_keyboard: [
+                [
                   {
-                    text: `${dateLabel}`,
-                    callback_data: `working_date_${dateStr}`,
+                    text: this.t(lang, 'booking.stadions.nearby'),
+                    callback_data: 'user_location',
                   },
-                ]);
-              }
-              buttons.push([
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-                  callback_data: 'back_user_6',
-                },
-              ]);
-
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('booking.working_time', { lang }),
-                {
-                  inline_keyboard: buttons,
-                },
-              );
-            } catch (error) {}
-          }
-          break;
-        case 'nameSearch':
-          {
-            try {
-              try {
-                if (ctx.callbackQuery) {
-                  await ctx.answerCbQuery();
-                }
-                await ctx.deleteMessage();
-              } catch (error) {}
-
-              await ctx.reply(
-                this.i18n.translate('booking.stadions.enter_name', { lang }),
-              );
-              ctx.session.stadion.name = 'SeorchName';
-            } catch (error) {}
-          }
-          break;
-        case 'cheapPrice':
-          {
-            try {
-              try {
-                if (ctx.callbackQuery) {
-                  await ctx.answerCbQuery();
-                }
-                await ctx.deleteMessage();
-              } catch (error) {}
-              const max_price = 500000;
-              const limit = 4;
-              const [stadions, total] = await Promise.all([
-                this.prisma.stadion.findMany({
-                  where: {
-                    working_status: true,
-                    admin_status: AdminStatus.APPROVED,
-                    owner: {
-                      status: Admin_S.ACTIVE,
-                    },
-                    price: {
-                      lte: max_price,
-                    },
-                    OR: [
-                      {
-                        stadionChedules: { some: {} },
-                      },
-                      {
-                        parent: {
-                          stadionChedules: { some: {} },
-                        },
-                      },
-                    ],
+                ],
+                [
+                  {
+                    text: this.t(lang, 'booking.stadions.by_time'),
+                    callback_data: 'user_working',
                   },
-                  include: {
-                    region: true,
-                    region_items: true,
+                ],
+                [
+                  {
+                    text: this.t(lang, 'booking.stadions.by_name'),
+                    callback_data: 'user_nameSearch',
                   },
-                  orderBy: {
-                    price: 'asc',
+                ],
+                [
+                  {
+                    text: this.t(lang, 'booking.stadions.cheap'),
+                    callback_data: 'user_cheapPrice',
                   },
-                  skip: (page - 1) * limit,
-                  take: limit,
-                }),
-                this.prisma.stadion.count({
-                  where: {
-                    working_status: true,
-                    admin_status: AdminStatus.APPROVED,
-                    owner: {
-                      status: Admin_S.ACTIVE,
-                    },
-                    price: { lte: max_price },
-                    OR: [
-                      {
-                        stadionChedules: { some: {} },
-                      },
-                      {
-                        parent: {
-                          stadionChedules: { some: {} },
-                        },
-                      },
-                    ],
-                  },
-                }),
-              ]);
-              if (!stadions.length) {
-                await ctx.reply(this.i18n.translate('error.error', { lang }));
-                return;
-              }
-              for (const stadion of stadions) {
-                await this.stadionAll_data(ctx, lang, stadion, '', true);
-              }
-
-              const totalPages = Math.ceil(total / limit);
-
-              if (page === 1 && totalPages === 1) {
-                return;
-              }
-
-              const row: InlineKeyboardButton[] = [];
-
-              if (page > 1) {
-                row.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: `booking_region_page_cheapPrice_${page - 1}`,
-                });
-              }
-
-              row.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
-
-              if (page < totalPages) {
-                row.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: `booking_region_page_cheapPrice_${page + 1}`,
-                });
-              }
-              const send = await ctx.reply(
-                this.i18n.translate('stadions.Select', { lang }),
-                {
-                  reply_markup: { inline_keyboard: [row] },
-                },
-              );
-              if (!ctx.session.stadionMessages) {
-                ctx.session.stadionMessages = [];
-              }
-              ctx.session.stadionMessages.push(send.message_id);
-            } catch (error) {}
-          }
-          break;
-        default: {
-          break;
+                ],
+                this.backButton(lang, 'back_user_3'),
+              ],
+            },
+          );
+          return;
         }
+        case 'location': {
+          await this.answerCb(ctx);
+          await ctx.reply(this.t(lang, 'stadions.location_else'), {
+            reply_markup: {
+              keyboard: [
+                [
+                  {
+                    text: this.t(lang, 'stadions.send_location'),
+                    request_location: true,
+                  },
+                ],
+              ],
+              resize_keyboard: true,
+              one_time_keyboard: true,
+            },
+          });
+          ctx.session.booking_step = 'user_location_send';
+          return;
+        }
+        case 'working':
+          return this.showWorkingDates(ctx, lang);
+        case 'nameSearch': {
+          await this.answerCb(ctx);
+          await ctx.deleteMessage().catch(() => undefined);
+          await ctx.reply(this.t(lang, 'booking.stadions.enter_name'));
+          if (ctx.session.stadion) ctx.session.stadion.name = 'SeorchName';
+          return;
+        }
+        case 'cheapPrice':
+          return this.showCheapStadions(ctx, lang, currentPage);
+        default:
+          // Masalan "user_offday": hech narsa qilmaydi, faqat tugma yuklanishini to'xtatamiz
+          this.logger.debug(`userSwitch: ishlov berilmagan data: ${data}`);
+          await this.answerCb(ctx);
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
+
+  private remainingTimeText(startAt: Date, endAt: Date, lang: string): string {
+    const { timeLeftText, totalMinutes } = this.utils.bookingTimeCalculate(
+      startAt,
+      lang,
+    );
+    const { totalMinutes: endMinutes } = this.utils.bookingTimeCalculate(
+      endAt,
+      lang,
+    );
+
+    if (totalMinutes <= 0 && endMinutes > 0) {
+      return this.t(lang, 'booking.game_started');
+    }
+    if (totalMinutes <= 0) return this.t(lang, 'bookingHistory.time_expired');
+    return timeLeftText;
+  }
+
+  private async showActiveBookings(ctx: MyContext, lang: string, page: number) {
+    const limit = 2;
+    const user = await this.findCurrentUser(ctx);
+    if (!user) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error(`User topilmadi: chatID=${ctx.from?.id}`),
+        ErrorContext.USER,
+      );
+      return;
+    }
+
+    const [bookings, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: {
+          user_id: user.id,
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+        },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          stadion: {
+            select: {
+              id: true,
+              name: true,
+              latitude: true,
+              longitude: true,
+              payments_type: true,
+              region: { select: { name: true } },
+              region_items: { select: { name: true } },
+            },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.booking.count({
+        where: {
+          user_id: user.id,
+          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+        },
+      }),
+    ]);
+
+    if (!total) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.t(lang, 'stadions.no_active_bookings'),
+        { inline_keyboard: [this.backButton(lang, 'back_user_3')] },
+      );
+      return;
+    }
+
+    await this.answerCb(ctx, this.t(lang, 'loading.loading'));
+    ctx.session.bookingBrones ??= [];
+
+    for (const item of bookings) {
+      const locationText = getLocation(
+        item.stadion.latitude,
+        item.stadion.longitude,
+        item.stadion.region.name,
+        item.stadion.region_items.name,
+      );
+
+      const lines = [
+        `${this.t(lang, 'bookingHistory.booking.id')}: ${item.id}`,
+        `${this.t(lang, 'bookingHistory.booking.stadion')}: ${escapeHtml(item.stadion.name)}`,
+        `${this.t(lang, 'bookingHistory.booking.date')}: ${format(item.date, 'dd.MM.yyyy')}`,
+        `${this.t(lang, 'bookingHistory.booking.time')}: ${item.start_time} - ${item.end_time}`,
+        `${this.t(lang, 'bookingHistory.booking.remaining_time')}: ${this.remainingTimeText(item.startAt, item.endAt, lang)}`,
+        `${this.t(lang, 'bookingHistory.booking.price')}: ${formatPrice(item.total_price)} ${this.t(lang, 'bookingHistory.booking.price_title')}`,
+        `${this.t(lang, 'bookingHistory.booking.payment_type')}: ${getPaymentText(item.payment_method, this.t(lang, 'peyments'))}`,
+        `${this.t(lang, 'bookingHistory.booking.status')}: ${statusMap(item.status, this.i18n, lang)}`,
+      ];
+      if (item.check_in) {
+        lines.push(this.t(lang, 'bookingHistory.booking.check_in'));
+      }
+      lines.push(
+        `${this.t(lang, 'bookingHistory.booking.location')}: ${locationText}`,
+      );
+
+      const send = await ctx.reply(lines.join('\n\n'), {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: this.utils.booking_status_handler(
+            item.status,
+            item.id,
+            item.payment_method,
+            item.stadion.payments_type,
+            item.startAt,
+            item.endAt,
+            page,
+            limit,
+            total,
+            item.check_in,
+            lang,
+          ),
+        },
+      });
+      ctx.session.bookingBrones.push(send.message_id);
+    }
+
+    const totalPages = Math.ceil(total / limit);
+    if (totalPages > 1) {
+      const send = await ctx.reply(this.t(lang, 'stadions.Select'), {
+        reply_markup: {
+          inline_keyboard: [
+            this.paginationRow(
+              lang,
+              page,
+              totalPages,
+              (p) => `booking_region_page_stadionBron_${p}`,
+            ),
+            this.backButton(lang, 'back_user_5'),
+          ],
+        },
+      });
+      ctx.session.bookingBrones.push(send.message_id);
+    }
+  }
+
+  private async showBookingHistory(ctx: MyContext, lang: string, page: number) {
+    const limit = 4;
+    const user = await this.findCurrentUser(ctx);
+    if (!user) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error(`User topilmadi: chatID=${ctx.from?.id}`),
+        ErrorContext.USER,
+      );
+      return;
+    }
+
+    const [bookings, total] = await Promise.all([
+      this.prisma.booking.findMany({
+        where: {
+          user_id: user.id,
+          status: {
+            in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED', 'REFUND_PENDING'],
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          stadion: {
+            select: {
+              id: true,
+              name: true,
+              longitude: true,
+              latitude: true,
+              region: { select: { name: true } },
+              region_items: { select: { name: true } },
+            },
+          },
+          tranzaktions: {
+            where: { status: TransactionStatus.SUCCESS },
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { refunded_sum: true },
+          },
+        },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.booking.count({
+        where: {
+          user_id: user.id,
+          status: {
+            in: ['COMPLETED', 'NOSHOW', 'CANCELED', 'REFUNDED', 'REFUND_PENDING'],
+          },
+        },
+      }),
+    ]);
+
+    if (!total) {
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.t(lang, 'stadions.booking_history_empty'),
+        { inline_keyboard: [this.backButton(lang, 'back_user_3')] },
+      );
+      return;
+    }
+
+    await this.answerCb(ctx, this.t(lang, 'loading.loading'));
+
+    const currency = this.t(lang, 'bookingHistory.booking.price_title');
+    const blocks = bookings.map((item) => {
+      const lines = [
+        `${this.t(lang, 'bookingHistory.booking.id')}: ${item.id}`,
+        `${this.t(lang, 'bookingHistory.booking.stadion')}: ${escapeHtml(item.stadion.name)}`,
+        `${this.t(lang, 'bookingHistory.booking.date')}: ${format(item.date, 'dd.MM.yyyy')}`,
+        `${this.t(lang, 'bookingHistory.booking.time')}: ${item.start_time} - ${item.end_time}`,
+        `${this.t(lang, 'bookingHistory.booking.price')}: ${formatPrice(item.total_price)} ${currency}`,
+        `${this.t(lang, 'bookingHistory.booking.payment_type')}: ${getPaymentText(item.payment_method, this.t(lang, 'peyments'))}`,
+        `${this.t(lang, 'bookingHistory.booking.status')}: ${statusMap(item.status, this.i18n, lang)}`,
+      ];
+
+      const tx = item.tranzaktions[0];
+      if (item.status === 'REFUNDED' && tx?.refunded_sum != null) {
+        lines.push(
+          `${this.t(lang, 'bookingHistory.booking.refunded')}: ${formatPrice(tx.refunded_sum)} ${currency}`,
+        );
+      }
+      if (item.status === 'REFUND_PENDING' && tx) {
+        lines.push(this.t(lang, 'bookingHistory.booking.refund_in_progress'));
+      }
+
+      lines.push(
+        `${this.t(lang, 'bookingHistory.booking.location')}: ${getLocation(
+          item.stadion.latitude,
+          item.stadion.longitude,
+          item.stadion.region.name,
+          item.stadion.region_items.name,
+        )}`,
+      );
+      return lines.join('\n\n');
+    });
+
+    const message = `${this.t(lang, 'bookingHistory.booking.history_title')}\n\n${blocks.join('\n\n━━━━━━━━━━━━━━━━━━━━\n\n')}`;
+
+    const totalPages = Math.ceil(total / limit);
+    const keyboard: InlineKeyboardButton[][] = [];
+    if (totalPages > 1) {
+      keyboard.push(
+        this.paginationRow(
+          lang,
+          page,
+          totalPages,
+          (p) => `booking_region_page_stadionBronHistory_${p}`,
+        ),
+      );
+    }
+    keyboard.push(this.backButton(lang, 'back_user_3'));
+
+    await this.utils.safeEditOrReply(ctx, message, { inline_keyboard: keyboard });
+  }
+
+  private async showFavorites(ctx: MyContext, lang: string, page: number) {
+    const limit = 4;
+    const where = {
+      chat_id: String(ctx.from?.id),
+      stadion: {
+        working_status: true,
+        admin_status: AdminStatus.APPROVED,
+        owner: { status: Admin_S.ACTIVE },
+      },
+    };
+
+    // count ham findMany bilan bir xil shart bilan: aks holda sahifalash xato chiqadi
+    const [favorites, total] = await Promise.all([
+      this.prisma.myFavoriteStadium.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        include: { stadion: { include: { region: true, region_items: true } } },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.myFavoriteStadium.count({ where }),
+    ]);
+
+    if (!favorites.length) {
+      await this.answerCb(ctx, this.t(lang, 'booking.stadion.noFavorites'), true);
+      return;
+    }
+
+    await this.answerCb(ctx, this.t(lang, 'loading.loading'));
+    for (const favorite of favorites) {
+      await this.stadionFavorite(ctx, lang, favorite.stadion);
+    }
+
+    const totalPages = Math.ceil(total / limit);
+    if (totalPages <= 1) return;
+
+    await this.utils.safeEditOrReply(ctx, this.t(lang, 'stadions.Select'), {
+      inline_keyboard: [
+        this.paginationRow(
+          lang,
+          page,
+          totalPages,
+          (p) => `booking_region_page_favorit_${p}`,
+        ),
+      ],
+    });
+  }
+
+  private dateLabel(
+    date: Date,
+    weekDay: number,
+    todayStr: string,
+    tomorrowStr: string,
+    lang: string,
+  ): string {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const weekDayText = this.t(lang, `schedule.week_days.${weekDay}`);
+    if (dateStr === todayStr) return `${this.t(lang, 'schedule.today')}. ${weekDayText}`;
+    if (dateStr === tomorrowStr) return `${this.t(lang, 'schedule.tomorrow')}. ${weekDayText}`;
+    const monthText = this.t(lang, `schedule.months.${date.getMonth() + 1}`);
+    return `${format(date, 'd')} - ${monthText}. ${weekDayText}`;
+  }
+
+  private async showWorkingDates(ctx: MyContext, lang: string) {
+    await this.answerCb(ctx);
+
+    const now = toZonedTime(new Date(), TASHKENT_TZ);
+    const todayStr = format(now, 'yyyy-MM-dd');
+    const tomorrowStr = format(new Date(now.getTime() + 86400000), 'yyyy-MM-dd');
+
+    const buttons: InlineKeyboardButton[][] = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(now);
+      date.setDate(now.getDate() + i);
+      const weekDay = date.getDay() === 0 ? 7 : date.getDay();
+
+      buttons.push([
+        {
+          text: this.dateLabel(date, weekDay, todayStr, tomorrowStr, lang),
+          callback_data: `working_date_${format(date, 'yyyy-MM-dd')}`,
+        },
+      ]);
+    }
+    buttons.push(this.backButton(lang, 'back_user_6'));
+
+    await this.utils.safeEditOrReply(
+      ctx,
+      this.t(lang, 'booking.working_time'),
+      { inline_keyboard: buttons },
+    );
+  }
+
+  private async showCheapStadions(ctx: MyContext, lang: string, page: number) {
+    const limit = 4;
+    await this.answerCb(ctx);
+    await ctx.deleteMessage().catch(() => undefined);
+
+    const where: Prisma.StadionWhereInput = {
+      ...this.visibleStadionWhere(),
+      price: { lte: CHEAP_PRICE_MAX },
+    };
+
+    const [stadions, total] = await Promise.all([
+      this.prisma.stadion.findMany({
+        where,
+        include: { region: true, region_items: true },
+        orderBy: { price: 'asc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.stadion.count({ where }),
+    ]);
+
+    if (!stadions.length) {
+      await ctx.reply(this.t(lang, 'stadions.stadions_not_found'), {
+        reply_markup: { inline_keyboard: [this.backButton(lang, 'back_user_6')] },
+      });
+      return;
+    }
+
+    for (const stadion of stadions) {
+      await this.stadionAll_data(ctx, lang, stadion, '', true);
+    }
+
+    const totalPages = Math.ceil(total / limit);
+    if (totalPages <= 1) return;
+
+    const send = await ctx.reply(this.t(lang, 'stadions.Select'), {
+      reply_markup: {
+        inline_keyboard: [
+          this.paginationRow(
+            lang,
+            page,
+            totalPages,
+            (p) => `booking_region_page_cheapPrice_${p}`,
+          ),
+        ],
+      },
+    });
+    ctx.session.stadionMessages ??= [];
+    ctx.session.stadionMessages.push(send.message_id);
+  }
+
+  // ───────────────────────── Stadion tanlash ─────────────────────────
+
   async userBooking(ctx: MyContext, lang: string) {
     try {
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.menuTitle', { lang }),
+        this.t(lang, 'booking.stadion.menuTitle'),
         {
           inline_keyboard: [
             [
               {
-                text: this.i18n.translate('booking.stadion.newBooking', {
-                  lang,
-                }),
+                text: this.t(lang, 'booking.stadion.newBooking'),
                 callback_data: 'user_stadionNewBron',
               },
             ],
             [
               {
-                text: this.i18n.translate('booking.stadion.activeBookings', {
-                  lang,
-                }),
+                text: this.t(lang, 'booking.stadion.activeBookings'),
                 callback_data: 'user_stadionBron',
               },
             ],
             [
               {
-                text: this.i18n.translate('booking.stadion.history', {
-                  lang,
-                }),
+                text: this.t(lang, 'booking.stadion.history'),
                 callback_data: 'user_stadionBronHistory',
               },
             ],
             [
               {
-                text: this.i18n.translate('booking.stadion.favorites', {
-                  lang,
-                }),
+                text: this.t(lang, 'booking.stadion.favorites'),
                 callback_data: 'user_stadionFavorite',
               },
             ],
             [
               {
-                text: this.i18n.translate('booking.stadion.search', { lang }),
+                text: this.t(lang, 'booking.stadion.search'),
                 callback_data: 'user_stadionSearch',
               },
             ],
-            [
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: 'back_user_1',
-              },
-            ],
+            this.backButton(lang, 'back_user_1'),
           ],
         },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
-  async userbookingRegion(ctx: MyContext, lang: string, id: number) {
+
+  async userBookingFanc(ctx: MyContext, lang: string) {
     try {
-      const region_Item = await this.prisma.region_item.findMany({
-        where: { region_id: id },
-        include: {
-          stadions: {
-            where: {
-              working_status: true,
-              admin_status: AdminStatus.APPROVED,
-              owner: {
-                status: Admin_S.ACTIVE,
-              },
-              OR: [
-                {
-                  stadionChedules: { some: {} },
-                },
-                {
-                  parent: {
-                    stadionChedules: { some: {} },
-                  },
-                },
-              ],
-            },
-            select: { id: true },
-          },
-        },
+      const stadions = await this.prisma.stadion.findMany({
+        where: this.visibleStadionWhere(),
+        select: { region_id: true },
       });
-      const avaylableItem = region_Item.filter((i) => i.stadions.length > 0);
-      if (!avaylableItem.length) {
-        ctx.reply(this.i18n.translate('error.error', { lang }));
+
+      if (!stadions.length) {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.t(lang, 'booking.stadion.notAvailable'),
+          { inline_keyboard: [this.backButton(lang, 'back_user_3')] },
+        );
         return;
       }
-      const button: InlineKeyboardButton[][] = avaylableItem.map((r) => [
-        {
-          text: r.name,
-          callback_data: `booking_regionItem_${r.id}`,
-        },
+
+      const regionIds = [...new Set(stadions.map((s) => s.region_id))];
+      const regions = await this.prisma.region.findMany({
+        where: { id: { in: regionIds } },
+      });
+
+      const buttons: InlineKeyboardButton[][] = regions.map((r) => [
+        { text: r.name, callback_data: `booking_region_${r.id}` },
       ]);
-      button.push([
-        {
-          text: this.i18n.translate('schedule.back', { lang }),
-          callback_data: 'back_user_4',
-        },
-      ]);
+      buttons.push(this.backButton(lang, 'back_user_3'));
+
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectRegion', { lang }),
-        { inline_keyboard: button },
+        this.t(lang, 'booking.stadion.availableRegions'),
+        { inline_keyboard: buttons },
       );
     } catch (error) {
-      console.log(error);
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
+  async userbookingRegion(ctx: MyContext, lang: string, id: number) {
+    try {
+      const regionItems = await this.prisma.region_item.findMany({
+        where: { region_id: id },
+        include: {
+          stadions: { where: this.visibleStadionWhere(), select: { id: true } },
+        },
+      });
+
+      const available = regionItems.filter((i) => i.stadions.length > 0);
+      if (!available.length) {
+        await this.utils.safeEditOrReply(
+          ctx,
+          this.t(lang, 'booking.stadion.notAvailable'),
+          { inline_keyboard: [this.backButton(lang, 'back_user_4')] },
+        );
+        return;
+      }
+
+      const buttons: InlineKeyboardButton[][] = available.map((r) => [
+        { text: r.name, callback_data: `booking_regionItem_${r.id}` },
+      ]);
+      buttons.push(this.backButton(lang, 'back_user_4'));
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.t(lang, 'booking.stadion.selectRegion'),
+        { inline_keyboard: buttons },
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    }
+  }
+
   async userbookingRegionItems(
     ctx: MyContext,
     lang: string,
@@ -1395,38 +1247,18 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
   ) {
     try {
       const limit = 10;
+      const currentPage = Math.max(1, Number(page) || 1);
+
       if (ctx.session.stadionMessages?.length) {
-        const messagesId = ctx.session.stadionMessages;
-        try {
-          await ctx.deleteMessages(messagesId);
-        } catch (e) {}
+        await ctx
+          .deleteMessages(ctx.session.stadionMessages)
+          .catch(() => undefined);
         ctx.session.stadionMessages = [];
       }
 
-      const baseWhere: Prisma.StadionWhereInput = {
-        region_item_id: itemId,
-        working_status: true,
-        admin_status: AdminStatus.APPROVED,
-        owner: {
-          status: Admin_S.ACTIVE,
-        },
-        OR: [
-          {
-            stadionChedules: { some: {} },
-          },
-          {
-            parent: {
-              stadionChedules: { some: {} },
-            },
-          },
-        ],
-      };
-
       const allStadions = await this.prisma.stadion.findMany({
-        where: baseWhere,
-        orderBy: {
-          id: 'asc',
-        },
+        where: { ...this.visibleStadionWhere(), region_item_id: itemId },
+        orderBy: { id: 'asc' },
         include: {
           owner: {
             select: {
@@ -1441,161 +1273,143 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
       });
 
       if (!allStadions.length) {
-        await this.utils.errorFunction(ctx);
-        return;
-      }
-
-      const sorted = allStadions.sort((a, b) => {
-        const aPremium = a.owner.subscriptions.length > 0 ? 1 : 0;
-        const bPremium = b.owner.subscriptions.length > 0 ? 1 : 0;
-        if (aPremium !== bPremium) return bPremium - aPremium;
-        return a.id - b.id;
-      });
-
-      const total = sorted.length;
-      const stadions = sorted
-        .slice((page - 1) * limit, (page - 1) * limit + limit)
-        .map(({ owner, ...stadion }) => stadion);
-
-      if (!stadions.length) {
-        await this.utils.errorFunction(ctx);
-        return;
-      }
-
-      const inline_keyboard: InlineKeyboardButton[][] = stadions.map(
-        (stadion) => [
-          {
-            text: `🏟 ${stadion.name}`,
-            callback_data: `bookingStadium_${stadion.id}_${itemId}_${page}`,
-          },
-        ],
-      );
-
-      const totalPages = Math.ceil(total / limit);
-
-      if (totalPages > 1) {
-        const row: InlineKeyboardButton[] = [];
-
-        if (page > 1) {
-          row.push({
-            text: this.i18n.translate('stadions.Previous', { lang }),
-            callback_data: `booking_region_page_${itemId}_${page - 1}`,
-          });
-        }
-
-        row.push({
-          text: `${page}/${totalPages}`,
-          callback_data: 'ignore',
-        });
-
-        if (page < totalPages) {
-          row.push({
-            text: this.i18n.translate('stadions.Next', { lang }),
-            callback_data: `booking_region_page_${itemId}_${page + 1}`,
-          });
-        }
-
-        inline_keyboard.push(row);
-      }
-      inline_keyboard.push([
-        {
-          text: this.i18n.translate('schedule.back', { lang }),
-          callback_data: JSON.stringify({
-            type: 'user_back_regionItems',
-            id: stadions[0].region_id,
-          }),
-        },
-      ]);
-
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('stadions.select', { lang }),
-        {
-          inline_keyboard,
-        },
-      );
-    } catch (error) {
-      await this.utils.errorFunction(ctx);
-    }
-  }
-
-  async userBookingFanc(ctx: MyContext, lang: string) {
-    try {
-      const stadions = await this.prisma.stadion.findMany({
-        where: {
-          working_status: true,
-          admin_status: AdminStatus.APPROVED,
-          owner: {
-            status: Admin_S.ACTIVE,
-          },
-          OR: [
-            {
-              stadionChedules: { some: {} },
-            },
-            {
-              parent: {
-                stadionChedules: { some: {} },
-              },
-            },
-          ],
-        },
-        include: {
-          region: {
-            select: {
-              name: true,
-            },
-          },
-          region_items: {
-            select: {
-              name: true,
-            },
-          },
-          parent: true,
-        },
-      });
-      if (!stadions.length) {
         await this.utils.safeEditOrReply(
           ctx,
-          this.i18n.translate('booking.stadion.notAvailable', { lang }),
-          {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('schedule.back', {
-                    lang,
-                  }),
-                  callback_data: 'back_user_3',
-                },
-              ],
-            ],
-          },
+          this.t(lang, 'booking.stadion.notAvailable'),
+          { inline_keyboard: [this.backButton(lang, 'back_user_4')] },
         );
         return;
       }
-      const regionId = [...new Set(stadions.map((s) => s.region_id))];
 
-      const regions = await this.prisma.region.findMany({
-        where: { id: { in: regionId } },
+      // Premium owner stadionlari birinchi chiqadi
+      const sorted = allStadions.sort((a, b) => {
+        const aPremium = a.owner.subscriptions.length > 0 ? 1 : 0;
+        const bPremium = b.owner.subscriptions.length > 0 ? 1 : 0;
+        return aPremium !== bPremium ? bPremium - aPremium : a.id - b.id;
       });
-      const button: InlineKeyboardButton[][] = regions.map((r) => [
-        { text: `${r.name}`, callback_data: `booking_region_${r.id}` },
-      ]);
-      button.push([
-        {
-          text: this.i18n.translate('schedule.back', { lang }),
-          callback_data: 'back_user_3',
-        },
-      ]);
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('booking.stadion.availableRegions', { lang }),
-        {
-          inline_keyboard: button,
-        },
+
+      const total = sorted.length;
+      const totalPages = Math.ceil(total / limit);
+
+      // Eski tugmadan keyin sahifa mavjud bo'lmasa, birinchi sahifaga qaytamiz
+      if (currentPage > totalPages) {
+        return this.userbookingRegionItems(ctx, lang, itemId, 1);
+      }
+
+      const stadions = sorted.slice(
+        (currentPage - 1) * limit,
+        currentPage * limit,
       );
+
+      const keyboard: InlineKeyboardButton[][] = stadions.map((stadion) => [
+        {
+          text: `🏟 ${stadion.name}`,
+          callback_data: `bookingStadium_${stadion.id}_${itemId}_${currentPage}`,
+        },
+      ]);
+
+      if (totalPages > 1) {
+        keyboard.push(
+          this.paginationRow(
+            lang,
+            currentPage,
+            totalPages,
+            (p) => `booking_region_page_${itemId}_${p}`,
+          ),
+        );
+      }
+      keyboard.push(
+        this.backButton(
+          lang,
+          JSON.stringify({
+            type: 'user_back_regionItems',
+            id: stadions[0].region_id,
+          }),
+        ),
+      );
+
+      await this.utils.safeEditOrReply(ctx, this.t(lang, 'stadions.select'), {
+        inline_keyboard: keyboard,
+      });
     } catch (error) {
-      await ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
+  }
+
+  // ───────────────────────── Stadion kartalari ─────────────────────────
+
+  private buildStadionCard(
+    lang: string,
+    stadion: IStadion,
+    ownerPhone: string | null | undefined,
+    options: { distanceKm?: string; bold: boolean },
+  ): string {
+    const bold = (value: string | number): string =>
+      options.bold ? `<b>${value}</b>` : String(value);
+
+    const statusText = stadion.working_status
+      ? `🟢 ${this.t(lang, 'view.active')}`
+      : `🔴 ${this.t(lang, 'view.inactive')}`;
+
+    let locationText = this.t(lang, 'view.not_available');
+    if (stadion.latitude && stadion.longitude) {
+      locationText = getLocation(
+        stadion.latitude,
+        stadion.longitude,
+        stadion.region.name,
+        stadion.region_items.name,
+      );
+    }
+
+    const lines = [
+      `🏟 <b>${escapeHtml(stadion.name)}</b>`,
+      '',
+      `${this.t(lang, 'view.locate')} ${locationText}`,
+    ];
+    if (options.distanceKm) {
+      lines.push(`${this.t(lang, 'view.distance')} ${options.distanceKm} km`);
+    }
+    lines.push(
+      stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n),
+      `${this.t(lang, 'view.count')} ${bold(stadion.max_count || this.t(lang, 'view.not'))}`,
+      `${this.t(lang, 'view.size')} ${bold(`${stadion.length || '❌'} x ${stadion.width || '❌'}`)}`,
+      `${this.t(lang, 'view.price')} ${bold(formatPrice(stadion.price))}`,
+      `${this.t(lang, 'view.peyments')} ${getPaymentText(stadion.payments_type, this.t(lang, 'peyments'))}`,
+      `${this.t(lang, 'view.phone')} ${escapeHtml(ownerPhone ?? '—')}`,
+      `${this.t(lang, 'view.status')} ${bold(statusText)}`,
+      `${this.t(lang, 'view.creted')} ${bold(formatDate(stadion.createdAt, lang))}`,
+      `${this.t(lang, 'view.update')} ${bold(formatDate(stadion.updatedAt, lang))}`,
+    );
+    return lines.join('\n');
+  }
+
+  /** Avval rasm bilan yuboradi, bo'lmasa (yoki rasm yo'q bo'lsa) oddiy matn bilan */
+  private async sendCard(
+    ctx: MyContext,
+    image: string | null | undefined,
+    text: string,
+    photoKeyboard: InlineKeyboardButton[][],
+    textKeyboard: InlineKeyboardButton[][],
+  ): Promise<number> {
+    if (image) {
+      try {
+        const sent = await ctx.replyWithPhoto(image, {
+          caption: text,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: photoKeyboard },
+        });
+        return sent.message_id;
+      } catch (error) {
+        this.logger.debug(
+          `Rasm yuborilmadi, matn yuboriladi: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+    const sent = await ctx.reply(text, {
+      parse_mode: 'HTML',
+      reply_markup: { inline_keyboard: textKeyboard },
+    });
+    return sent.message_id;
   }
 
   async stadionAll_data(
@@ -1606,161 +1420,129 @@ ${this.i18n.translate('bookingHistory.booking.location', { lang })}: ${locationT
     isSeorch = false,
   ) {
     try {
-      if (ctx.callbackQuery) {
-        await ctx.answerCbQuery().catch(() => {});
-      }
+      await this.answerCb(ctx);
       const owner = await this.prisma.owners.findUnique({
         where: { id: stadion.owner_id },
+        select: { phone: true },
       });
-      const formatPrice = (price?: number | string) => {
-        if (!price) return '❌';
-        return new Intl.NumberFormat('uz-UZ').format(Number(price));
-      };
-      const statusText = stadion.working_status
-        ? `🟢 ${this.i18n.translate('view.active', { lang })}`
-        : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
 
-      let locationText = this.i18n.translate('view.not_available', { lang });
-      if (stadion.latitude && stadion.longitude) {
-        locationText = getLocation(
-          stadion.latitude,
-          stadion.longitude,
-          stadion.region.name,
-          stadion.region_items.name,
-        );
-      }
+      const text = this.buildStadionCard(lang, stadion, owner?.phone, {
+        distanceKm,
+        bold: true,
+      });
 
-      const message = `
-🏟 <b>${stadion.name}</b>\n
-${this.i18n.translate('view.locate', { lang })} ${locationText}
-${distanceKm ? this.i18n.translate('view.distance', { lang }) : ''} ${distanceKm ? distanceKm + ' km\n' : ''}${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
-${this.i18n.translate('view.count', { lang })} <b>${stadion.max_count || this.i18n.translate('view.not', { lang })}</b>
-${this.i18n.translate('view.size', { lang })} <b>${stadion.length || '❌'} x ${stadion.width || '❌'}</b>
-${this.i18n.translate('view.price', { lang })} <b>${formatPrice(stadion.price) || '❌'}</b>
-${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
-${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${(this, this.i18n.translate('view.status', { lang }))} <b>${statusText}</b>
-${this.i18n.translate('view.creted', { lang })} <b>${formatDate(stadion.createdAt, lang)}</b>
-${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedAt, lang)}</b>
-`;
-
-      const sendText = async () => {
-        const send = await ctx.reply(message, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('booking.stadion.favorite', {
-                    lang,
-                  }),
-                  callback_data: `booking_save_${stadion.id}`,
-                },
-              ],
-              [
-                {
-                  text: this.i18n.translate('booking.stadion.book', { lang }),
-                  callback_data: `booking_stadion_${stadion.id}`,
-                },
-                isSeorch
-                  ? {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: 'back_user_6',
-                    }
-                  : {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'user_back_regionItems',
-                        id: stadion.region_id,
-                      }),
-                    },
-              ],
-            ],
-          },
-        });
-        if (!ctx.session.stadionMessages) {
-          ctx.session.stadionMessages = [];
-        }
-        ctx.session.stadionMessages.push(send.message_id);
-      };
-
-      if (stadion.image) {
-        try {
-          const send = await ctx.replyWithPhoto(stadion.image, {
-            caption: message,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('booking.stadion.favorite', {
-                      lang,
-                    }),
-                    callback_data: `booking_save_${stadion.id}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('booking.stadion.book', {
-                      lang,
-                    }),
-                    callback_data: `booking_stadion_${stadion.id}`,
-                  },
-                  isSeorch
-                    ? {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_6',
-                      }
-                    : {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'user_back_regionItems_Id',
-                          id: stadion.region_item_id,
-                        }),
-                      },
-                ],
-              ],
-            },
+      const searchBack = 'back_user_6';
+      const textBack = isSeorch
+        ? searchBack
+        : JSON.stringify({ type: 'user_back_regionItems', id: stadion.region_id });
+      const photoBack = isSeorch
+        ? searchBack
+        : JSON.stringify({
+            type: 'user_back_regionItems_Id',
+            id: stadion.region_item_id,
           });
-          if (!ctx.session.stadionMessages) {
-            ctx.session.stadionMessages = [];
-          }
-          ctx.session.stadionMessages.push(send.message_id);
-        } catch (err) {
-          await sendText();
-        }
-      } else {
-        await sendText();
-      }
+
+      const keyboard = (back: string): InlineKeyboardButton[][] => [
+        [
+          {
+            text: this.t(lang, 'booking.stadion.favorite'),
+            callback_data: `booking_save_${stadion.id}`,
+          },
+        ],
+        [
+          {
+            text: this.t(lang, 'booking.stadion.book'),
+            callback_data: `booking_stadion_${stadion.id}`,
+          },
+          { text: this.t(lang, 'schedule.back'), callback_data: back },
+        ],
+      ];
+
+      const messageId = await this.sendCard(
+        ctx,
+        stadion.image,
+        text,
+        keyboard(photoBack),
+        keyboard(textBack),
+      );
+      ctx.session.stadionMessages ??= [];
+      ctx.session.stadionMessages.push(messageId);
     } catch (error) {
-      await ctx.reply(this.i18n.translate('error.error', { lang }));
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    }
+  }
+
+  async stadionFavorite(ctx: MyContext, lang: string, stadion: IStadion) {
+    try {
+      const owner = await this.prisma.owners.findUnique({
+        where: { id: stadion.owner_id },
+        select: { phone: true },
+      });
+
+      const text = this.buildStadionCard(lang, stadion, owner?.phone, {
+        bold: false,
+      });
+
+      const keyboard: InlineKeyboardButton[][] = [
+        [
+          {
+            text: this.t(lang, 'booking.stadion.delete_favorite'),
+            callback_data: `delete_stadion_fovorite_${stadion.id}`,
+          },
+        ],
+        [
+          {
+            text: this.t(lang, 'booking.stadion.book'),
+            callback_data: `booking_stadion_${stadion.id}`,
+          },
+          { text: this.t(lang, 'schedule.back'), callback_data: 'back_user_3' },
+        ],
+      ];
+
+      const messageId = await this.sendCard(
+        ctx,
+        stadion.image,
+        text,
+        keyboard,
+        keyboard,
+      );
+      ctx.session.stadionFavoritMessages ??= [];
+      ctx.session.stadionFavoritMessages.push(messageId);
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
 
   async userSaveFnc(ctx: MyContext, lang: string, stadionId: number) {
     try {
-      const where = {
-        chat_id_stadion_id: {
-          chat_id: String(ctx.from?.id),
-          stadion_id: stadionId,
-        },
-      };
-      const data = await this.prisma.myFavoriteStadium.findUnique({ where });
-      if (data) {
-        await this.prisma.myFavoriteStadium.delete({ where });
-        await ctx.answerCbQuery(
-          this.i18n.translate('booking.stadion.removedFromFavorites', { lang }),
+      const chat_id = String(ctx.from?.id);
+
+      // Avval o'chirishga urinamiz: bor bo'lsa o'chiriladi, yo'q bo'lsa qo'shamiz
+      const { count } = await this.prisma.myFavoriteStadium.deleteMany({
+        where: { chat_id, stadion_id: stadionId },
+      });
+      if (count > 0) {
+        await this.answerCb(
+          ctx,
+          this.t(lang, 'booking.stadion.removedFromFavorites'),
         );
-      } else {
-        await this.prisma.myFavoriteStadium.create({
-          data: { stadion_id: stadionId, chat_id: String(ctx.from?.id) },
-        });
-        await ctx.answerCbQuery(
-          this.i18n.translate('booking.stadion.addedToFavorites', { lang }),
-        );
+        return;
       }
+
+      try {
+        await this.prisma.myFavoriteStadium.create({
+          data: { stadion_id: stadionId, chat_id },
+        });
+      } catch (error) {
+        // Tugma ikki marta tez bosilsa, ikkinchisi allaqachon qo'shilgan bo'ladi
+        const isDuplicate =
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002';
+        if (!isDuplicate) throw error;
+      }
+      await this.answerCb(ctx, this.t(lang, 'booking.stadion.addedToFavorites'));
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
 
@@ -1772,198 +1554,50 @@ ${this.i18n.translate('view.update', { lang })} <b>${formatDate(stadion.updatedA
   ) {
     ctx.session.booking_step = null;
     try {
-      const send = await ctx.reply('location', {
+      // Reply klaviaturani olib tashlash uchun vaqtincha xabar
+      const hint = await ctx.reply('location', {
         reply_markup: { remove_keyboard: true },
       });
-      try {
-        await ctx.deleteMessage(send.message_id);
-      } catch (error) {}
-      const stadiums = await this.prisma.stadion.findMany({
-        where: {
-          working_status: true,
-          admin_status: AdminStatus.APPROVED,
-          owner: {
-            status: Admin_S.ACTIVE,
-          },
+      await ctx.deleteMessage(hint.message_id).catch(() => undefined);
 
-          OR: [
-            {
-              stadionChedules: { some: {} },
-            },
-            {
-              parent: {
-                stadionChedules: { some: {} },
-              },
-            },
-          ],
-        },
-        take: 5,
-        include: {
-          region: true,
-          region_items: true,
-        },
+      // Masofa bo'yicha filtrlashdan OLDIN take qo'llanmaydi: aks holda yaqin stadionlar tushib qoladi
+      const stadiums = await this.prisma.stadion.findMany({
+        where: this.visibleStadionWhere(),
+        take: NEARBY_CANDIDATES_LIMIT,
+        include: { region: true, region_items: true },
       });
 
       const nearby = stadiums
-        .map((s) => {
-          if (!s.latitude || !s.longitude) return null;
-          const distance = getDistance(
-            latitude,
-            longitude,
-            s.latitude,
-            s.longitude,
-          );
-          return { ...s, distance };
+        .flatMap((s) => {
+          if (!s.latitude || !s.longitude) return [];
+          const distance = getDistance(latitude, longitude, s.latitude, s.longitude);
+          return distance <= NEARBY_RADIUS_METERS ? [{ ...s, distance }] : [];
         })
-        .filter(Boolean)
-        .filter((s) => s!.distance <= 3000)
-        .sort((a, b) => a!.distance - b!.distance)
-        .slice(0, 5);
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, NEARBY_LIMIT);
 
       if (!nearby.length) {
-        await ctx.reply(
-          this.i18n.translate('stadions.stadions_not_found', { lang }),
-          {
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: 'back_user_6',
-                  },
-                ],
-              ],
-            },
-          },
-        );
+        await ctx.reply(this.t(lang, 'stadions.stadions_not_found'), {
+          reply_markup: { inline_keyboard: [this.backButton(lang, 'back_user_6')] },
+        });
         return;
       }
 
-      for (const s of nearby) {
-        const distanceKm = (s!.distance / 1000).toFixed(2);
-        await this.stadionAll_data(ctx, lang, s!, distanceKm, true);
-      }
-    } catch (error) {
-      console.error(error);
-      await this.utils.errorFunction(ctx);
-    }
-  }
-
-  async stadionFavorite(ctx: MyContext, lang: string, stadion: IStadion) {
-    try {
-      const owner = await this.prisma.owners.findUnique({
-        where: { id: stadion.owner_id },
-      });
-      const formatPrice = (price?: number | string) => {
-        if (!price) return '❌';
-        return new Intl.NumberFormat('uz-UZ').format(Number(price));
-      };
-
-      const statusText = stadion.working_status
-        ? `🟢 ${this.i18n.translate('view.active', { lang })}`
-        : `🔴 ${this.i18n.translate('view.inactive', { lang })}`;
-
-      let locationText = this.i18n.translate('view.not_available', { lang });
-      if (stadion.latitude && stadion.longitude) {
-        locationText = getLocation(
-          stadion.latitude,
-          stadion.longitude,
-          stadion.region.name,
-          stadion.region_items.name,
+      for (const stadium of nearby) {
+        await this.stadionAll_data(
+          ctx,
+          lang,
+          stadium,
+          (stadium.distance / 1000).toFixed(2),
+          true,
         );
       }
-
-      const message = `
-🏟 <b>${stadion.name}</b>\n
-${this.i18n.translate('view.locate', { lang })} ${locationText}
-${stadionTypeLabel(stadion.mini, stadion.stadion_mini, lang, this.i18n)}
-${this.i18n.translate('view.count', { lang })} ${stadion.max_count || `${this.i18n.translate('view.not', { lang })}`}
-${this.i18n.translate('view.size', { lang })} ${stadion.length || '❌'} x ${stadion.width || '❌'}
-${this.i18n.translate('view.price', { lang })} ${formatPrice(stadion.price) || '❌'}
-${this.i18n.translate('view.peyments', { lang })} ${getPaymentText(stadion.payments_type, this.i18n.translate('peyments', { lang }))}
-${this.i18n.translate('view.phone', { lang })} ${owner?.phone}
-${(this, this.i18n.translate('view.status', { lang }))} ${statusText}
-${this.i18n.translate('view.creted', { lang })} ${formatDate(stadion.createdAt, lang)}
-${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, lang)}
-`;
-
-      const sendText = async () => {
-        const send = await ctx.reply(message, {
-          parse_mode: 'HTML',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('booking.stadion.delete_favorite', {
-                    lang,
-                  }),
-                  callback_data: `delete_stadion_fovorite_${stadion.id}`,
-                },
-              ],
-              [
-                {
-                  text: this.i18n.translate('booking.stadion.book', { lang }),
-                  callback_data: `booking_stadion_${stadion.id}`,
-                },
-                {
-                  text: this.i18n.translate('schedule.back'),
-                  callback_data: 'back_user_3',
-                },
-              ],
-            ],
-          },
-        });
-        if (!ctx.session.stadionFavoritMessages) {
-          ctx.session.stadionFavoritMessages = [];
-        }
-        ctx.session.stadionFavoritMessages.push(send.message_id);
-      };
-
-      if (stadion.image) {
-        try {
-          const send = await ctx.replyWithPhoto(stadion.image, {
-            caption: message,
-            parse_mode: 'HTML',
-            reply_markup: {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate(
-                      'booking.stadion.delete_favorite',
-                      {
-                        lang,
-                      },
-                    ),
-                    callback_data: `delete_stadion_fovorite_${stadion.id}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('booking.stadion.book', { lang }),
-                    callback_data: `booking_stadion_${stadion.id}`,
-                  },
-                  {
-                    text: this.i18n.translate('schedule.back'),
-                    callback_data: 'back_user_3',
-                  },
-                ],
-              ],
-            },
-          });
-          if (!ctx.session.stadionFavoritMessages) {
-            ctx.session.stadionFavoritMessages = [];
-          }
-          ctx.session.stadionFavoritMessages.push(send.message_id);
-        } catch (err) {
-          await sendText();
-        }
-      } else {
-        await sendText();
-      }
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
+  // ───────────────────────── Sana va vaqt tanlash ─────────────────────────
 
   async userbookingStadion(ctx: MyContext, lang: string, stadionId: number) {
     try {
@@ -1971,10 +1605,15 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         where: { id: stadionId },
         include: { parent: true, owner: { select: { id: true } } },
       });
-
       if (!stadion) {
-        return this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion topilmadi: id=${stadionId}`),
+          ErrorContext.STADION,
+        );
+        return;
       }
+
       const targetStadionId = stadion.parent_id ?? stadion.id;
       const [schedule, offDays, specialDays] = await Promise.all([
         this.prisma.stadion_chedule.findMany({
@@ -1989,124 +1628,147 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
       ]);
 
       if (!schedule.length) {
-        ctx.reply(
-          this.i18n.translate('booking.stadion.noWorkingHours', { lang }),
-        );
+        await ctx.reply(this.t(lang, 'booking.stadion.noWorkingHours'));
         return;
       }
 
-      const tz = 'Asia/Tashkent';
-      const now = toZonedTime(new Date(), tz);
-
+      const now = toZonedTime(new Date(), TASHKENT_TZ);
       const todayStr = format(now, 'yyyy-MM-dd');
-      const tomorrowStr = format(
-        new Date(now.getTime() + 86400000),
-        'yyyy-MM-dd',
-      );
+      const tomorrowStr = format(new Date(now.getTime() + 86400000), 'yyyy-MM-dd');
+      const currentDay = now.getDay() === 0 ? 7 : now.getDay();
 
       const offSet = new Set(
         offDays.map((d) =>
-          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+          format(toZonedTime(new Date(d.date), TASHKENT_TZ), 'yyyy-MM-dd'),
         ),
       );
-
       const specialMap = new Map(
         specialDays.map((d) => [
-          format(toZonedTime(new Date(d.date), tz), 'yyyy-MM-dd'),
+          format(toZonedTime(new Date(d.date), TASHKENT_TZ), 'yyyy-MM-dd'),
           d,
         ]),
       );
 
-      const buttons = schedule.map((s) => {
-        const dayOfWeek = s.day_of_week;
-        const currentDay = now.getDay() === 0 ? 7 : now.getDay();
+      // Eng yaqin sanalar birinchi bo'lib chiqishi uchun sanasi bo'yicha tartiblaymiz
+      const entries = schedule
+        .map((s) => {
+          let diff = s.day_of_week - currentDay;
+          if (diff < 0) diff += 7;
+          const date = new Date(now);
+          date.setDate(now.getDate() + diff);
+          return { s, date, dateStr: format(date, 'yyyy-MM-dd') };
+        })
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-        let diff = dayOfWeek - currentDay;
-        if (diff < 0) diff += 7;
+      const buttons: InlineKeyboardButton[][] = entries.map(
+        ({ s, date, dateStr }) => {
+          const label = this.dateLabel(date, s.day_of_week, todayStr, tomorrowStr, lang);
+          const special = specialMap.get(dateStr);
 
-        const date = new Date(now);
-        date.setDate(now.getDate() + diff);
-
-        const dateStr = format(date, 'yyyy-MM-dd');
-
-        const day = format(date, 'd');
-        const monthNumber = date.getMonth() + 1;
-
-        const monthText = this.i18n.translate(
-          `schedule.months.${monthNumber}`,
-          { lang },
-        );
-
-        const weekDayText = this.i18n.translate(
-          `schedule.week_days.${dayOfWeek}`,
-          { lang },
-        );
-
-        let dateLabel = `${day} - ${monthText}. ${weekDayText}`;
-
-        if (dateStr === todayStr) {
-          dateLabel = `${this.i18n.translate('schedule.today', { lang })}. ${weekDayText}`;
-        }
-
-        if (dateStr === tomorrowStr) {
-          dateLabel = `${this.i18n.translate('schedule.tomorrow', { lang })}. ${weekDayText}`;
-        }
-
-        const special = specialMap.get(dateStr);
-
-        if (special) {
+          if (special) {
+            return [
+              {
+                text: `⭐ ${label} || ${special.start_time} - ${special.end_time}`,
+                callback_data: `booking_specials_${special.id}_${stadion.id}`,
+              },
+            ];
+          }
+          if (offSet.has(dateStr)) {
+            return [
+              {
+                text: `🔒 ${label} || ${s.start_time} - ${s.end_time}`,
+                callback_data: 'user_offday',
+              },
+            ];
+          }
           return [
             {
-              text: `⭐ ${dateLabel} || ${special.start_time} - ${special.end_time}`,
-              callback_data: `booking_specials_${special.id}_${stadion.id}`,
+              text: `📅 ${label} || ${s.start_time} - ${s.end_time}`,
+              callback_data: `booking_schedule_${date.getFullYear()}_${format(date, 'd')}_${date.getMonth() + 1}_${s.id}_${stadion.id}`,
             },
           ];
-        }
+        },
+      );
 
-        if (offSet.has(dateStr)) {
-          return [
-            {
-              text: `🔒 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
-              callback_data: `user_offday`,
-            },
-          ];
-        }
-
-        return [
-          {
-            text: `📅 ${dateLabel} || ${s.start_time} - ${s.end_time}`,
-            callback_data: `booking_schedule_${date.getFullYear()}_${day}_${monthNumber}_${s.id}_${stadion.id}`,
-          },
-        ];
-      });
-      if (ctx.session.admin_step === 'NewBooking_owners') {
-        buttons.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `Newbooking_firstName_${stadion.owner.id}_${lang}`,
-          },
-        ]);
-      } else {
-        buttons.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: JSON.stringify({
-              type: 'Continue_back_stadion',
-              id: stadion.region_item_id,
-            }),
-          },
-        ]);
-      }
+      buttons.push(
+        this.backButton(
+          lang,
+          ctx.session.admin_step === 'NewBooking_owners'
+            ? `Newbooking_firstName_${stadion.owner.id}_${lang}`
+            : JSON.stringify({
+                type: 'Continue_back_stadion',
+                id: stadion.region_item_id,
+              }),
+        ),
+      );
 
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectDate', { lang }),
+        this.t(lang, 'booking.stadion.selectDate'),
         { inline_keyboard: buttons },
       );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
+  /** Bugun bo'lsa va ish boshlangan bo'lsa, o'tib ketgan vaqtlarni ko'rsatmaslik uchun boshlanish vaqtini suradi */
+  private resolveSlotStart(
+    startOfDay: Date,
+    scheduleStart: string,
+    referenceStart: string,
+  ): string {
+    if (!this.utils.isSameLocalDay(startOfDay, new Date())) return scheduleStart;
+    const currentTime = this.utils.currentLocalTimeRoundedUp();
+    return this.utils.isCurrentTimeAfter(currentTime, scheduleStart, referenceStart)
+      ? currentTime
+      : scheduleStart;
+  }
+
+  private async getFreeSlots(
+    stadionIds: number[],
+    startOfDay: Date,
+    fromTime: string,
+    toTime: string,
+    referenceStart: string,
+  ): Promise<TimeSlot[]> {
+    const allSlots: TimeSlot[] = await this.utils.generateSlots(fromTime, toTime);
+    const windowStart = this.utils.combineDateAndTime(startOfDay, fromTime, referenceStart);
+    const windowEnd = this.utils.combineDateAndTime(startOfDay, toTime, referenceStart);
+
+    const bookings = await this.prisma.booking.findMany({
+      where: {
+        stadion_id: { in: stadionIds },
+        status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
+        startAt: { lt: windowEnd },
+        endAt: { gt: windowStart },
+      },
+    });
+
+    return allSlots.filter((slot) => {
+      const slotStart = this.utils.combineDateAndTime(startOfDay, slot.start, referenceStart);
+      const slotEnd = this.utils.combineDateAndTime(startOfDay, slot.end, referenceStart);
+      return this.utils.isRangeFree(slotStart, slotEnd, bookings);
+    });
+  }
+
+  private slotKeyboard(
+    slots: TimeSlot[],
+    field: 'start' | 'end',
+    callback: (slot: TimeSlot) => string,
+  ): InlineKeyboardButton[][] {
+    const rows: InlineKeyboardButton[][] = [];
+    for (let i = 0; i < slots.length; i += SLOTS_PER_ROW) {
+      rows.push(
+        slots.slice(i, i + SLOTS_PER_ROW).map((slot) => ({
+          text: slot[field],
+          callback_data: callback(slot),
+        })),
+      );
+    }
+    return rows;
+  }
+
   async special(
     ctx: MyContext,
     lang: string,
@@ -2114,148 +1776,62 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     stadionId: number,
   ) {
     try {
-      if (ctx.session.stadion.schedule_id) {
-        ctx.session.stadion.schedule_id = null;
-      }
+      if (ctx.session.stadion.schedule_id) ctx.session.stadion.schedule_id = null;
+
       const [special, stadion] = await Promise.all([
-        this.prisma.stadion_special_schedule.findUnique({
-          where: { id: specialId },
-        }),
+        this.prisma.stadion_special_schedule.findUnique({ where: { id: specialId } }),
         this.prisma.stadion.findUnique({
           where: { id: stadionId },
           include: { parent: true, children: true },
         }),
       ]);
       if (!special || !stadion) {
-        this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Special yoki stadion topilmadi: special=${specialId} stadion=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
 
-      const stadionIds = getStadionIds(stadion);
-      const button: InlineKeyboardButton[][] = [];
-      const slotsPerKeyboard = 2;
-
       const referenceStart = special.start_time;
-
       const startOfDay = this.utils.buildCalendarDate(
         special.date.getUTCFullYear(),
         special.date.getUTCMonth() + 1,
         special.date.getUTCDate(),
       );
-
-      let scheduleStart = special.start_time;
-      const currentTime = this.utils.currentLocalTimeRoundedUp();
-
-      const nowInstant = new Date();
-      const isSameCalendarDay = this.utils.isSameLocalDay(
+      const fromTime = this.resolveSlotStart(startOfDay, special.start_time, referenceStart);
+      const freeSlots = await this.getFreeSlots(
+        getStadionIds(stadion),
         startOfDay,
-        nowInstant,
-      );
-
-      if (
-        isSameCalendarDay &&
-        this.utils.isCurrentTimeAfter(
-          currentTime,
-          scheduleStart,
-          referenceStart,
-        )
-      ) {
-        scheduleStart = currentTime;
-      }
-
-      const allSlots = await this.utils.generateSlots(
-        scheduleStart,
-        special.end_time,
-      );
-
-      const windowStart = this.utils.combineDateAndTime(
-        startOfDay,
-        scheduleStart,
-        referenceStart,
-      );
-      const windowEnd = this.utils.combineDateAndTime(
-        startOfDay,
+        fromTime,
         special.end_time,
         referenceStart,
       );
 
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          stadion_id: { in: stadionIds },
-          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
-          startAt: { lt: windowEnd },
-          endAt: { gt: windowStart },
-        },
-      });
-
-      const freeSlots = allSlots.filter((slot) => {
-        const slotStart = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.start,
-          referenceStart,
-        );
-        const slotEnd = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.end,
-          referenceStart,
-        );
-        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
-      });
-
-      if (freeSlots.length) {
-        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-          const row: InlineKeyboardButton[] = [];
-          for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (freeSlots[i + j]) {
-              row.push({
-                text: freeSlots[i + j].start,
-                callback_data: `booking_special_${freeSlots[i + j].start}_${special.id}_${stadionId}`,
-              });
-            }
-          }
-          button.push(row);
-        }
-        button.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_back_${stadionId}`,
-          },
-        ]);
-      } else {
-        try {
-          await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            { show_alert: true },
-          );
-          return;
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `booking_back_${stadionId}`,
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
+      const backCallback = `booking_back_${stadionId}`;
+      if (!freeSlots.length) {
+        await this.notifyNoFreeSlots(ctx, lang, backCallback);
+        return;
       }
+
+      const keyboard = this.slotKeyboard(
+        freeSlots,
+        'start',
+        (slot) => `booking_special_${slot.start}_${special.id}_${stadionId}`,
+      );
+      keyboard.push(this.backButton(lang, backCallback));
 
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectTime', { lang }),
-        { inline_keyboard: button },
+        this.t(lang, 'booking.stadion.selectTime'),
+        { inline_keyboard: keyboard },
       );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
   async userbookingSpecialEnd(
     ctx: MyContext,
     lang: string,
@@ -2265,123 +1841,57 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
   ) {
     try {
       const [special, stadion] = await Promise.all([
-        this.prisma.stadion_special_schedule.findUnique({
-          where: { id: specialId },
-        }),
+        this.prisma.stadion_special_schedule.findUnique({ where: { id: specialId } }),
         this.prisma.stadion.findUnique({
           where: { id: stadionId },
           include: { parent: true, children: true },
         }),
       ]);
-
       if (!special || !stadion) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Special yoki stadion topilmadi: special=${specialId} stadion=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
 
-      const stadionsIds = getStadionIds(stadion);
-      const button: InlineKeyboardButton[][] = [];
-      const slotsPerKeyboard = 2;
-
       const referenceStart = special.start_time;
+      const year = special.date.getUTCFullYear();
+      const month = special.date.getUTCMonth() + 1;
+      const day = special.date.getUTCDate();
+      const startOfDay = this.utils.buildCalendarDate(year, month, day);
 
-      const allSlots = await this.utils.generateSlots(
-        start_time,
-        special.end_time,
-      );
-
-      const startOfDay = this.utils.buildCalendarDate(
-        special.date.getUTCFullYear(),
-        special.date.getUTCMonth() + 1,
-        special.date.getUTCDate(),
-      );
-      const windowStart = this.utils.combineDateAndTime(
+      const freeSlots = await this.getFreeSlots(
+        getStadionIds(stadion),
         startOfDay,
         start_time,
-        referenceStart,
-      );
-      const windowEnd = this.utils.combineDateAndTime(
-        startOfDay,
         special.end_time,
         referenceStart,
       );
 
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          stadion_id: { in: stadionsIds },
-          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
-          startAt: { lt: windowEnd },
-          endAt: { gt: windowStart },
-        },
-      });
-
-      const freeSlots = allSlots.filter((slot) => {
-        const slotStart = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.start,
-          referenceStart,
-        );
-        const slotEnd = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.end,
-          referenceStart,
-        );
-        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
-      });
-
-      if (freeSlots.length) {
-        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-          const row: InlineKeyboardButton[] = [];
-          for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (freeSlots[i + j]) {
-              row.push({
-                text: freeSlots[i + j].end,
-                callback_data: `booking_specialEnd_${start_time}_${freeSlots[i + j].end}_${stadionId}_${special.date.getUTCFullYear()}_${special.date.getUTCMonth() + 1}_${special.date.getUTCDate()}_${scheduleType.special}`,
-              });
-            }
-          }
-          button.push(row);
-        }
-        ctx.session.stadion.schedule_id = special.id;
-        button.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_specialBack_${special.id}_${stadionId}`,
-          },
-        ]);
-      } else {
-        try {
-          await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            { show_alert: true },
-          );
-          return;
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `booking_specialBack_${special.id}_${stadionId}`,
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
+      const backCallback = `booking_specialBack_${special.id}_${stadionId}`;
+      if (!freeSlots.length) {
+        await this.notifyNoFreeSlots(ctx, lang, backCallback);
+        return;
       }
+
+      ctx.session.stadion.schedule_id = special.id;
+      const keyboard = this.slotKeyboard(
+        freeSlots,
+        'end',
+        (slot) =>
+          `booking_specialEnd_${start_time}_${slot.end}_${stadionId}_${year}_${month}_${day}_${scheduleType.special}`,
+      );
+      keyboard.push(this.backButton(lang, backCallback));
 
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectEndTime', { lang }),
-        { inline_keyboard: button },
+        this.t(lang, 'booking.stadion.selectEndTime'),
+        { inline_keyboard: keyboard },
       );
     } catch (error) {
-      await this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
 
@@ -2395,27 +1905,23 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     lang: string,
   ) {
     try {
-      if (ctx.session.stadion.schedule_id) {
-        ctx.session.stadion.schedule_id = null;
-      }
+      if (ctx.session.stadion.schedule_id) ctx.session.stadion.schedule_id = null;
+
       const [scheduleDate, stadion] = await Promise.all([
-        this.prisma.stadion_chedule.findUnique({
-          where: { id: scheduleId },
-        }),
+        this.prisma.stadion_chedule.findUnique({ where: { id: scheduleId } }),
         this.prisma.stadion.findUnique({
           where: { id: stadionId },
           include: { parent: true, children: true },
         }),
       ]);
-
       if (!scheduleDate || !stadion) {
-        this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Jadval yoki stadion topilmadi: schedule=${scheduleId} stadion=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
-
-      const stadionsIds = getStadionIds(stadion);
-      const button: InlineKeyboardButton[][] = [];
-      const slotsPerKeyboard = 2;
 
       const referenceStart = scheduleDate.start_time;
       const startOfDay = this.utils.buildCalendarDate(
@@ -2423,120 +1929,39 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
         Number(monthNumber),
         Number(day),
       );
-
-      const currentTime = this.utils.currentLocalTimeRoundedUp();
-      let scheduleStart = scheduleDate.start_time;
-
-      const isSameCalendarDay = this.utils.isSameLocalDay(
+      const fromTime = this.resolveSlotStart(startOfDay, scheduleDate.start_time, referenceStart);
+      const freeSlots = await this.getFreeSlots(
+        getStadionIds(stadion),
         startOfDay,
-        new Date(),
-      );
-
-      if (
-        isSameCalendarDay &&
-        this.utils.isCurrentTimeAfter(
-          currentTime,
-          scheduleStart,
-          referenceStart,
-        )
-      ) {
-        scheduleStart = currentTime;
-      }
-
-      const allSlots = await this.utils.generateSlots(
-        scheduleStart,
-        scheduleDate.end_time,
-      );
-
-      const windowStart = this.utils.combineDateAndTime(
-        startOfDay,
-        scheduleStart,
-        referenceStart,
-      );
-      const windowEnd = this.utils.combineDateAndTime(
-        startOfDay,
+        fromTime,
         scheduleDate.end_time,
         referenceStart,
       );
 
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          stadion_id: { in: stadionsIds },
-          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
-          startAt: { lt: windowEnd },
-          endAt: { gt: windowStart },
-        },
-      });
-
-      const freeSlots = allSlots.filter((slot) => {
-        const slotStart = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.start,
-          referenceStart,
-        );
-        const slotEnd = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.end,
-          referenceStart,
-        );
-        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
-      });
-
-      if (freeSlots.length) {
-        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-          const row: InlineKeyboardButton[] = [];
-          for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (freeSlots[i + j]) {
-              row.push({
-                text: freeSlots[i + j].start,
-                callback_data: `booking_timeStart_${freeSlots[i + j].start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-              });
-            }
-          }
-          button.push(row);
-        }
-        button.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_back_${stadionId}`,
-          },
-        ]);
-      } else {
-        try {
-          await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            { show_alert: true },
-          );
-          return;
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `booking_back_${stadionId}`,
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
+      const backCallback = `booking_back_${stadionId}`;
+      if (!freeSlots.length) {
+        await this.notifyNoFreeSlots(ctx, lang, backCallback);
+        return;
       }
+
+      const keyboard = this.slotKeyboard(
+        freeSlots,
+        'start',
+        (slot) =>
+          `booking_timeStart_${slot.start}_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
+      );
+      keyboard.push(this.backButton(lang, backCallback));
 
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectTime', { lang }),
-        { inline_keyboard: button },
+        this.t(lang, 'booking.stadion.selectTime'),
+        { inline_keyboard: keyboard },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx);
-      console.log(error);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
   async bookingSchedule_end(
     ctx: MyContext,
     years: string,
@@ -2549,125 +1974,62 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
   ) {
     try {
       const [scheduleDate, stadion] = await Promise.all([
-        this.prisma.stadion_chedule.findUnique({
-          where: { id: scheduleId },
-        }),
+        this.prisma.stadion_chedule.findUnique({ where: { id: scheduleId } }),
         this.prisma.stadion.findUnique({
           where: { id: stadionId },
           include: { parent: true, children: true },
         }),
       ]);
       if (!scheduleDate || !stadion) {
-        this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Jadval yoki stadion topilmadi: schedule=${scheduleId} stadion=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
 
-      const stadionIds = getStadionIds(stadion);
-      const button: InlineKeyboardButton[][] = [];
-      const slotsPerKeyboard = 2;
-
       const referenceStart = scheduleDate.start_time;
-
       const startOfDay = this.utils.buildCalendarDate(
         Number(years),
         Number(monthNumber),
         Number(day),
       );
-
-      const allSlots = await this.utils.generateSlots(
-        start_time,
-        scheduleDate.end_time,
-      );
-
-      const windowStart = this.utils.combineDateAndTime(
+      const freeSlots = await this.getFreeSlots(
+        getStadionIds(stadion),
         startOfDay,
         start_time,
-        referenceStart,
-      );
-      const windowEnd = this.utils.combineDateAndTime(
-        startOfDay,
         scheduleDate.end_time,
         referenceStart,
       );
 
-      const bookings = await this.prisma.booking.findMany({
-        where: {
-          stadion_id: { in: stadionIds },
-          status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
-          startAt: { lt: windowEnd },
-          endAt: { gt: windowStart },
-        },
-      });
-
-      const freeSlots = allSlots.filter((slot) => {
-        const slotStart = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.start,
-          referenceStart,
-        );
-        const slotEnd = this.utils.combineDateAndTime(
-          startOfDay,
-          slot.end,
-          referenceStart,
-        );
-        return this.utils.isRangeFree(slotStart, slotEnd, bookings);
-      });
-
-      if (freeSlots.length) {
-        for (let i = 0; i < freeSlots.length; i += slotsPerKeyboard) {
-          const row: InlineKeyboardButton[] = [];
-          for (let j = 0; j < slotsPerKeyboard; j++) {
-            if (freeSlots[i + j]) {
-              row.push({
-                text: freeSlots[i + j].end,
-                callback_data: `booking_timeEnd_${start_time}_${freeSlots[i + j].end}_${day}_${monthNumber}_${stadionId}_${years}_${scheduleType.schedule}`,
-              });
-            }
-          }
-          button.push(row);
-        }
-        ctx.session.scheduleId = scheduleDate.id;
-        button.push([
-          {
-            text: this.i18n.translate('schedule.back', { lang }),
-            callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-          },
-        ]);
-      } else {
-        try {
-          await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            { show_alert: true },
-          );
-          return;
-        } catch (error) {
-          await ctx.reply(
-            this.i18n.translate('booking.no_free_slots', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`,
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
+      const backCallback = `booking_scheduleBack_${scheduleId}_${day}_${monthNumber}_${years}_${stadionId}`;
+      if (!freeSlots.length) {
+        await this.notifyNoFreeSlots(ctx, lang, backCallback);
+        return;
       }
+
+      ctx.session.scheduleId = scheduleDate.id;
+      const keyboard = this.slotKeyboard(
+        freeSlots,
+        'end',
+        (slot) =>
+          `booking_timeEnd_${start_time}_${slot.end}_${day}_${monthNumber}_${stadionId}_${years}_${scheduleType.schedule}`,
+      );
+      keyboard.push(this.backButton(lang, backCallback));
 
       await this.utils.safeEditOrReply(
         ctx,
-        this.i18n.translate('booking.stadion.selectEndTime', { lang }),
-        { inline_keyboard: button },
+        this.t(lang, 'booking.stadion.selectEndTime'),
+        { inline_keyboard: keyboard },
       );
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     }
   }
+
+  // ───────────────────────── Bron yaratish ─────────────────────────
+
   async bookingScheduleFinish(
     ctx: MyContext,
     start_time: string,
@@ -2677,8 +2039,10 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     stadionId: number,
     type: scheduleType,
   ) {
+    let conflictBack = 'back_user_3';
     try {
       ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
+
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
@@ -2687,329 +2051,216 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           parent: true,
         },
       });
-
       if (!stadion) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion topilmadi: id=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
-      let callback_data = `booking_back_${stadionId}`;
+
+      let backCallback = `booking_back_${stadionId}`;
       if (ctx.session.scheduleId) {
         const id = ctx.session.scheduleId;
-        if (type === scheduleType.schedule) {
-          callback_data = `booking_timeStart_${start_time}_${id}_${date.getDate()}_${date.getMonth() + 1}_${date.getFullYear()}_${stadionId}`;
-        } else {
-          callback_data = `booking_special_${start_time}_${id}_${stadionId}`;
-        }
+        backCallback =
+          type === scheduleType.schedule
+            ? `booking_timeStart_${start_time}_${id}_${date.getDate()}_${date.getMonth() + 1}_${date.getFullYear()}_${stadionId}`
+            : `booking_special_${start_time}_${id}_${stadionId}`;
       }
+      conflictBack = backCallback;
 
       const targetStadionId = stadion.parent_id ?? stadion.id;
-
       const dayOfWeek = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
 
       const [scheduleRow, specialRow] = await Promise.all([
         this.prisma.stadion_chedule.findFirst({
-          where: {
-            stadion_id: targetStadionId,
-            day_of_week: dayOfWeek,
-          },
+          where: { stadion_id: targetStadionId, day_of_week: dayOfWeek },
         }),
-
         this.prisma.stadion_special_schedule.findFirst({
-          where: {
-            stadion_id: targetStadionId,
-            date,
-          },
+          where: { stadion_id: targetStadionId, date },
         }),
       ]);
 
       const referenceStart =
         specialRow?.start_time ?? scheduleRow?.start_time ?? start_time;
 
-      const toMinutes = (time: string) => {
-        const [hour, minute] = time.split(':').map(Number);
-
-        return hour * 60 + minute;
-      };
-
-      const startMinutes = toMinutes(start_time);
-      const referenceMinutes = toMinutes(referenceStart);
-
+      // Tungi jadvalda (masalan 22:00-02:00) 00:00 dan keyingi vaqt ertasi kunga tegishli
       const bookingDate = new Date(date);
-
-      if (startMinutes < referenceMinutes) {
+      if (toMinutes(start_time) < toMinutes(referenceStart)) {
         bookingDate.setUTCDate(bookingDate.getUTCDate() + 1);
       }
 
-      const startAt = this.utils.combineDateAndTime(
-        date,
-        start_time,
-        referenceStart,
-      );
+      const startAt = this.utils.combineDateAndTime(date, start_time, referenceStart);
+      const endAt = this.utils.combineDateAndTime(date, end_time, referenceStart);
 
-      const endAt = this.utils.combineDateAndTime(
-        date,
-        end_time,
-        referenceStart,
-      );
-      const days = this.utils.formatCalendarDate(bookingDate);
-
+      // ── Admin (owner) qo'lda bron qilmoqda ──
       if (ctx.session.admin_step === 'NewBooking_owners') {
-        const { total, price, hors } = this.utils.calculateTotalPrice_Admins(
+        conflictBack = 'back_owner_11';
+        const { total, hors } = this.utils.calculateTotalPrice_Admins(
           start_time,
           end_time,
           stadion.price,
         );
 
-        const booking = await this.prisma.booking.create({
-          data: {
-            stadion_id: stadion.id,
-            date: bookingDate,
-            start_time,
-            end_time,
-            customer_name: ctx.session.admin_bron_name,
-            customer_phone: ctx.session.admin_bron_phone,
-            startAt,
-            endAt,
-            status: 'CONFIRMED',
-            total_price: total,
-            payment_method: 'CASH',
-            expires_at: new Date(Date.now() + 30 * 60 * 1000),
-          },
-        });
-        ((ctx.session.admin_bron_name = null),
-          (ctx.session.admin_bron_phone = null));
+        const booking = await this.runGuarded(stadion, startAt, endAt, (tx) =>
+          tx.booking.create({
+            data: {
+              stadion_id: stadion.id,
+              date: bookingDate,
+              start_time,
+              end_time,
+              customer_name: ctx.session.admin_bron_name,
+              customer_phone: ctx.session.admin_bron_phone,
+              startAt,
+              endAt,
+              status: 'CONFIRMED',
+              total_price: total,
+              payment_method: 'CASH',
+              expires_at: new Date(Date.now() + CASH_BOOKING_TTL_MS),
+            },
+          }),
+        );
+
+        ctx.session.admin_bron_name = null;
+        ctx.session.admin_bron_phone = null;
         if (ctx.session.admin_booking_messages?.length) {
           await ctx
             .deleteMessages(ctx.session.admin_booking_messages)
-            .catch(() => {});
+            .catch(() => undefined);
+          ctx.session.admin_booking_messages = [];
         }
-
-        const buttons: InlineKeyboardButton[][] = [
-          [
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: 'back_owner_11',
-            },
-          ],
-        ];
 
         await this.utils.safeEditOrReply(
           ctx,
-          this.i18n.translate('admin.new_booking.success', {
-            lang,
-            args: {
-              stadion: stadion.name,
-              date: formatDate(bookingDate, lang),
-              start_time,
-              end_time,
-              hours: hors,
-              total_price: total,
-              status: statusMap(booking.status, this.i18n, lang),
-            },
+          this.t(lang, 'admin.new_booking.success', {
+            stadion: stadion.name,
+            date: formatDate(bookingDate, lang),
+            start_time,
+            end_time,
+            hours: hors,
+            total_price: total,
+            status: statusMap(booking.status, this.i18n, lang),
           }),
-          {
-            inline_keyboard: buttons,
-          },
+          { inline_keyboard: [this.backButton(lang, 'back_owner_11')] },
         );
         ctx.session.admin_step = null;
         return;
       }
 
-      const hasCard = canPayByCard(stadion.payments_type, stadion.owner);
-
-      const user = await this.prisma.users.findUnique({
-        where: {
-          chatID: String(ctx.from?.id),
-        },
-      });
-
+      // ── Oddiy user bron qilmoqda ──
+      const user = await this.findCurrentUser(ctx);
       if (!user) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`User topilmadi: chatID=${ctx.from?.id}`),
+          ErrorContext.USER,
+        );
         return;
       }
 
-      const noshowCount = await this.prisma.booking.count({
-        where: {
-          user_id: user.id,
-          stadion_id: stadion.id,
-          status: {
-            in: ['NOSHOW', 'REFUNDED'],
-          },
-        },
-      });
+      const hasCard = canPayByCard(stadion.payments_type, stadion.owner);
+      const noshowCount = await this.countNoShows(user.id, stadion.id);
+      const { penalty, total, hors } = this.utils.calculateTotalPrice(
+        start_time,
+        end_time,
+        stadion.price,
+        noshowCount,
+      );
 
-      const paymentTextMap = {
-        CARD: this.i18n.translate('peyments.card', { lang }),
-        CASH: this.i18n.translate('peyments.cash', { lang }),
+      const cardText = this.t(lang, 'peyments.card');
+      const cashText = this.t(lang, 'peyments.cash');
+      const baseArgs = {
+        date: formatDate(bookingDate, lang),
+        start_time,
+        end_time,
+        hours: hors,
+        total: total.toLocaleString(),
       };
+      const penaltyBlock =
+        penalty > 0
+          ? this.t(lang, 'booking.penalty_block', {
+              penalty: penalty.toLocaleString(),
+            })
+          : '';
+      const noshowWarning =
+        noshowCount === 1
+          ? this.t(lang, 'booking.no_show_warning')
+          : noshowCount >= 2
+            ? this.t(lang, 'booking.penalty')
+            : '';
 
-      if (stadion.payments_type === 'CARD') {
-        if (!hasCard) {
-          await this.utils.errorFunction(ctx);
-          return;
-        }
-
-        const { penalty, total, hors } = this.utils.calculateTotalPrice(
-          start_time,
-          end_time,
-          stadion.price,
-          noshowCount,
-        );
-
-        let warning = '';
-
-        if (noshowCount === 1) {
-          warning = this.i18n.translate('booking.no_show_warning', { lang });
-        } else if (noshowCount >= 2) {
-          warning = this.i18n.translate('booking.penalty', { lang });
-        }
+      /** Karta orqali to'lov: bron hali yaratilmaydi, ma'lumot sessionda saqlanadi */
+      const startCardFlow = async (warning: string): Promise<void> => {
         ctx.session.pendingBooking = {
           stadion_id: stadion.id,
-          date: date,
+          date,
           bookingData: bookingDate,
-          start_time: start_time,
-          end_time: end_time,
-          startAt: startAt,
-          endAt: endAt,
+          start_time,
+          end_time,
+          startAt,
+          endAt,
           payment_method: Pay_method.CARD,
           total_price: total,
           user_id: user.id,
           type,
         };
-
-        const paymentMethodText = paymentTextMap.CARD || 'CARD';
-
-        const message = this.i18n.translate('booking.message_template', {
-          lang,
-
-          args: {
-            warning,
-            date: formatDate(bookingDate, lang),
-            start_time,
-            end_time,
-            hours: hors,
-
-            total: total.toLocaleString(),
-
-            payment_method: paymentMethodText,
-
-            penalty_block:
-              penalty > 0
-                ? this.i18n.translate('booking.penalty_block', {
-                    lang,
-                    args: {
-                      penalty: penalty.toLocaleString(),
-                    },
-                  })
-                : '',
-          },
-        });
         await this.utils.safeEditOrReply(
           ctx,
-          message,
+          this.t(lang, 'booking.message_template', {
+            ...baseArgs,
+            warning,
+            payment_method: cardText,
+            penalty_block: penaltyBlock,
+          }),
           {
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate('booking.pay_by_card', { lang }),
-
+                  text: this.t(lang, 'booking.pay_by_card'),
                   callback_data: `bookingPaymentProviders_${lang}`,
                 },
               ],
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-
-                  callback_data,
-                },
-              ],
+              this.backButton(lang, backCallback),
             ],
           },
           'Markdown',
         );
+      };
 
-        return;
-      }
-
-      if (stadion.payments_type === 'CASH') {
-        const { penalty, total, hors } = this.utils.calculateTotalPrice(
-          start_time,
-          end_time,
-          stadion.price,
-          noshowCount,
+      /** Naqd to'lov: bron darhol yaratiladi va user tasdiqlashi kutiladi */
+      const startCashFlow = async (
+        templateKey: string,
+        args: Record<string, unknown>,
+      ): Promise<void> => {
+        const booking = await this.runGuarded(stadion, startAt, endAt, (tx) =>
+          tx.booking.create({
+            data: {
+              stadion_id: stadion.id,
+              user_id: user.id,
+              date: bookingDate,
+              start_time,
+              end_time,
+              startAt,
+              endAt,
+              total_price: total,
+              payment_method: 'CASH',
+              expires_at: new Date(Date.now() + CASH_BOOKING_TTL_MS),
+            },
+          }),
         );
-
-        let warning = '';
-
-        if (noshowCount === 1) {
-          warning = this.i18n.translate('booking.no_show_warning', { lang });
-        } else if (noshowCount >= 2) {
-          warning = this.i18n.translate('booking.penalty', { lang });
-        }
-
-        const paymentMethodText = paymentTextMap.CASH || 'CASH';
-
-        const message = this.i18n.translate('booking.booking_confirm', {
-          lang,
-
-          args: {
-            warning,
-            date: formatDate(bookingDate, lang),
-            start_time,
-            end_time,
-            hours: hors,
-
-            total: total.toLocaleString(),
-
-            payment_method: paymentMethodText,
-
-            penalty_block:
-              penalty > 0
-                ? this.i18n.translate('booking.penalty_block', {
-                    lang,
-                    args: {
-                      penalty: penalty.toLocaleString(),
-                    },
-                  })
-                : '',
-          },
-        });
-
-        const booking = await this.prisma.booking.create({
-          data: {
-            stadion_id: stadion.id,
-            user_id: user.id,
-
-            date: bookingDate,
-
-            start_time,
-            end_time,
-
-            startAt,
-            endAt,
-
-            total_price: total,
-            payment_method: 'CASH',
-
-            expires_at: new Date(Date.now() + 30 * 60 * 1000),
-          },
-        });
-
         await this.utils.safeEditOrReply(
           ctx,
-          message,
+          this.t(lang, templateKey, args),
           {
             inline_keyboard: [
               [
                 {
-                  text: this.i18n.translate('booking.confirm', { lang }),
-
+                  text: this.t(lang, 'booking.confirm'),
                   callback_data: `booking_confirm_yes_${booking.id}`,
                 },
-
                 {
-                  text: this.i18n.translate('booking.cancel', { lang }),
-
+                  text: this.t(lang, 'booking.cancel'),
                   callback_data: `booking_confirm_no_${booking.id}`,
                 },
               ],
@@ -3017,292 +2268,95 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           },
           'Markdown',
         );
+      };
 
-        return;
-      }
-
-      if (stadion.payments_type === 'GIBRID') {
-        const { penalty, hors, total } = this.utils.calculateTotalPrice(
-          start_time,
-          end_time,
-          stadion.price,
-          noshowCount,
-        );
-
-        const paymentMethodTextMap = {
-          CARD: this.i18n.translate('peyments.card', { lang }),
-
-          CASH: this.i18n.translate('peyments.cash', { lang }),
-        };
-
-        if (noshowCount >= 2 && hasCard) {
-          ctx.session.pendingBooking = {
-            stadion_id: stadion.id,
-            date: date,
-            bookingData: bookingDate,
-            start_time: start_time,
-            end_time: end_time,
-            startAt: startAt,
-            endAt: endAt,
-            payment_method: Pay_method.CARD,
-            total_price: total,
-            user_id: user.id,
-            type,
-          };
-          const paymentMethodText = paymentMethodTextMap.CARD || 'CARD';
-
-          const warning = this.i18n.translate('booking.warning', { lang });
-
-          const message = this.i18n.translate('booking.message_template', {
-            lang,
-
-            args: {
-              warning,
-              date: formatDate(bookingDate, lang),
-              start_time,
-              end_time,
-              hours: hors,
-
-              total: total.toLocaleString(),
-
-              payment_method: paymentMethodText,
-
-              penalty_block:
-                penalty > 0
-                  ? this.i18n.translate('booking.penalty_block', {
-                      lang,
-                      args: {
-                        penalty: penalty.toLocaleString(),
-                      },
-                    })
-                  : '',
-            },
-          });
-
-          await this.utils.safeEditOrReply(
-            ctx,
-            message,
-            {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('booking.pay_by_card', { lang }),
-                    callback_data: `bookingPaymentProviders_${lang}`,
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data,
-                  },
-                ],
-              ],
-            },
-            'Markdown',
-          );
+      switch (stadion.payments_type) {
+        case 'CARD': {
+          if (!hasCard) {
+            await this.utils.errorFunction(
+              ctx,
+              new Error(
+                `Stadion ${stadion.id} karta qabul qila olmaydi (payout/partner sozlanmagan)`,
+              ),
+              ErrorContext.BOOKING,
+            );
+            return;
+          }
+          await startCardFlow(noshowWarning);
           return;
         }
-
-        if (noshowCount >= 2) {
-          const paymentMethodText = paymentMethodTextMap.CASH || 'CASH';
-
-          const warning = this.i18n.translate(
-            'booking.booking_penalty_notice.warning',
-            { lang },
-          );
-
-          const message = this.i18n.translate(
-            'booking.booking_penalty_notice.message_template',
-            {
-              lang,
-
-              args: {
-                warning,
-                date: formatDate(bookingDate, lang),
-                start_time,
-                end_time,
-                hours: hors,
-
-                total: total.toLocaleString(),
-
-                payment_method: paymentMethodText,
-
-                penalty_block:
-                  penalty > 0
-                    ? this.i18n.translate('booking.penalty_block', {
-                        lang,
-                        args: {
-                          penalty: penalty.toLocaleString(),
-                        },
-                      })
-                    : '',
-              },
-            },
-          );
-
-          const booking = await this.prisma.booking.create({
-            data: {
-              stadion_id: stadion.id,
-              user_id: user.id,
-
-              date: bookingDate,
-
-              start_time,
-              end_time,
-
-              startAt,
-              endAt,
-
-              total_price: total,
-              payment_method: 'CASH',
-
-              expires_at: new Date(Date.now() + 30 * 60 * 1000),
-            },
+        case 'CASH': {
+          await startCashFlow('booking.booking_confirm', {
+            ...baseArgs,
+            warning: noshowWarning,
+            payment_method: cashText,
+            penalty_block: penaltyBlock,
           });
-
-          await this.utils.safeEditOrReply(
-            ctx,
-            message,
-            {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('booking.confirm', { lang }),
-
-                    callback_data: `booking_confirm_yes_${booking.id}`,
-                  },
-
-                  {
-                    text: this.i18n.translate('booking.cancel', { lang }),
-
-                    callback_data: `booking_confirm_no_${booking.id}`,
-                  },
-                ],
-              ],
-            },
-            'Markdown',
-          );
-
           return;
         }
-
-        if (!hasCard) {
-          const paymentMethodText = paymentMethodTextMap.CASH || 'CASH';
-
-          let warning = '';
-
-          if (noshowCount === 1) {
-            warning = this.i18n.translate('booking.booking_warning.warning', {
-              lang,
+        case 'GIBRID': {
+          // 2 va undan ko'p NOSHOW: karta majburiy (karta bo'lmasa naqd, ogohlantirish bilan)
+          if (noshowCount >= 2 && hasCard) {
+            await startCardFlow(this.t(lang, 'booking.warning'));
+            return;
+          }
+          if (noshowCount >= 2) {
+            await startCashFlow('booking.booking_penalty_notice.message_template', {
+              ...baseArgs,
+              warning: this.t(lang, 'booking.booking_penalty_notice.warning'),
+              payment_method: cashText,
+              penalty_block: penaltyBlock,
             });
-          } else if (noshowCount >= 2) {
-            warning = this.i18n.translate('booking.penalty', { lang });
+            return;
+          }
+          if (!hasCard) {
+            await startCashFlow('booking.booking_warning.message_template', {
+              ...baseArgs,
+              warning:
+                noshowCount === 1
+                  ? this.t(lang, 'booking.booking_warning.warning')
+                  : '',
+              payment_method: cashText,
+            });
+            return;
           }
 
-          const message = this.i18n.translate(
-            'booking.booking_warning.message_template',
-            {
-              lang,
-
-              args: {
-                warning,
-                date: formatDate(bookingDate, lang),
-                start_time,
-                end_time,
-                hours: hors,
-
-                total: total.toLocaleString(),
-
-                payment_method: paymentMethodText,
-              },
-            },
-          );
-
-          const booking = await this.prisma.booking.create({
-            data: {
-              stadion_id: stadion.id,
-              user_id: user.id,
-
-              date: bookingDate,
-
-              start_time,
-              end_time,
-
-              startAt,
-              endAt,
-
-              total_price: total,
-              payment_method: 'CASH',
-
-              expires_at: new Date(Date.now() + 30 * 60 * 1000),
-            },
-          });
-
+          const shortDate = bookingDate.toISOString().split('T')[0];
+          const suffix = `${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}_${type}`;
           await this.utils.safeEditOrReply(
             ctx,
-            message,
+            this.t(lang, 'booking.select_payment_method'),
             {
               inline_keyboard: [
                 [
                   {
-                    text: this.i18n.translate('booking.confirm', { lang }),
-
-                    callback_data: `booking_confirm_yes_${booking.id}`,
-                  },
-
-                  {
-                    text: this.i18n.translate('booking.cancel', { lang }),
-
-                    callback_data: `booking_confirm_no_${booking.id}`,
+                    text: cashText,
+                    callback_data: `booking_peyments_cash_${suffix}`,
                   },
                 ],
+                [
+                  {
+                    text: cardText,
+                    callback_data: `booking_peyments_card_${suffix}`,
+                  },
+                ],
+                this.backButton(lang, backCallback),
               ],
             },
-            'Markdown',
           );
-
           return;
         }
-
-        const shortDate = bookingDate.toISOString().split('T')[0];
-
-        await this.utils.safeEditOrReply(
-          ctx,
-          this.i18n.translate('booking.select_payment_method', { lang }),
-          {
-            inline_keyboard: [
-              [
-                {
-                  text: this.i18n.translate('peyments.cash', { lang }),
-
-                  callback_data: `booking_peyments_cash_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}_${type}`,
-                },
-              ],
-              [
-                {
-                  text: this.i18n.translate('peyments.card', { lang }),
-
-                  callback_data: `booking_peyments_card_${start_time}_${end_time}_${shortDate}_${stadionId}_${Number(stadion.price)}_${noshowCount}_${type}`,
-                },
-              ],
-
-              [
-                {
-                  text: this.i18n.translate('schedule.back', { lang }),
-
-                  callback_data,
-                },
-              ],
-            ],
-          },
-        );
-
-        return;
+        default:
+          await this.utils.errorFunction(
+            ctx,
+            new Error(
+              `Noma'lum payments_type: ${String(stadion.payments_type)} (stadion=${stadion.id})`,
+            ),
+            ErrorContext.BOOKING,
+          );
       }
     } catch (error) {
-      console.error('bookingScheduleFinish error:', error);
-
-      await this.utils.errorFunction(ctx);
+      await this.handleBookingFailure(ctx, lang, error, conflictBack);
     }
   }
 
@@ -3313,205 +2367,181 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     start_time: string,
     end_time: string,
     stadionId: number,
-    pricePerHur: number,
-    noshowCount: number,
+    _pricePerHur: number,
+    _noshowCount: number,
     schedule_type: scheduleType,
     lang: string,
   ) {
     try {
       ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
-      const { total, hors } = this.utils.calculateTotalPrice(
-        start_time,
-        end_time,
-        pricePerHur,
-        noshowCount,
-      );
 
-      const user = await this.prisma.users.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-      });
+      const user = await this.findCurrentUser(ctx);
       if (!user) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`User topilmadi: chatID=${ctx.from?.id}`),
+          ErrorContext.USER,
+        );
         return;
       }
-      const startAt = new Date(
-        `${format(date, 'yyyy-MM-dd')}T${start_time}:00`,
-      );
-      const endAt = new Date(`${format(date, 'yyyy-MM-dd')}T${end_time}:00`);
+
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadionId },
         include: {
-          owner: {
-            select: { payout_status: true, paylov_partner_id: true },
-          },
+          owner: { select: { payout_status: true, paylov_partner_id: true } },
+          parent: true,
+          children: true,
         },
       });
       if (!stadion) {
-        await this.utils.errorFunction(ctx);
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion topilmadi: id=${stadionId}`),
+          ErrorContext.STADION,
+        );
         return;
       }
 
-      const hasCard = canPayByCard(stadion.payments_type, stadion.owner);
-      if (!hasCard) {
-        await this.utils.errorFunction(ctx);
+      if (!canPayByCard(stadion.payments_type, stadion.owner)) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion ${stadion.id} karta qabul qila olmaydi`),
+          ErrorContext.BOOKING,
+        );
         return;
       }
 
-      const paymentTextMap = {
-        CARD: this.i18n.translate('peyments.card', { lang }),
-        CASH: this.i18n.translate('peyments.cash', { lang }),
-      };
+      // Narx va noshow soni callback_data dan EMAS, bazadan olinadi (callback soxtalashtirilishi mumkin)
+      const pricePerHour = Number(stadion.price);
+      const noshowCount = await this.countNoShows(user.id, stadion.id);
+      const { total, hors } = this.utils.calculateTotalPrice(
+        start_time,
+        end_time,
+        pricePerHour,
+        noshowCount,
+      );
+
+      const dayText = format(date, 'yyyy-MM-dd');
+      const startAt = new Date(`${dayText}T${start_time}:00`);
+      const endAt = new Date(`${dayText}T${end_time}:00`);
+
+      const warning =
+        noshowCount === 1
+          ? this.t(lang, 'booking.booking_warning.warning')
+          : noshowCount >= 2
+            ? this.t(lang, 'booking.penalty')
+            : '';
+
       switch (type) {
-        case 'cash':
-          {
-            const paymentMethodText = paymentTextMap['CASH'] || 'CASH';
-
-            let warning = '';
-
-            if (noshowCount == 1) {
-              warning = this.i18n.translate('booking.booking_warning.warning', {
-                lang,
-              });
-            } else if (noshowCount >= 2) {
-              warning = this.i18n.translate('booking.penalty', { lang });
-            }
-
-            const message = this.i18n.translate(
-              'booking.booking_warning.message_template',
-              {
-                lang,
-                args: {
-                  warning,
-                  date: formatDate(date, lang),
-                  start_time,
-                  end_time,
-                  hours: hors,
-                  total: total.toLocaleString(),
-                  payment_method: paymentMethodText,
-                },
-              },
-            );
-
-            const booking = await this.prisma.booking.create({
+        case 'cash': {
+          const booking = await this.runGuarded(stadion, startAt, endAt, (tx) =>
+            tx.booking.create({
               data: {
                 stadion_id: stadionId,
                 user_id: user.id,
-                date: date,
+                date,
                 start_time,
                 end_time,
                 startAt,
                 endAt,
                 total_price: total,
                 payment_method: 'CASH',
-                expires_at: new Date(Date.now() + 30 * 60 * 1000),
+                expires_at: new Date(Date.now() + CASH_BOOKING_TTL_MS),
               },
-            });
+            }),
+          );
 
-            await this.utils.safeEditOrReply(
-              ctx,
-              message,
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('booking.confirm', { lang }),
-                      callback_data: `booking_confirm_yes_${booking.id}`,
-                    },
-                    {
-                      text: this.i18n.translate('booking.cancel', { lang }),
-                      callback_data: `booking_confirm_no_${booking.id}`,
-                    },
-                  ],
-                ],
-              },
-              'Markdown',
-            );
-          }
-          break;
-        case 'card':
-          {
-            ctx.session.pendingBooking = {
-              date,
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.t(lang, 'booking.booking_warning.message_template', {
+              warning,
+              date: formatDate(date, lang),
               start_time,
               end_time,
-              startAt,
-              endAt,
-              bookingData: date,
-              payment_method: Pay_method.CARD,
-              stadion_id: stadionId,
-              user_id: user.id,
-              total_price: total,
-              pricePerHur,
-              noshowCount,
-              type: schedule_type,
-            };
-
-            const paymentMethodText = paymentTextMap['CARD'] || 'CARD';
-            let warning = '';
-
-            if (noshowCount == 1) {
-              warning = this.i18n.translate('booking.booking_warning.warning', {
-                lang,
-              });
-            } else if (noshowCount >= 2) {
-              warning = this.i18n.translate('booking.penalty', { lang });
-            }
-
-            const message = this.i18n.translate('booking.booking_details', {
-              lang,
-              args: {
-                warning: warning,
-                date: formatDate(date, lang),
-                start_time,
-                end_time,
-                hours: hors,
-                total: total.toLocaleString(),
-                payment_method: paymentMethodText,
-              },
-            });
-            await this.utils.safeEditOrReply(
-              ctx,
-              message,
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'booking.payment_options.prepay',
-                        { lang },
-                      ),
-                      callback_data: `bookingPaymentProviderStep2_${lang}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'booking.payment_options.pay_later',
-                        { lang },
-                      ),
-                      callback_data: `booking_confirm_pending_1`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: `back_user_Booking`,
-                    },
-                  ],
+              hours: hors,
+              total: total.toLocaleString(),
+              payment_method: this.t(lang, 'peyments.cash'),
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.t(lang, 'booking.confirm'),
+                    callback_data: `booking_confirm_yes_${booking.id}`,
+                  },
+                  {
+                    text: this.t(lang, 'booking.cancel'),
+                    callback_data: `booking_confirm_no_${booking.id}`,
+                  },
                 ],
-              },
-              'Markdown',
-            );
-          }
-          break;
-        default: {
-          await this.utils.errorFunction(ctx);
+              ],
+            },
+            'Markdown',
+          );
+          return;
         }
+        case 'card': {
+          ctx.session.pendingBooking = {
+            date,
+            start_time,
+            end_time,
+            startAt,
+            endAt,
+            bookingData: date,
+            payment_method: Pay_method.CARD,
+            stadion_id: stadionId,
+            user_id: user.id,
+            total_price: total,
+            pricePerHur: pricePerHour,
+            noshowCount,
+            type: schedule_type,
+          };
+
+          await this.utils.safeEditOrReply(
+            ctx,
+            this.t(lang, 'booking.booking_details', {
+              warning,
+              date: formatDate(date, lang),
+              start_time,
+              end_time,
+              hours: hors,
+              total: total.toLocaleString(),
+              payment_method: this.t(lang, 'peyments.card'),
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: this.t(lang, 'booking.payment_options.prepay'),
+                    callback_data: `bookingPaymentProviderStep2_${lang}`,
+                  },
+                ],
+                [
+                  {
+                    text: this.t(lang, 'booking.payment_options.pay_later'),
+                    callback_data: 'booking_confirm_pending_1',
+                  },
+                ],
+                this.backButton(lang, 'back_user_Booking'),
+              ],
+            },
+            'Markdown',
+          );
+          return;
+        }
+        default:
+          await this.utils.errorFunction(
+            ctx,
+            new Error(`bookingPayments: noma'lum type: ${type}`),
+            ErrorContext.COMMON,
+          );
       }
     } catch (error) {
-      await this.utils.errorFunction(ctx, error, ErrorContext.BOOKING);
+      await this.handleBookingFailure(ctx, lang, error, 'back_user_Booking');
     }
   }
+
+  // ───────────────────────── Vaqt bo'yicha qidirish ─────────────────────────
 
   async searchWorkingStadions(
     ctx: MyContext,
@@ -3523,230 +2553,146 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
   ) {
     try {
       const searchDate = new Date(date);
+      if (Number.isNaN(searchDate.getTime())) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`searchWorkingStadions: sana noto'g'ri: ${date}`),
+          ErrorContext.COMMON,
+        );
+        return;
+      }
 
-      const dayOfWeek = searchDate.getDay() === 0 ? 7 : searchDate.getDay();
-
+      const currentPage = Math.max(1, Number(page) || 1);
       const limit = 4;
+      // new Date('yyyy-MM-dd') UTC yarim tunga teng, shuning uchun hafta kuni ham UTC bo'yicha olinadi
+      const dayOfWeek = searchDate.getUTCDay() === 0 ? 7 : searchDate.getUTCDay();
 
-      const whereCondition = {
+      const coversTime = { start_time: { lte: start_time }, end_time: { gte: end_time } };
+
+      const specialDay: Prisma.StadionWhereInput = {
+        stadionOffDays: { none: { date: searchDate } },
+        stadionSpecialSchedules: { some: { date: searchDate, ...coversTime } },
+      };
+      const regularDay: Prisma.StadionWhereInput = {
+        AND: [
+          { stadionSpecialSchedules: { none: { date: searchDate } } },
+          { stadionOffDays: { none: { date: searchDate } } },
+          { stadionChedules: { some: { day_of_week: dayOfWeek, ...coversTime } } },
+        ],
+      };
+
+      const whereCondition: Prisma.StadionWhereInput = {
         working_status: true,
         admin_status: AdminStatus.APPROVED,
-        owner: {
-          status: Admin_S.ACTIVE,
-        },
-
+        owner: { status: Admin_S.ACTIVE },
+        // Faqat faol bronlar vaqtni band qiladi (bekor qilinganlari emas)
         bookings: {
           none: {
             date: searchDate,
+            status: { in: ['CONFIRMED', 'PAID', 'PENDING'] },
             AND: [
-              {
-                start_time: {
-                  lt: end_time,
-                },
-              },
-              {
-                end_time: {
-                  gt: start_time,
-                },
-              },
+              { start_time: { lt: end_time } },
+              { end_time: { gt: start_time } },
             ],
           },
         },
-
         OR: [
-          {
-            stadionOffDays: {
-              none: {
-                date: searchDate,
-              },
-            },
-            stadionSpecialSchedules: {
-              some: {
-                date: searchDate,
-                start_time: {
-                  lte: start_time,
-                },
-                end_time: {
-                  gte: end_time,
-                },
-              },
-            },
-          },
-
-          {
-            parent: {
-              stadionOffDays: {
-                none: {
-                  date: searchDate,
-                },
-              },
-              stadionSpecialSchedules: {
-                some: {
-                  date: searchDate,
-                  start_time: {
-                    lte: start_time,
-                  },
-                  end_time: {
-                    gte: end_time,
-                  },
-                },
-              },
-            },
-          },
-
-          {
-            AND: [
-              {
-                stadionSpecialSchedules: {
-                  none: {
-                    date: searchDate,
-                  },
-                },
-              },
-              {
-                stadionOffDays: {
-                  none: {
-                    date: searchDate,
-                  },
-                },
-              },
-              {
-                stadionChedules: {
-                  some: {
-                    day_of_week: dayOfWeek,
-                    start_time: {
-                      lte: start_time,
-                    },
-                    end_time: {
-                      gte: end_time,
-                    },
-                  },
-                },
-              },
-            ],
-          },
-
-          {
-            parent: {
-              AND: [
-                {
-                  stadionSpecialSchedules: {
-                    none: {
-                      date: searchDate,
-                    },
-                  },
-                },
-                {
-                  stadionOffDays: {
-                    none: {
-                      date: searchDate,
-                    },
-                  },
-                },
-                {
-                  stadionChedules: {
-                    some: {
-                      day_of_week: dayOfWeek,
-                      start_time: {
-                        lte: start_time,
-                      },
-                      end_time: {
-                        gte: end_time,
-                      },
-                    },
-                  },
-                },
-              ],
-            },
-          },
+          specialDay,
+          { parent: specialDay },
+          regularDay,
+          { parent: regularDay },
         ],
       };
 
       const [stadions, total] = await Promise.all([
         this.prisma.stadion.findMany({
           where: whereCondition,
-          skip: (page - 1) * limit,
+          skip: (currentPage - 1) * limit,
           take: limit,
-          include: {
-            region: true,
-            region_items: true,
-          },
+          include: { region: true, region_items: true },
         }),
-
-        this.prisma.stadion.count({
-          where: whereCondition,
-        }),
+        this.prisma.stadion.count({ where: whereCondition }),
       ]);
 
       if (!stadions.length) {
-        try {
-          await ctx.answerCbQuery(
-            this.i18n.translate('booking.no_free_slots', {
-              lang,
-            }),
-            {
-              show_alert: true,
-            },
-          );
-        } catch {}
-
+        await this.answerCb(ctx, this.t(lang, 'booking.no_free_slots'), true);
         return;
       }
 
-      try {
-        await ctx.deleteMessage();
-
-        if (ctx.session.stadionMessages?.length) {
-          await ctx.deleteMessages(ctx.session.stadionMessages);
-        }
-      } catch {}
+      await ctx.deleteMessage().catch(() => undefined);
+      if (ctx.session.stadionMessages?.length) {
+        await ctx
+          .deleteMessages(ctx.session.stadionMessages)
+          .catch(() => undefined);
+        ctx.session.stadionMessages = [];
+      }
 
       for (const stadion of stadions) {
         await this.stadionAll_data(ctx, lang, stadion, '', true);
       }
 
       const totalPages = Math.ceil(total / limit);
+      if (totalPages <= 1) return;
 
-      if (totalPages <= 1) {
-        return;
-      }
-
-      const paginationButtons: InlineKeyboardButton[] = [];
-
-      if (page > 1) {
-        paginationButtons.push({
-          text: this.i18n.translate('stadions.Previous', { lang }),
-          callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page - 1}`,
-        });
-      }
-
-      paginationButtons.push({
-        text: `${page} / ${totalPages}`,
-        callback_data: 'ignore',
-      });
-
-      if (page < totalPages) {
-        paginationButtons.push({
-          text: this.i18n.translate('stadions.Next', { lang }),
-          callback_data: `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${page + 1}`,
-        });
-      }
-
-      await ctx.reply(
-        this.i18n.translate('booking.Select', {
-          lang,
-        }),
-        {
-          reply_markup: {
-            inline_keyboard: [paginationButtons],
-          },
+      await ctx.reply(this.t(lang, 'booking.Select'), {
+        reply_markup: {
+          inline_keyboard: [
+            this.paginationRow(
+              lang,
+              currentPage,
+              totalPages,
+              (p) =>
+                `search_stadionsPage_${date}_${start_time}_${end_time}_${lang}_${p}`,
+            ),
+          ],
         },
-      );
+      });
     } catch (error) {
-      await this.utils.errorFunction(ctx, error);
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
     } finally {
-      await ctx.answerCbQuery().catch(() => {});
+      await this.answerCb(ctx);
     }
+  }
+
+  private readPendingForPayment(pending: PendingBooking) {
+    if (!pending) return null;
+    const {
+      stadion_id,
+      user_id,
+      bookingData,
+      start_time,
+      end_time,
+      startAt,
+      endAt,
+      total_price,
+      payment_method,
+      type,
+    } = pending;
+
+    if (
+      !stadion_id ||
+      !user_id ||
+      !bookingData ||
+      !start_time ||
+      !end_time ||
+      !startAt ||
+      !endAt ||
+      !total_price ||
+      !payment_method ||
+      !type
+    ) {
+      return null;
+    }
+    return {
+      stadion_id,
+      user_id,
+      bookingData,
+      start_time,
+      end_time,
+      startAt,
+      endAt,
+      total_price,
+    };
   }
 
   async BookingPaymentProviders(
@@ -3755,48 +2701,57 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
     lang: string,
   ) {
     try {
-      const pending = ctx.session.pendingBooking;
-
-      if (
-        !pending ||
-        !pending.start_time ||
-        !pending.end_time ||
-        !pending.stadion_id ||
-        !pending.type ||
-        !pending.bookingData ||
-        !pending.endAt ||
-        !pending.startAt ||
-        !pending.payment_method ||
-        !pending.total_price ||
-        !pending.user_id
-      ) {
-        await this.utils.errorFunction(ctx);
-        this.logger.warn(
-          "BookingPaymentProviders: pendingBooking topilmadi yoki to'liq emas",
+      const pending = this.readPendingForPayment(ctx.session.pendingBooking);
+      if (!pending) {
+        // Odatda session eskirgan (bot qayta ishga tushgan yoki eski tugma)
+        await this.utils.errorFunction(
+          ctx,
+          new Error("BookingPaymentProviders: pendingBooking topilmadi yoki to'liq emas"),
+          ErrorContext.USER,
         );
         return;
       }
 
-      const { booking, transaction } = await this.prisma.$transaction(
+      const botUsername = process.env.BOT_USERNAME;
+      if (!botUsername) throw new Error('BOT_USERNAME sozlanmagan');
+
+      const slotStadion = await this.prisma.stadion.findUnique({
+        where: { id: pending.stadion_id },
+        include: { parent: true, children: true },
+      });
+      if (!slotStadion) {
+        await this.utils.errorFunction(
+          ctx,
+          new Error(`Stadion topilmadi: id=${pending.stadion_id}`),
+          ErrorContext.STADION,
+        );
+        return;
+      }
+
+      // Vaqt bo'shligini tekshirish va booking + tranzaksiya yaratish bitta Serializable tranzaksiyada
+      const created = await this.runGuarded(
+        slotStadion,
+        pending.startAt,
+        pending.endAt,
         async (tx) => {
           const booking = await tx.booking.create({
             data: {
-              stadion_id: pending.stadion_id!,
-              user_id: pending.user_id!,
-              date: pending.bookingData!,
-              start_time: pending.start_time!,
-              end_time: pending.end_time!,
-              startAt: pending.startAt!,
-              endAt: pending.endAt!,
-              total_price: pending.total_price!,
+              stadion_id: pending.stadion_id,
+              user_id: pending.user_id,
+              date: pending.bookingData,
+              start_time: pending.start_time,
+              end_time: pending.end_time,
+              startAt: pending.startAt,
+              endAt: pending.endAt,
+              total_price: pending.total_price,
               payment_method: Pay_method.CARD,
-              expires_at: new Date(Date.now() + 15 * 60 * 1000),
+              expires_at: new Date(Date.now() + CARD_BOOKING_TTL_MS),
             },
           });
 
           const transaction = await tx.tranzaktion.create({
             data: {
-              user_id: pending.user_id!,
+              user_id: pending.user_id,
               booking_id: booking.id,
               amount: pending.total_price,
               provider: PaymentProvider.PAYLOV,
@@ -3807,7 +2762,16 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
 
           return { booking, transaction };
         },
-      );
+      ).catch(async (error: unknown) => {
+        if (this.isSlotConflict(error)) {
+          await this.notifyNoFreeSlots(ctx, lang, 'back_user_Booking');
+          return null;
+        }
+        throw error;
+      });
+      if (!created) return;
+
+      const { booking, transaction } = created;
 
       let checkoutUrl: string;
       try {
@@ -3815,58 +2779,57 @@ ${this.i18n.translate('view.update', { lang })} ${formatDate(stadion.updatedAt, 
           externalId: `BK:${transaction.id}`,
           amountSom: pending.total_price,
           method: provider,
-          returnUrl: `https://t.me/${process.env.BOT_USERNAME}?start=paymentBooking_success_${transaction.id}`,
+          returnUrl: `https://t.me/${botUsername}?start=paymentBooking_success_${transaction.id}`,
         });
 
         await this.prisma.tranzaktion.update({
           where: { id: transaction.id },
           data: { provider_order_id: String(checkout.order_id) },
         });
-
         checkoutUrl = checkout.checkout_url;
-      } catch (err) {
-        this.logger.error(
-          `Booking #${booking.id} uchun checkout yaratilmadi: ${err instanceof Error ? err.message : err}`,
-        );
-        await this.prisma.$transaction([
-          this.prisma.tranzaktion.update({
-            where: { id: transaction.id },
-            data: { status: TransactionStatus.FAILED },
-          }),
-          this.prisma.booking.update({
-            where: { id: booking.id },
-            data: { expires_at: new Date() },
-          }),
-        ]);
-        await this.utils.errorFunction(ctx, err);
+      } catch (checkoutError) {
+        try {
+          await this.prisma.$transaction([
+            this.prisma.tranzaktion.update({
+              where: { id: transaction.id },
+              data: { status: TransactionStatus.FAILED },
+            }),
+            this.prisma.booking.update({
+              where: { id: booking.id },
+              data: { expires_at: new Date() },
+            }),
+          ]);
+        } catch (rollbackError) {
+          this.logger.error(
+            `Booking #${booking.id} rollback bo'lmadi (tranzaksiya ${transaction.id})`,
+            rollbackError instanceof Error ? rollbackError.stack : String(rollbackError),
+          );
+        }
+        await this.utils.errorFunction(ctx, checkoutError, ErrorContext.PAYMENT);
         return;
       }
 
-      const message = this.i18n.translate('booking.payment.redirect', {
-        lang,
-        args: { total: pending.total_price.toLocaleString() },
-      });
-
-      await this.utils.safeEditOrReply(ctx, message, {
-        inline_keyboard: [
-          [
-            {
-              text: this.i18n.translate('booking.payment.pay_button', { lang }),
-              url: checkoutUrl,
-            },
+      await this.utils.safeEditOrReply(
+        ctx,
+        this.t(lang, 'booking.payment.redirect', {
+          total: pending.total_price.toLocaleString(),
+        }),
+        {
+          inline_keyboard: [
+            [{ text: this.t(lang, 'booking.payment.pay_button'), url: checkoutUrl }],
+            [
+              {
+                text: this.t(lang, 'booking.cancel'),
+                callback_data: `booking_confirm_no_${booking.id}`,
+              },
+            ],
           ],
-          [
-            {
-              text: this.i18n.translate('booking.cancel', { lang }),
-              callback_data: `booking_confirm_no_${booking.id}`,
-            },
-          ],
-        ],
-      });
+        },
+      );
 
       ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
     } catch (error) {
-      await this.utils.errorFunction(ctx, error);
+      await this.utils.errorFunction(ctx, error, ErrorContext.PAYMENT);
     }
   }
 }

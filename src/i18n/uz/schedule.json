@@ -47,7 +47,7 @@
   },
   "schedules": {
     "format": "❌ Format xato. To'g'ri format: 09:00-18:00",
-    "error":  "❌ Xato: boshlanish va tugash vaqtlarini bir xil kiritish mumkin emas. Tungi ish vaqti uchun, masalan, 08:00 - 03:00 ko‘rinishida kiriting.",
+    "error": "❌ Xato: boshlanish va tugash vaqtlarini bir xil kiritish mumkin emas. Tungi ish vaqti uchun, masalan, 08:00 - 03:00 ko‘rinishida kiriting.",
     "overlap": "⚠️ Kiritilgan ish vaqti mavjud ish vaqti bilan to‘qnashmoqda. Iltimos, boshqa vaqt oralig‘ini kiriting.",
     "updated": "✅ Ma'lumot muvaffaqiyatli yangilandi.",
     "creat": "👌 Ma'lumot muvaffaqiyatli yaratildi.",
@@ -66,7 +66,8 @@
     "succses": "✅ Ma'lumot muvaffaqiyatli saqlandi! 🎉",
     "update": "✅ Ma'lumot muvaffaqiyatli yangilandi!",
     "error": "❌ Bazaga yozishda xatolik yuz berdi! ⚠️",
-    "add_day": "📅 Dam olish kuni uchun sanani kiriting, quyidagi formatda: (YYYY-MM-DD)"
+    "add_day": "📅 Dam olish kuni uchun sanani kiriting, quyidagi formatda: (YYYY-MM-DD)",
+    "exists": "⚠️ Bu sana uchun allaqachon yozuv mavjud. Boshqa sanani kiriting."
   },
   "specile": "📅 Mahsus kun uchun sanani kiriting, quyidagi formatda: (YYYY-MM-DD)",
   "update": "🗓️ Yangilash uchun yangi sanani kiriting. Format: (YYYY-MM-DD)",

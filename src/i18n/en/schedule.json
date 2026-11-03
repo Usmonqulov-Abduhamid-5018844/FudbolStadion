@@ -65,7 +65,8 @@
     "succses": "✅ Data saved successfully! 🎉",
     "update": "✅ Data updated successfully!",
     "error": "❌ Error writing to the database! ⚠️",
-    "add_day": "📅 Enter the day off date in the following format: (YYYY-MM-DD)"
+    "add_day": "📅 Enter the day off date in the following format: (YYYY-MM-DD)",
+    "exists": "⚠️ An entry for this date already exists. Please enter another date."
   },
   "specile": "📅 Enter the date for the special day in the following format: (YYYY-MM-DD)",
   "update": "🗓️ Enter the new date for update. Format: (YYYY-MM-DD)",

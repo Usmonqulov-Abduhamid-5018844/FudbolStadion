@@ -9,5 +9,6 @@
   "phone": "📞 Iltimos, telefon raqamingizni yuboring",
   "send_phone": "📱 Telefon raqamni yuborish",
   "finish": "🎉 Tabriklaymiz! Siz muvaffaqiyatli ro'yxatdan o'tdingiz!",
-  "email_exists_error": "⚠️ Bu email allaqachon ro‘yxatdan o‘tgan"
+  "email_exists_error": "⚠️ Bu email allaqachon ro‘yxatdan o‘tgan",
+  "phone_own_only": "❌ Iltimos, faqat o'zingizning telefon raqamingizni yuboring. Buning uchun pastdagi tugmadan foydalaning."
 }

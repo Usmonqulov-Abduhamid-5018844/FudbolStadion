@@ -9,7 +9,6 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service';
-import { CreatOcto_PaymentDto } from './dto/create-payment.dto';
 import { PaylovWebhookDto } from './dto/create-paylov.dto';
 import { PaylovService } from 'src/paylov/paylov.service';
 import { PaylovState } from 'src/helpers/interface/enum';

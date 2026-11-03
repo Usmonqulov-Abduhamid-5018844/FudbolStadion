@@ -8,5 +8,7 @@
   "phone": "📞 Please send your phone number",
   "send_phone": "📱 Send phone number",
   "finish": "🎉 Congratulations! You have successfully registered!",
-  "email_exists_error": "⚠️ This email is already registered"
+  "email_exists_error": "⚠️ This email is already registered",
+
+  "phone_own_only": "❌ Please send only your own phone number using the button below."
 }

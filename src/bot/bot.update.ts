@@ -48,6 +48,7 @@ import {
 import {
   canOwnerAcceptCard,
   canPayByCard,
+  escapeHtml,
   getRelatedStadionIds,
   getStadionIds,
 } from 'src/helpers/stadions';
@@ -82,17 +83,34 @@ interface AdminRunOptions {
   context?: ErrorContext;
 }
 
+interface ActionPayload {
+  type: string;
+  id?: number;
+  day?: number;
+  page?: number;
+  provider?: string;
+  schedule_id?: number;
+  stadion_off?: number;
+  special_id?: number;
+  back?: string;
+  plan?: string;
+  setting?: NotificationSettings_type;
+}
+
+type NotificationTexts = Record<
+  string,
+  { title?: string; message?: string } | undefined
+>;
+
+const ACTIVE_BOOKING_STATUSES: Booking_status[] = [
+  'CONFIRMED',
+  'PENDING',
+  'PAID',
+];
+
 @Update()
 export class BotUpdate {
   private readonly logger = new Logger(BotUpdate.name);
-  private readonly AdminChatid = (process.env.ADMIN_CHAT_ID ?? '')
-    .split(',')
-    .filter(Boolean)
-    .map(Number);
-  private readonly SuperAdminChatid = (process.env.SUPPER_ADMIN ?? '')
-    .split(',')
-    .filter(Boolean)
-    .map(Number);
   constructor(
     private readonly botService: BotService,
     private readonly i18n: I18nService,
@@ -258,6 +276,7 @@ export class BotUpdate {
   ): Promise<void> {
     const t = this.tr(lang);
     const providers = await this.availableProviders();
+
     const back: InlineKeyboardButton[] = [
       { text: t('schedule.back'), callback_data: backCallback },
     ];
@@ -394,13 +413,6 @@ export class BotUpdate {
     return this.callbackData(ctx)?.split('_') ?? [];
   }
 
-  private parsePremiumReason(raw: string): PremiumReason {
-    if (!(Object.values(PremiumReason) as string[]).includes(raw)) {
-      throw new InvalidCallbackError(`Noto'g'ri PremiumReason: ${raw}`);
-    }
-    return raw as PremiumReason;
-  }
-
   private reportSecurity(ctx: MyContext, reason: string): void {
     const userId = ctx.from?.id ?? 'unknown';
     const username = ctx.from?.username ? `@${ctx.from.username}` : '-';
@@ -429,6 +441,35 @@ export class BotUpdate {
     );
   }
 
+  private parseIdList(raw?: string): number[] {
+    return (raw ?? '')
+      .split(',')
+      .map((s) => Number(s.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  }
+
+  private readonly AdminChatid = this.parseIdList(process.env.ADMIN_CHAT_ID);
+  private readonly SuperAdminChatid = this.parseIdList(
+    process.env.SUPER_ADMIN ?? process.env.SUPPER_ADMIN,
+  );
+  private static readonly SUPER_OWNER_STEPS = new Set([
+    'status',
+    'confirm',
+    'delete',
+    'deletConfirm',
+  ]);
+  private parseGiftReason(raw: string): PremiumReason {
+    const allowed: string[] = [
+      PremiumReason.GIFT,
+      PremiumReason.COMPENSATION,
+      PremiumReason.TRIAL,
+    ];
+    if (!allowed.includes(raw)) {
+      throw new InvalidCallbackError(`Noto'g'ri sovg'a sababi: ${raw}`);
+    }
+    return raw as PremiumReason;
+  }
+
   private async runAdmin(
     ctx: MyContext,
     run: (lang: string, parts: string[]) => Promise<unknown>,
@@ -442,6 +483,7 @@ export class BotUpdate {
         level === 'super' ? 'admin.super_admin_only' : 'admin.admin_only';
       await this.alertBox(ctx, this.tr(lang)(key));
       this.reportSecurity(ctx, `${level} huquqisiz urinish`);
+      await ctx.answerCbQuery().catch(() => undefined);
       return;
     }
 
@@ -459,8 +501,9 @@ export class BotUpdate {
         await this.alertBox(ctx, this.tr(lang)('error.error'));
         return;
       }
-
       await this.utils.errorFunction(ctx, error, context);
+    } finally {
+      await ctx.answerCbQuery().catch(() => undefined);
     }
   }
 
@@ -627,7 +670,7 @@ export class BotUpdate {
 
   ////////////////////////⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️⬇️///////////////////////////////
 
-  @Action(/^Newbooking_(owners|firstName|stadions)_(\d+)_(\w+)$/)
+  @Action(/^Newbooking_(owners|firstName|stadions)_(\d+)_(uz|ru|en)$/)
   async Newbooking(@Ctx() ctx: MyContext) {
     try {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
@@ -1620,7 +1663,6 @@ export class BotUpdate {
       return;
     }
 
-    // Egasiga bildirishnoma xabar yuborishdan oldin: xabar yiqilsa ham yo'qolmasin
     const settings: NotificationSettings_type = {
       ...DefaultNotificationSettings,
       ...(booking.stadion.owner
@@ -1732,7 +1774,6 @@ export class BotUpdate {
       return;
     }
 
-    // sessiya JSON ko'rinishida saqlansa, sanalar matn bo'lib qaytadi
     const date = new Date(pending.date);
     const startAt = new Date(pending.startAt);
     const endAt = new Date(pending.endAt);
@@ -1769,7 +1810,6 @@ export class BotUpdate {
       endAt,
       total_price: pending.total_price,
     };
-    // Sessiyani avval tozalaymiz: tugma ikki marta bosilsa, ikkita bron yaratilmasin
     ctx.session.pendingBooking = { ...INITIAL_PENDING_BOOKING };
 
     const booking = await this.prisma.booking.create({
@@ -2726,6 +2766,114 @@ export class BotUpdate {
       await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
   }
+  @Action(/^add_stadion/)
+async add_stadion(@Ctx() ctx: MyContext) {
+  try {
+    const lang = await this.utils.langs(ctx);
+    const t = this.tr(lang);
+
+    const owner = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+      select: { status: true },
+    });
+    if (!owner) {
+      await this.deny(ctx, lang);
+      return;
+    }
+    if (owner.status === 'BLOCKED') {
+      await this.alertBox(ctx, t('stadions.blocked.cannot_add_stadium'));
+      return;
+    }
+    if (owner.status === 'PENDING') {
+      await this.alertBox(ctx, t('stadions.pending.cannot_add_stadium'));
+      return;
+    }
+
+    const regions = await this.prisma.region.findMany();
+    if (!regions.length) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error('Regionlar hali yaratilmagan (npm run prisma qilish kerak)'),
+        ErrorContext.STADION,
+      );
+      return;
+    }
+
+    const buttons: InlineKeyboardButton[][] = regions.map((r) => [
+      { text: r.name, callback_data: `region_${r.id}` },
+    ]);
+    buttons.push([
+      { text: t('stadions.back'), callback_data: 'back_owner_2' },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, t('stadions.stadion_region'), {
+      inline_keyboard: buttons,
+    });
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+  } finally {
+    await ctx.answerCbQuery().catch(() => undefined);
+  }
+}
+
+@Action(/^region_(\d+)$/)
+async region_items(@Ctx() ctx: MyContext) {
+  await ctx.answerCbQuery().catch(() => undefined);
+  try {
+    const lang = await this.utils.langs(ctx);
+    const t = this.tr(lang);
+    const regionId = Number((ctx.match as RegExpMatchArray)[1]);
+
+    const items = await this.prisma.region_item.findMany({
+      where: { region_id: regionId },
+    });
+    if (!items.length) {
+      await this.utils.errorFunction(
+        ctx,
+        new Error(`Region ${regionId} uchun tumanlar yo'q`),
+        ErrorContext.STADION,
+      );
+      return;
+    }
+
+    const stadion = this.ensureStadionSession(ctx);
+    stadion.region_id = regionId;
+    stadion.step = 1;
+
+    const buttons: InlineKeyboardButton[][] = items.map((item) => [
+      { text: item.name, callback_data: `regions_item_${item.id}` },
+    ]);
+    buttons.push([
+      { text: t('stadions.back'), callback_data: 'back_owner_3' },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, t('stadions.region_items'), {
+      inline_keyboard: buttons,
+    });
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+  }
+}
+
+@Action(/^regions_item_(\d+)$/)
+async onStadions(@Ctx() ctx: MyContext) {
+  await ctx.answerCbQuery().catch(() => undefined);
+  try {
+    const lang = await this.utils.langs(ctx);
+    const regionItemId = Number((ctx.match as RegExpMatchArray)[1]);
+
+    const stadion = this.ensureStadionSession(ctx);
+    ctx.session.stadion_step = ctx.session.stadion_step || null;
+
+    stadion.region_item_id = regionItemId;
+    stadion.step = 2;
+    await ctx.reply(this.tr(lang)('stadions.name'));
+    ctx.session.stadion_step = 'stadion';
+    stadion.name = 'N';
+  } catch (error) {
+    await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+  }
+}
 
   @Action(/^toggleNotification\|(\w+)\|(\d+)$/)
   async toggleNotification(@Ctx() ctx: MyContext) {
@@ -2754,6 +2902,13 @@ export class BotUpdate {
       }
       if (owner.chatID !== String(ctx.from?.id)) {
         await this.deny(ctx, lang);
+        return;
+      }
+      if (!(await this.ownerService.hasActivePremium(owner.id))) {
+        await this.alertBox(
+          ctx,
+          this.tr(lang)('premium.premium_notification.only'),
+        );
         return;
       }
 
@@ -3233,6 +3388,7 @@ export class BotUpdate {
       await ctx.answerCbQuery().catch(() => undefined);
     }
   }
+
   /////////////////////////////////////  ADMIN PANELi  /////////////////////////////////////
 
   @Action(/^admins_([a-zA-Z]+)$/)
@@ -3240,7 +3396,7 @@ export class BotUpdate {
     await this.runAdmin(
       ctx,
       (lang, parts) => this.adminPaneli.admins_stadiums(ctx, parts[1], lang),
-      { context: ErrorContext.STADION },
+      { context: ErrorContext.ADMIN },
     );
   }
   @Action(/^stadium_([a-zA-Z]+)_(\d+)_(\d+)$/)
@@ -3284,30 +3440,39 @@ export class BotUpdate {
   async AdminPaner_Owner(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(
       ctx,
-      async (lang, parts) => {
-        const action =
-          parts.length === 6 ? (parts[3] as 'activate' | 'block') : undefined;
-          
+      async (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        const step = m[1];
+        const action = m[2] as 'activate' | 'block' | undefined;
 
-        if (action && !this.isSuperAdmin(ctx)) {
-          await this.alertBox(ctx, this.tr(lang)('admin.super_admin_only'));
-          this.reportSecurity(ctx, `super admin huquqisiz ${action} urinishi`);
-          return;
+        if (BotUpdate.SUPER_OWNER_STEPS.has(step)) {
+          if (!this.isSuperAdmin(ctx)) {
+            await this.alertBox(ctx, this.tr(lang)('admin.super_admin_only'));
+            this.reportSecurity(
+              ctx,
+              `super admin huquqisiz '${step}' urinishi`,
+            );
+            return;
+          }
+          if ((step === 'status' || step === 'confirm') && !action) {
+            throw new InvalidCallbackError(
+              `AdminPanel_Owner_${step}: action yo'q`,
+            );
+          }
+          this.auditLog(ctx, 'super');
         }
-        if (action) this.auditLog(ctx, 'super');
 
-        return this.adminPaneli.AdminPanel_owner(
+        await this.adminPaneli.AdminPanel_owner(
           ctx,
-          parts[2],
-          Number(parts[parts.length - 2]),
-          Number(parts[parts.length - 1]),
+          step,
+          Number(m[3]),
+          Number(m[4]),
           action,
         );
       },
       { context: ErrorContext.OWNER },
     );
   }
-
   @Action(/^AdminOwner_([a-zA-Z]+)_(\d+)_(\d+)_(\d+)$/)
   async AdminOwner(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(
@@ -3323,6 +3488,7 @@ export class BotUpdate {
       { context: ErrorContext.OWNER },
     );
   }
+
   @Action(/^ownerPremiumReason_([a-zA-Z]+)_(\d+)_(\d+)$/)
   async ownerPremiumReason(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(
@@ -3330,7 +3496,7 @@ export class BotUpdate {
       (_lang, parts) =>
         this.adminPaneli.ownerPremiumReason(
           ctx,
-          parts[1],
+          this.parseGiftReason(parts[1]),
           Number(parts[2]),
           Number(parts[3]),
         ),
@@ -3348,7 +3514,7 @@ export class BotUpdate {
           Number(parts[1]),
           Number(parts[2]),
           Number(parts[3]),
-          this.parsePremiumReason(parts[4]),
+          this.parseGiftReason(parts[4]),
         ),
       { level: 'super', context: ErrorContext.PREMIUM },
     );
@@ -3364,11 +3530,12 @@ export class BotUpdate {
           Number(parts[1]),
           Number(parts[2]),
           Number(parts[3]),
-          this.parsePremiumReason(parts[4]),
+          this.parseGiftReason(parts[4]),
         ),
       { level: 'super', context: ErrorContext.PREMIUM },
     );
   }
+
   @Action(/^AdminOwnerStadium_detail_(\d+)_(\d+)_(\d+)_(\d+)$/)
   async AdminOwner_stadium_detail(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(
@@ -3384,6 +3551,7 @@ export class BotUpdate {
       { context: ErrorContext.STADION },
     );
   }
+
   @Action(/^admin_back_(\d+)$/)
   async adminBack(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(ctx, async (lang, parts) => {
@@ -3391,2702 +3559,1791 @@ export class BotUpdate {
         case '1':
           await this.adminPaneli.admin_paneli(ctx, lang);
           break;
-        case '2': {
-          if (ctx.session.admin_messageId) {
-            await ctx
-              .deleteMessage(ctx.session.admin_messageId)
-              .catch(() => undefined);
-          }
-          ctx.session.admin_messageId = null;
-          ctx.session.admin_step = null;
-          ctx.session.ownerId = null;
-          ctx.session.currentPage = null;
-          ctx.session.historyPage = null;
-          ctx.session.confirment_messageId = null;
+        case '2':
+          await this.adminPaneli.closeOwnerStadiumDetails(ctx);
           break;
-        }
       }
     });
   }
-  
+  /////////////////////////////////////  ADMIN PANELi  /////////////////////////////////////
 
-  @Action(/.+/)
-  async parseAction(@Ctx() ctx: MyContext) {
-    let data: {
-      type: string;
-      id: number;
-      day: number;
-      page: number;
-      provider: string;
-      schedule_id: number;
-      stadion_off: number;
-      special_id: number;
-      back: string;
-      plan: string;
-      setting: NotificationSettings_type;
-    };
-    const lang = await this.utils.langs(ctx);
+  /*   ParseAction */
+
+  private static readonly HELP_OWNER = new Map<string, string>([
+    ['HELP_ABOUT', 'help.help.about'],
+    ['HELP_START', 'help.help.start'],
+    ['HELP_PAYMENT', 'help.help.payment'],
+    ['HELP_CANCEL', 'help.help.cancel'],
+    ['HELP_PREMIUM', 'help.help.premium'],
+    ['HELP_ADVERTISEMENT', 'help.help.advertisement'],
+    ['HELP_STATISTICS', 'help.help.statistics'],
+    ['HELP_FAQ', 'help.help.faq'],
+    ['HELP_CONTACT', 'help.help.contact'],
+  ]);
+  private static readonly HELP_USER = new Map<string, string>([
+    ['HELP_USER_BOOKING', 'user_help.booking'],
+    ['HELP_USER_MY_BOOKINGS', 'user_help.my_bookings'],
+    ['HELP_USER_HOW_BOOKING', 'user_help.how_booking'],
+    ['HELP_USER_PAYMENT_PENALTY', 'user_help.payment_penalty'],
+    ['HELP_USER_CANCEL', 'user_help.cancel'],
+    ['HELP_USER_CONTACT', 'user_help.contact'],
+  ]);
+
+  private static readonly NOTIFICATION_LISTS = {
+    unread: {
+      isRead: false,
+      icon: '🟢',
+      title: 'notification.unread',
+      empty: 'notification.no_new_messages',
+      itemType: 'notification_view',
+      listType: 'notification_unread',
+    },
+    read: {
+      isRead: true,
+      icon: '🟢',
+      title: 'notification.read',
+      empty: 'notification.no_read_messages',
+      itemType: 'notification_read_view',
+      listType: 'notification_read',
+    },
+    all: {
+      isRead: undefined,
+      icon: '📋',
+      title: 'notification.all',
+      empty: 'notification.no_notifications',
+      itemType: null,
+      listType: 'notification_all',
+    },
+  } as const;
+
+  private jsonCb(
+    type: string,
+    extra: Record<string, string | number> = {},
+  ): string {
+    const data = JSON.stringify({ type, ...extra });
+    if (Buffer.byteLength(data, 'utf8') > 64) {
+      throw new Error(`callback_data 64 baytdan oshdi: ${data}`);
+    }
+    return data;
+  }
+
+  private parsePayload(raw: string): ActionPayload | null {
+    if (!raw.startsWith('{')) return null;
     try {
-      if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
-      data = JSON.parse(ctx.callbackQuery.data);
-    } catch (error) {
-      this.utils.errorFunction(ctx);
-      console.log(error);
+      const value: unknown = JSON.parse(raw);
+      if (
+        typeof value === 'object' &&
+        value !== null &&
+        'type' in value &&
+        typeof value.type === 'string'
+      ) {
+        return value as ActionPayload;
+      }
+    } catch {}
+    return null;
+  }
+
+  private num(value: number | undefined, name: string): number {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+      throw new InvalidCallbackError(`Callback maydoni noto'g'ri: ${name}`);
+    }
+    return value;
+  }
+
+  private idOf(data: ActionPayload): number {
+    const id = this.num(data.id, `${data.type}.id`);
+    if (id === 0) throw new InvalidCallbackError(`${data.type}: id = 0`);
+    return id;
+  }
+
+  private parsePlan(raw: string | undefined): PremiumPlan {
+    const plan = Object.values(PremiumPlan).find((p) => p === raw);
+    if (!plan)
+      throw new InvalidCallbackError(`Noto'g'ri premium plan: ${String(raw)}`);
+    return plan;
+  }
+
+  private shortName(name: string, max = 20): string {
+    return name.length > max ? `${name.slice(0, max)}...` : name;
+  }
+
+  private ownedBy(ctx: MyContext) {
+    return { owner: { chatID: String(ctx.from?.id) } };
+  }
+
+  private async loadOwnedStadion(ctx: MyContext, lang: string, id: number) {
+    const stadion = await this.prisma.stadion.findFirst({
+      where: { id, ...this.ownedBy(ctx) },
+    });
+    if (!stadion) await this.deny(ctx, lang);
+    return stadion;
+  }
+
+  private async allowStadion(
+    ctx: MyContext,
+    lang: string,
+    id: number,
+  ): Promise<boolean> {
+    if (await this.ownsStadion(ctx, id)) return true;
+    await this.deny(ctx, lang);
+    return false;
+  }
+
+  private async allowOwner(
+    ctx: MyContext,
+    lang: string,
+    ownerId: number,
+  ): Promise<boolean> {
+    if (await this.isOwnerOf(ctx, ownerId)) return true;
+    await this.deny(ctx, lang);
+    return false;
+  }
+
+  private async showOwnerSettings(
+    ctx: MyContext,
+    lang: string,
+    ownerId: number,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const item = (key: string, type: string): InlineKeyboardButton[] => [
+      { text: t(key), callback_data: this.jsonCb(type, { id: ownerId }) },
+    ];
+    await this.utils.safeEditOrReply(ctx, t('settings.title'), {
+      inline_keyboard: [
+        item('settings.language', 'language'),
+        item('settings.notification', 'notification'),
+        item('settings.phone', 'phone'),
+        item('premium.advertising.button', 'advertising'),
+        item('premium.premium', 'ownerPremium'),
+        [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
+      ],
+    });
+  }
+
+  private async showOwnerStadions(ctx: MyContext, lang: string): Promise<void> {
+    const t = this.tr(lang);
+    const owner = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+      select: { id: true },
+    });
+    if (!owner) throw new Error(`Owner topilmadi: chatID=${ctx.from?.id}`);
+
+    const stadions = await this.prisma.stadion.findMany({
+      where: { owner_id: owner.id, stadion_mini: false },
+      orderBy: { updatedAt: 'desc' },
+      select: { id: true, name: true },
+    });
+
+    const add: InlineKeyboardButton[] = [
+      { text: t('stadions.add'), callback_data: 'add_stadion' },
+    ];
+    const back: InlineKeyboardButton[] = [
+      { text: t('stadions.back'), callback_data: 'back_owner_1' },
+    ];
+
+    if (!stadions.length) {
+      await this.utils.safeEditOrReply(ctx, t('stadions.stadion'), {
+        inline_keyboard: [add, back],
+      });
       return;
     }
-    try {
-      switch (data.type) {
-        case 'noob': {
-          if (ctx.callbackQuery) {
-            try {
-              await ctx.answerCbQuery();
-            } catch {}
-          }
-          return;
-        }
-        case 'Continue_back_stadion': {
-          return this.userService.userbookingRegionItems(ctx, lang, data.id);
-        }
-        case 'user_back_regionItems': {
-          await ctx
-            .answerCbQuery()
-            .then(() => {})
-            .catch();
-          return this.userService.userbookingRegion(ctx, lang, data.id);
-        }
-        case 'user_back_regionItems_Id': {
-          await ctx
-            .answerCbQuery()
-            .then(() => {})
-            .catch();
-          if (ctx.session.stadionMessages?.length) {
-            const messagesId = ctx.session.stadionMessages;
-            try {
-              await ctx.deleteMessages(messagesId);
-            } catch (e) {}
-            ctx.session.stadionMessages = [];
-          }
-          break;
-        }
-        case 'HELP_ABOUT':
-          {
-            try {
-              await this.utils.safeEditHelpReplyOwner(
-                ctx,
-                this.i18n.translate('help.help.about', { lang }),
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_START':
-          {
-            try {
-              await this.utils.safeEditHelpReplyOwner(
-                ctx,
-                this.i18n.translate('help.help.start', { lang }),
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_PAYMENT':
-          {
-            try {
-              await this.utils.safeEditHelpReplyOwner(
-                ctx,
-                this.i18n.translate('help.help.payment', { lang }),
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_CANCEL':
-          {
-            try {
-              await this.utils.safeEditHelpReplyOwner(
-                ctx,
-                this.i18n.translate('help.help.cancel', { lang }),
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'HELP_PREMIUM': {
-          try {
-            await this.utils.safeEditHelpReplyOwner(
-              ctx,
-              this.i18n.translate('help.help.premium', { lang }),
-            );
-          } catch {
-            this.utils.errorFunction(ctx);
-          }
-          break;
-        }
-
-        case 'HELP_ADVERTISEMENT': {
-          try {
-            await this.utils.safeEditHelpReplyOwner(
-              ctx,
-              this.i18n.translate('help.help.advertisement', { lang }),
-            );
-          } catch {
-            this.utils.errorFunction(ctx);
-          }
-          break;
-        }
-
-        case 'HELP_STATISTICS': {
-          try {
-            await this.utils.safeEditHelpReplyOwner(
-              ctx,
-              this.i18n.translate('help.help.statistics', { lang }),
-            );
-          } catch {
-            this.utils.errorFunction(ctx);
-          }
-          break;
-        }
-
-        case 'HELP_FAQ': {
-          try {
-            await this.utils.safeEditHelpReplyOwner(
-              ctx,
-              this.i18n.translate('help.help.faq', { lang }),
-            );
-          } catch {
-            this.utils.errorFunction(ctx);
-          }
-          break;
-        }
-
-        case 'HELP_CONTACT':
-          {
-            try {
-              await this.utils.safeEditHelpReplyOwner(
-                ctx,
-                this.i18n.translate('help.help.contact', { lang }),
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_BOOKING':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.booking', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_MY_BOOKINGS':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.my_bookings', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_HOW_BOOKING':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.how_booking', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_PAYMENT_PENALTY':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.payment_penalty', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_CANCEL':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.cancel', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'HELP_USER_CONTACT':
-          {
-            try {
-              await this.utils.safeEditHelpReplyUser(
-                ctx,
-                this.i18n.translate('user_help.contact', { lang }),
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'stadion': {
-          return this.ownerService.stadionMenyu(ctx, data.id, lang);
-        }
-        case 'miniStadionlar': {
-          return this.ownerService.miniStadionlar(ctx, data.id, lang);
-        }
-        case 'Stadion_nomi':
-          {
-            try {
-              const stadion = await this.prisma.stadion.findUnique({
-                where: { id: data.id },
-              });
-              if (!stadion) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-              ctx.session.stadion.id = stadion.id;
-              if (stadion.stadion_mini) {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.stadionSplit.name', {
-                    lang,
-                    args: { name: stadion.name },
-                  }),
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('success.edit', { lang }),
-                          callback_data: JSON.stringify({
-                            type: 'updateName',
-                            id: stadion.id,
-                          }),
-                        },
-
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: `owner_miniStadion_${stadion.id}`,
-                        },
-                      ],
-                    ],
-                  },
-                );
-                ctx.session.mini = true;
-              } else {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.stadionSplit.name', {
-                    lang,
-                    args: { name: stadion.name },
-                  }),
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('success.edit', { lang }),
-                          callback_data: JSON.stringify({
-                            type: 'updateName',
-                            id: stadion.id,
-                          }),
-                        },
-                      ],
-                      [
-                        {
-                          text: this.i18n.translate('schedule.back', { lang }),
-                          callback_data: JSON.stringify({
-                            type: 'stadion',
-                            id: stadion.id,
-                          }),
-                        },
-                      ],
-                    ],
-                  },
-                );
-                ctx.session.mini = false;
-              }
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-
-        case 'updateName':
-          {
-            try {
-              ctx.reply(
-                this.i18n.translate('stadions.stadionSplit.enterNewName', {
-                  lang,
-                }),
-              );
-              ctx.session.stadion.name = 'StadionEditName';
-            } catch (error) {}
-          }
-          break;
-
-        case 'players_count':
-          {
-            try {
-              const stadion = await this.prisma.stadion.findFirstOrThrow({
-                where: { id: data.id, stadion_mini: true },
-              });
-              await this.utils.safeEditOrReply(
-                ctx,
-
-                this.i18n.translate('stadions.max_players', {
-                  lang,
-                  args: { count: stadion.max_count },
-                }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('success.edit', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'edit_miniStadion',
-                          id: stadion.id,
-                        }),
-                      },
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: `owner_miniStadion_${stadion.id}`,
-                      },
-                    ],
-                  ],
-                },
-              );
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            } finally {
-              await ctx
-                .answerCbQuery()
-                .then(() => {})
-                .catch();
-            }
-          }
-          break;
-        case 'payment_method': {
-          return this.ownerService.stadionPayments(ctx, data.id, lang);
-        }
-        case 'Update_Payments':
-          {
-            try {
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('stadions.paymenst_type', { lang }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('stadions.card', { lang }),
-                        callback_data: `payments_${Payments.CARD}`,
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('stadions.cash', { lang }),
-                        callback_data: `payments_${Payments.CASH}`,
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('stadions.both', { lang }),
-                        callback_data: `payments_${Payments.GIBRID}`,
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'payment_method',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                  ],
-                },
-              );
-              ctx.session.stadion.payments = 'PAYMENTS';
-              ctx.session.stadion.id = data.id;
-            } catch (error) {
-              await this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'edit_miniStadion':
-          {
-            await ctx.reply(
-              this.i18n.translate('stadions.stadium_capacity_prompt', { lang }),
-            );
-            ctx.session.maxCount = 'maxCount';
-            ctx.session.stadion.id = data.id;
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'back_1':
-          {
-            const owner = await this.prisma.owners.findUnique({
-              where: { chatID: String(ctx.from?.id) },
-            });
-            if (!owner) {
-              throw new Error();
-            }
-            const stadion = await this.prisma.stadion.findMany({
-              where: { owner_id: owner.id, stadion_mini: false },
-              orderBy: { updatedAt: 'desc' },
-            });
-            if (!stadion.length) {
-              try {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.stadion', { lang }),
-                  {
-                    inline_keyboard: [
-                      [
-                        {
-                          text: this.i18n.translate('stadions.add', { lang }),
-                          callback_data: 'add_stadion',
-                        },
-                      ],
-                      [
-                        {
-                          text: this.i18n.translate('stadions.back', { lang }),
-                          callback_data: 'back_owner_1',
-                        },
-                      ],
-                    ],
-                  },
-                );
-              } catch (error) {
-                this.utils.errorFunction(ctx);
-              }
-              return;
-            } else {
-              const button: InlineKeyboardButton[][] = [];
-
-              stadion.forEach((s) => {
-                button.push([
-                  {
-                    text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
-                    callback_data: JSON.stringify({
-                      type: 'stadion',
-                      id: s.id,
-                    }),
-                  },
-                ]);
-              });
-
-              button.push(
-                [
-                  {
-                    text: this.i18n.translate('stadions.add', { lang }),
-                    callback_data: 'add_stadion',
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('stadions.back', { lang }),
-                    callback_data: 'back_owner_1',
-                  },
-                ],
-              );
-              try {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.select', { lang }),
-                  { inline_keyboard: button },
-                );
-              } catch (error) {
-                this.utils.errorFunction(ctx);
-              }
-            }
-          }
-          break;
-        case 'delete':
-          {
-            try {
-              const stadion = await this.prisma.stadion.findUnique({
-                where: { id: data.id },
-              });
-              if (!stadion) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('schedule.type.delet', { lang }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.type.yes', {
-                          lang,
-                        }),
-                        callback_data: JSON.stringify({
-                          type: 'delete_yes',
-                          id: data.id,
-                        }),
-                      },
-                      stadion.stadion_mini
-                        ? {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: `owner_miniStadion_${stadion.id}`,
-                          }
-                        : {
-                            text: this.i18n.translate('schedule.back', {
-                              lang,
-                            }),
-                            callback_data: JSON.stringify({
-                              type: 'stadion',
-                              id: data.id,
-                            }),
-                          },
-                    ],
-                  ],
-                },
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'delete_yes':
-          {
-            try {
-              const owner = await this.prisma.owners.findUnique({
-                where: { chatID: String(ctx.from?.id) },
-              });
-              if (!owner) {
-                throw new Error();
-              }
-
-              const Stadion = await this.prisma.stadion.findFirst({
-                where: { id: data.id, owner_id: owner.id },
-                include: {
-                  parent: true,
-                  children: true,
-                },
-              });
-              if (!Stadion) {
-                await this.utils.errorFunction(ctx);
-                return;
-              }
-
-              const stadionIds = getRelatedStadionIds(Stadion);
-
-              const bookings = await this.prisma.booking.count({
-                where: {
-                  stadion_id: { in: stadionIds },
-                  status: {
-                    in: ['CONFIRMED', 'PENDING', 'PAID'],
-                  },
-                },
-              });
-
-              if (bookings > 0) {
-                await this.utils.safeEditOrReply(
-                  ctx,
-                  this.i18n.translate('stadions.deleteAlert', { lang }),
-                  {
-                    inline_keyboard: [
-                      [
-                        Stadion.stadion_mini
-                          ? {
-                              text: this.i18n.translate('schedule.back', {
-                                lang,
-                              }),
-                              callback_data: `owner_miniStadion_${Stadion.id}`,
-                            }
-                          : {
-                              text: this.i18n.translate('schedule.back', {
-                                lang,
-                              }),
-                              callback_data: JSON.stringify({
-                                type: 'stadion',
-                                id: Stadion.id,
-                              }),
-                            },
-                      ],
-                    ],
-                  },
-                );
-                return;
-              }
-              await this.prisma.stadion.deleteMany({
-                where: { id: { in: stadionIds } },
-              });
-              if (Stadion.stadion_mini) {
-                return this.ownerService.miniStadionlar(
-                  ctx,
-                  Number(Stadion.parent_id),
-                  lang,
-                );
-              }
-              const stadion = await this.prisma.stadion.findMany({
-                where: { owner_id: owner.id, stadion_mini: false },
-                orderBy: { updatedAt: 'desc' },
-              });
-
-              if (!stadion.length) {
-                try {
-                  await this.utils.safeEditOrReply(
-                    ctx,
-                    this.i18n.translate('stadions.stadion', { lang }),
-                    {
-                      inline_keyboard: [
-                        [
-                          {
-                            text: this.i18n.translate('stadions.add', { lang }),
-                            callback_data: 'add_stadion',
-                          },
-                        ],
-                        [
-                          {
-                            text: this.i18n.translate('stadions.back', {
-                              lang,
-                            }),
-                            callback_data: 'back_owner_1',
-                          },
-                        ],
-                      ],
-                    },
-                  );
-                } catch (error) {
-                  this.utils.errorFunction(ctx);
-                }
-
-                return;
-              } else {
-                const button: InlineKeyboardButton[][] = [];
-
-                stadion.forEach((s) => {
-                  button.push([
-                    {
-                      text: `🏟 ${s.name.length > 20 ? s.name.slice(0, 20) + '...' : s.name}`,
-                      callback_data: JSON.stringify({
-                        type: 'stadion',
-                        id: s.id,
-                      }),
-                    },
-                  ]);
-                });
-
-                button.push(
-                  [
-                    {
-                      text: this.i18n.translate('stadions.add', { lang }),
-                      callback_data: 'add_stadion',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('stadions.back', { lang }),
-                      callback_data: 'back_owner_1',
-                    },
-                  ],
-                );
-                try {
-                  await this.utils.safeEditOrReply(
-                    ctx,
-                    this.i18n.translate('stadions.select', { lang }),
-                    { inline_keyboard: button },
-                  );
-                } catch (error) {
-                  ctx.reply(this.i18n.translate('error.error', { lang }));
-                }
-              }
-            } catch (error) {
-              console.log(error);
-
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'schedule':
-          {
-            if (data.back === 'back') {
-              ctx.session.step = null;
-            }
-            try {
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('schedule.schedule.name', { lang }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate(
-                          'schedule.schedule.one_week',
-                          {
-                            lang,
-                          },
-                        ),
-                        callback_data: JSON.stringify({
-                          type: 'week_schedule',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate(
-                          'schedule.schedule.dey_off_dey',
-                          {
-                            lang,
-                          },
-                        ),
-                        callback_data: JSON.stringify({
-                          type: 'day_off',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate(
-                          'schedule.schedule.special_deys',
-                          { lang },
-                        ),
-                        callback_data: JSON.stringify({
-                          type: 'special_table',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'stadion',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                  ],
-                },
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'week_schedule': {
-          return this.botService.renderScheduleMenu(ctx, data.id);
-        }
-        case 'notification': {
-          return this.ownerService.renderNotification(ctx, data.id, lang);
-        }
-        case 'ownerPremium': {
-          return this.ownerService.premium(ctx, Number(data.id), lang);
-        }
-        case 'premium_buy':
-          {
-            const plan = data.plan as PremiumPlan;
-
-            const amount = PREMIUM_PLANS[plan].price;
-            const label = PLAN_LABELS[lang][plan];
-
-            const message = this.i18n.translate(
-              'premium.premium_payment.message',
-              {
-                lang,
-                args: {
-                  label,
-                  amount: amount.toLocaleString(),
-                  currency: CURRENCY_LABELS[lang],
-                },
-              },
-            );
-            await this.utils.safeEditOrReply(ctx, message, {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('premium.button', { lang }),
-                    callback_data: JSON.stringify({
-                      type: 'premium_provider',
-                      plan: data.plan,
-                      id: data.id,
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: JSON.stringify({
-                      id: data.id,
-                      type: 'ownerPremium',
-                    }),
-                  },
-                ],
-              ],
-            });
-          }
-          break;
-        case 'premium_provider': {
-          const active = await this.paylov.getActiveMethods();
-
-          const available = PAYMENT_PROVIDERS.filter((p) =>
-            active.some((a) => a.name === p.key.toLowerCase()),
-          );
-
-          if (available.length === 0) {
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('premium.payment.no_methods', { lang }),
-            );
-            break;
-          }
-
-          const keyboard = available.map((provider) => [
-            {
-              text: `${provider.icon} ${this.i18n.translate(provider.translationKey, { lang })}`,
-              callback_data: `premiumProvider|${provider.key}|${data.plan}|${data.id}`,
-            },
-          ]);
-
-          keyboard.push([
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: JSON.stringify({
-                type: 'premium_buy',
-                id: data.id,
-                plan: data.plan,
-              }),
-            },
-          ]);
-
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('premium.payment.choose_provider', { lang }),
-            { inline_keyboard: keyboard },
-          );
-          break;
-        }
-        case 'add_schedule_day':
-          {
-            ctx.session.stadion.schedule_day = data.day;
-            ctx.reply(
-              this.i18n.translate('schedule.working_hours', {
-                lang,
-                args: {
-                  name: this.i18n.translate(`schedule.week_days.${data.day}`, {
-                    lang,
-                  }),
-                },
-              }),
-            );
-
-            ctx.session.step = 'enter_schedule_time';
-            ctx.session.stadion.id = data.id;
-
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'add_schedule': {
-          return this.botService.renderSchedule_week(ctx, data.id);
-        }
-        case 'view_schedule': {
-          return this.botService.viewSchedule(ctx, data.id);
-        }
-        case 'delete_schedule_day':
-          {
-            const schedule = await this.prisma.stadion_chedule.findUnique({
-              where: { id: data.schedule_id },
-              include: {
-                stadion: {
-                  include: { parent: true, children: true },
-                },
-              },
-            });
-            if (!schedule) {
-              await this.utils.errorFunction(ctx);
-              return;
-            }
-            const stadionIds = getStadionIds(schedule.stadion);
-
-            const hasBooking = await this.prisma.booking.findMany({
-              where: {
-                stadion_id: { in: stadionIds },
-                status: { in: ['CONFIRMED', 'PENDING', 'PAID'] },
-              },
-            });
-
-            const conflict =
-              hasBooking &&
-              hasBooking.some(
-                (b) => new Date(b.date).getDay() === schedule?.day_of_week,
-              );
-
-            if (conflict) {
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('schedule.schedule_delete_warning', {
-                  lang,
-                }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.delete_yes', {
-                          lang,
-                        }),
-                        callback_data: JSON.stringify({
-                          type: 'confirm_Schedule_delete',
-                          id: data.id,
-                          schedule_id: data.schedule_id,
-                        }),
-                      },
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: JSON.stringify({
-                          type: 'view_schedule',
-                          id: data.id,
-                        }),
-                      },
-                    ],
-                  ],
-                },
-              );
-            } else {
-              await this.prisma.stadion_chedule.delete({
-                where: { id: data.schedule_id },
-              });
-              this.botService.viewSchedule(ctx, data.id);
-            }
-          }
-          break;
-
-        case 'confirm_Schedule_delete':
-          {
-            await this.prisma.stadion_chedule.delete({
-              where: { id: data.schedule_id },
-            });
-            ctx.answerCbQuery(
-              this.i18n.translate('schedule.schedule_deleted', { lang }),
-            );
-            ctx.session.step = null;
-            ctx.session.stadion.id = null;
-            ctx.session.stadion.schedule_id = null;
-            this.botService.viewSchedule(ctx, data.id);
-          }
-          break;
-        case 'edit_schedule':
-          {
-            ctx.session.stadion.schedule_day = data.day;
-            ctx.reply(
-              this.i18n.translate(`schedule.update_hours`, {
-                lang,
-                args: {
-                  day: this.i18n.translate(`schedule.week_days.${data.day}`, {
-                    lang,
-                  }),
-                },
-              }),
-            );
-            ctx.session.step = 'edit_schedule_time';
-            ctx.session.stadion.id = data.id;
-            ctx.session.stadion.schedule_id = data.schedule_id;
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'day_off': {
-          return this.botService.stadion_off_days(ctx, data.id);
-        }
-        case 'off_stadion':
-          {
-            ctx.session.step = 'add_off_stadion_week';
-            ctx.session.stadion.id = data.id;
-            await ctx.reply(
-              this.i18n.translate('schedule.off_day.add_day', { lang }),
-            );
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'week_edit':
-          {
-            ctx.session.step = 'week_edit';
-            ctx.session.stadion.off = data.stadion_off;
-            ctx.session.stadion.id = data.id;
-            await ctx.reply(
-              this.i18n.translate('schedule.off_day.add_day', { lang }),
-            );
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'delete_week':
-          {
-            try {
-              await this.prisma.stadion_off_days.delete({
-                where: { id: data.stadion_off },
-              });
-              return this.botService.stadion_off_days(ctx, data.id);
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'special_table': {
-          return this.botService.stadion_special(ctx, data.id);
-        }
-        case 'add_special':
-          {
-            ctx.session.step = 'add_special';
-            ctx.session.stadion.id = data.id;
-            await ctx.reply(this.i18n.translate('schedule.specile', { lang }));
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'special_edit':
-          {
-            ctx.session.step = 'edit_specile';
-            ctx.session.stadion.id = data.id;
-            ctx.session.stadion.schedule_id = data.special_id;
-            await ctx.reply(this.i18n.translate('schedule.update', { lang }));
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-
-        case 'special_delet': {
-          try {
-            await this.prisma.stadion_special_schedule.delete({
-              where: { id: data.special_id },
-            });
-            return this.botService.stadion_special(ctx, data.id);
-          } catch (error) {
-            this.utils.errorFunction(ctx);
-          }
-        }
-        case 'lokation': {
-          return this.botService.location(ctx, data.id);
-        }
-        case 'update_location':
-          {
-            ctx.session.step = 'location';
-            ctx.session.stadion.id = data.id;
-            ctx.reply(this.i18n.translate('stadions.location', { lang }), {
-              reply_markup: {
-                keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('stadions.send_location', {
-                        lang,
-                      }),
-                      request_location: true,
-                    },
-                  ],
-                ],
-                one_time_keyboard: true,
-                resize_keyboard: true,
-              },
-            });
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'price': {
-          return this.botService.stadion_price(ctx, data.id);
-        }
-        case 'Update_price':
-          {
-            ctx.session.step = 'price';
-            ctx.session.stadion.id = data.id;
-            ctx.reply(this.i18n.translate('stadions.price', { lang }));
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'image': {
-          return this.botService.stadion_image(ctx, data.id);
-        }
-        case 'update_image':
-          {
-            ((ctx.session.step = 'image'), (ctx.session.stadion.id = data.id));
-            ctx.reply(this.i18n.translate('stadions.image', { lang }));
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'all_data': {
-          return this.botService.all_data(ctx, data.id);
-        }
-        case 'language':
-          {
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('common.START', { lang }),
-              {
-                inline_keyboard: [
-                  [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
-                  [{ text: '🇷🇺 Русский', callback_data: 'lang_ru' }],
-                  [{ text: '🇬🇧 English', callback_data: 'lang_en' }],
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'phone_back',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
-              },
-            );
-            ctx.session.step = 'language';
-          }
-          break;
-        case 'phone': {
-          return this.ownerService.ownerContakt(ctx, data.id);
-        }
-        case 'phone_back':
-          {
-            try {
-              await this.utils.safeEditOrReply(
-                ctx,
-                this.i18n.translate('settings.title', { lang }),
-                {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('settings.language', {
-                          lang,
-                        }),
-                        callback_data: JSON.stringify({
-                          id: data.id,
-                          type: 'language',
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('settings.notification', {
-                          lang,
-                        }),
-                        callback_data: JSON.stringify({
-                          id: data.id,
-                          type: 'notification',
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('settings.phone', { lang }),
-                        callback_data: JSON.stringify({
-                          id: data.id,
-                          type: 'phone',
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate(
-                          'premium.advertising.button',
-                          { lang },
-                        ),
-                        callback_data: JSON.stringify({
-                          id: data.id,
-                          type: 'advertising',
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('premium.premium', { lang }),
-                        callback_data: JSON.stringify({
-                          id: data.id,
-                          type: 'ownerPremium',
-                        }),
-                      },
-                    ],
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_owner_1',
-                      },
-                    ],
-                  ],
-                },
-              );
-            } catch (error) {
-              this.utils.errorFunction(ctx);
-            }
-          }
-          break;
-        case 'advertising':
-          {
-            const now = new Date();
-            const ownerPremium = await this.prisma.subscription.findFirst({
-              where: {
-                ownerId: Number(data.id),
-                isActive: true,
-                endDate: { gt: now },
-              },
-            });
-            if (!ownerPremium) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('premium.advertising.required', { lang }),
-                { show_alert: true },
-              );
-              return;
-            }
-            const ownerId = Number(data.id);
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('advertisement.advertisement.menu_title', {
-                lang,
-              }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'advertisement.advertisement.create',
-                        { lang },
-                      ),
-                      callback_data: `advertisement_create_${ownerId}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'advertisement.advertisement.my_ads',
-                        { lang },
-                      ),
-                      callback_data: `advertisement_list_${ownerId}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'advertisement.advertisement.statistics',
-                        { lang },
-                      ),
-                      callback_data: `advertisement_statistics_${ownerId}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate(
-                        'advertisement.advertisement.help',
-                        { lang },
-                      ),
-                      callback_data: `advertisement_help_${ownerId}`,
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'ownerSettings_back',
-                      }),
-                    },
-                  ],
-                ],
-              },
-            );
-            if (ctx.session.advertisements?.length) {
-              await ctx.deleteMessages(ctx.session.advertisements);
-              ctx.session.advertisements = [];
-            }
-            ctx.session.advertisement = {
-              title: null,
-              description: null,
-              image: null,
-              stadionId: null,
-              isAllStadiums: false,
-            };
-            if (ctx.callbackQuery) {
-              await ctx
-                .answerCbQuery()
-                .then(() => {})
-                .catch();
-            }
-          }
-          break;
-
-        case 'advertisement_skip_image': {
-          ctx.session.advertisement.image = null;
-          ctx.session.step = null;
-          if (ctx.callbackQuery) {
-            await ctx.answerCbQuery().catch(() => {});
-          }
-          return await this.ownerService.selectAdvertisementStadium(ctx, lang);
-        }
-        case 'advertisement_select_stadium': {
-          ctx.session.advertisement.stadionId = data.id;
-          return await this.ownerService.advertisementPreview(ctx, lang);
-        }
-        case 'advertisement_preview_booking': {
-          if (ctx.callbackQuery) {
-            await ctx.answerCbQuery(
-              this.i18n.translate('advertisement.booking_only_users', {
-                lang,
-              }),
-              {
-                show_alert: true,
-              },
-            );
-          }
-          break;
-        }
-        case 'advertisement_confirm': {
-          if (ctx.callbackQuery) {
-            await ctx.answerCbQuery();
-          }
-          return await this.ownerService.advertisement_created(ctx, lang);
-        }
-        case 'ownerSettings_back': {
-          const owner = await this.prisma.owners.findUnique({
-            where: { chatID: String(ctx.from?.id) },
-          });
-          if (!owner) {
-            ctx.reply(this.i18n.translate('error.error', { lang }));
-            return;
-          }
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('settings.title', { lang }),
-            {
-              inline_keyboard: [
-                [
-                  {
-                    text: this.i18n.translate('settings.language', { lang }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'language',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('settings.notification', {
-                      lang,
-                    }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'notification',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('settings.phone', { lang }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'phone',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('premium.advertising.button', {
-                      lang,
-                    }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'advertising',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('premium.premium', { lang }),
-                    callback_data: JSON.stringify({
-                      id: owner.id,
-                      type: 'ownerPremium',
-                    }),
-                  },
-                ],
-                [
-                  {
-                    text: this.i18n.translate('schedule.back', { lang }),
-                    callback_data: 'back_owner_1',
-                  },
-                ],
-              ],
-            },
-          );
-          break;
-        }
-        case 'phone_update':
-          {
-            if (!ctx.session.owner_registor) {
-              ctx.session.owner_registor = {
-                email: null,
-                full_name: null,
-                id: 0,
-                phone: null,
-                step: null,
-              };
-            }
-            ctx.session.owner_registor.phone = 'update_phone';
-            ctx.session.owner_registor.id = data.id;
-            ctx.reply(this.i18n.translate('registor.phone', { lang }));
-            await ctx
-              .answerCbQuery()
-              .then(() => {})
-              .catch();
-          }
-          break;
-        case 'notification_unread':
-          {
-            const limit = 5;
-
-            const total = await this.prisma.notification.count({
-              where: {
-                ownerId: data.id,
-                isRead: false,
-              },
-            });
-            const currentPage = Math.max(1, Number(data.page) || 1);
-
-            const totalPages = Math.max(1, Math.ceil(total / limit));
-
-            const page = Math.min(currentPage, totalPages);
-
-            const skip = (page - 1) * limit;
-
-            const [notifications] = await Promise.all([
-              this.prisma.notification.findMany({
-                where: {
-                  ownerId: data.id,
-                  isRead: false,
-                },
-                orderBy: {
-                  createdAt: 'desc',
-                },
-                skip,
-                take: limit,
-              }),
-            ]);
-
-            if (!notifications.length) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.no_new_messages', { lang }),
-              );
-              return;
-            }
-
-            const keyboard: InlineKeyboardButton[][] = [
-              ...notifications.map((item) => [
-                {
-                  text:
-                    NotificationNames[item.type]?.[lang] ??
-                    NotificationNames[item.type]?.uz,
-                  callback_data: JSON.stringify({
-                    type: 'notification_view',
-                    id: item.id,
-                    page: page,
-                  }),
-                },
-              ]),
-            ];
-
-            if (totalPages > 1) {
-              const row: InlineKeyboardButton[] = [];
-
-              if (page > 1) {
-                row.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_unread',
-                    id: data.id,
-                    page: page - 1,
-                  }),
-                });
-              }
-
-              row.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
-
-              if (page < totalPages) {
-                row.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_unread',
-                    id: data.id,
-                    page: page + 1,
-                  }),
-                });
-              }
-
-              keyboard.push(row);
-            }
-
-            keyboard.push([
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: JSON.stringify({
-                  type: 'notification_back',
-                  id: data.id,
-                }),
-              },
-            ]);
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              `🟢 ${this.i18n.translate('notification.unread', { lang })}`,
-              {
-                inline_keyboard: keyboard,
-              },
-            );
-
-            await ctx.answerCbQuery().catch(() => {});
-          }
-          break;
-        case 'notification_view':
-          {
-            const notification = await this.prisma.notification.findUnique({
-              where: { id: data.id },
-            });
-
-            if (!notification) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.notification_not_found', {
-                  lang,
-                }),
-              );
-              return;
-            }
-
-            const tr = notification.translations as any;
-
-            if (!notification.isRead) {
-              await this.prisma.notification.update({
-                where: { id: notification.id },
-                data: { isRead: true },
-              });
-            }
-            const count = await this.prisma.notification.count({
-              where: { ownerId: notification.ownerId, isRead: false },
-            });
-
-            const title = tr[lang]?.title || tr.uz.title;
-            const message = tr[lang]?.message || tr.uz.message;
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('notification.notification.detail', {
-                lang,
-                args: {
-                  title,
-                  message,
-                  date: formatDate(
-                    notification.sentAt
-                      ? notification.sentAt
-                      : notification.createdAt,
-                    lang,
-                  ),
-                },
-              }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type:
-                          count > 0
-                            ? 'notification_unread'
-                            : 'notification_back',
-                        id: notification.ownerId,
-                        page: data.page,
-                      }),
-                    },
-                  ],
-                ],
-              },
-            );
-          }
-          break;
-        case 'notification_back': {
-          return this.ownerService.renderNotification(ctx, data.id, lang);
-        }
-        case 'notification_read':
-          {
-            const limit = 5;
-
-            const total = await this.prisma.notification.count({
-              where: {
-                ownerId: data.id,
-                isRead: true,
-              },
-            });
-            const currentPage = Math.max(1, Number(data.page) || 1);
-
-            const totalPages = Math.max(1, Math.ceil(total / limit));
-
-            const page = Math.min(currentPage, totalPages);
-
-            const skip = (page - 1) * limit;
-
-            const notifications = await this.prisma.notification.findMany({
-              where: {
-                ownerId: data.id,
-                isRead: true,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              },
-              skip,
-              take: limit,
-            });
-
-            if (!notifications.length) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.no_read_messages', { lang }),
-              );
-              return;
-            }
-
-            const keyboard: InlineKeyboardButton[][] = [
-              ...notifications.map((item) => [
-                {
-                  text:
-                    NotificationNames[item.type]?.[lang] ??
-                    NotificationNames[item.type]?.uz,
-                  callback_data: JSON.stringify({
-                    type: 'notification_read_view',
-                    id: item.id,
-                    page: page,
-                  }),
-                },
-              ]),
-            ];
-
-            if (totalPages > 1) {
-              const row: InlineKeyboardButton[] = [];
-
-              if (page > 1) {
-                row.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_read',
-                    id: data.id,
-                    page: page - 1,
-                  }),
-                });
-              }
-
-              row.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
-
-              if (page < totalPages) {
-                row.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_read',
-                    id: data.id,
-                    page: page + 1,
-                  }),
-                });
-              }
-
-              keyboard.push(row);
-            }
-
-            keyboard.push([
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: JSON.stringify({
-                  type: 'notification_back',
-                  id: data.id,
-                }),
-              },
-            ]);
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              `🟢 ${this.i18n.translate('notification.read', { lang })}`,
-              {
-                inline_keyboard: keyboard,
-              },
-            );
-          }
-          break;
-        case 'notification_read_view':
-          {
-            const notification = await this.prisma.notification.findUnique({
-              where: { id: data.id },
-            });
-
-            if (!notification) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.notification_not_found', {
-                  lang,
-                }),
-              );
-              return;
-            }
-
-            const tr = notification.translations as any;
-
-            const title = tr[lang]?.title || tr.uz.title;
-            const message = tr[lang]?.message || tr.uz.message;
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('notification.notification.detail', {
-                lang,
-                args: {
-                  title,
-                  message,
-                  date: formatDate(
-                    notification.sentAt
-                      ? notification.sentAt
-                      : notification.createdAt,
-                    lang,
-                  ),
-                },
-              }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: `${this.i18n.translate('schedule.back', { lang })}`,
-                      callback_data: JSON.stringify({
-                        type: 'notification_read',
-                        id: notification.ownerId,
-                        page: data.page,
-                      }),
-                    },
-                  ],
-                ],
-              },
-            );
-          }
-          break;
-
-        case 'notification_all':
-          {
-            const limit = 5;
-
-            const total = await this.prisma.notification.count({
-              where: {
-                ownerId: data.id,
-              },
-            });
-            const currentPage = Math.max(1, Number(data.page) || 1);
-
-            const totalPages = Math.max(1, Math.ceil(total / limit));
-
-            const page = Math.min(currentPage, totalPages);
-
-            const skip = (page - 1) * limit;
-
-            const notifications = await this.prisma.notification.findMany({
-              where: {
-                ownerId: data.id,
-              },
-              orderBy: {
-                createdAt: 'desc',
-              },
-              skip,
-              take: limit,
-            });
-
-            if (!notifications.length) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.no_notifications', { lang }),
-              );
-              return;
-            }
-            const keyboard: InlineKeyboardButton[][] = [
-              ...notifications.map((item) => [
-                {
-                  text: `${item.isRead ? '✅' : '🟢'} ${
-                    NotificationNames[item.type]?.[lang] ??
-                    NotificationNames[item.type]?.uz
-                  }`,
-                  callback_data: JSON.stringify({
-                    type: item.isRead
-                      ? 'notification_read_view'
-                      : 'notification_view',
-                    id: item.id,
-                    page: page,
-                  }),
-                },
-              ]),
-            ];
-
-            if (totalPages > 1) {
-              const row: InlineKeyboardButton[] = [];
-
-              if (page > 1) {
-                row.push({
-                  text: this.i18n.translate('stadions.Previous', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_all',
-                    id: data.id,
-                    page: page - 1,
-                  }),
-                });
-              }
-
-              row.push({
-                text: `${page} / ${totalPages}`,
-                callback_data: 'ignore',
-              });
-
-              if (page < totalPages) {
-                row.push({
-                  text: this.i18n.translate('stadions.Next', { lang }),
-                  callback_data: JSON.stringify({
-                    type: 'notification_all',
-                    id: data.id,
-                    page: page + 1,
-                  }),
-                });
-              }
-
-              keyboard.push(row);
-            }
-
-            keyboard.push([
-              {
-                text: this.i18n.translate('schedule.back', { lang }),
-                callback_data: JSON.stringify({
-                  type: 'notification_back',
-                  id: data.id,
-                }),
-              },
-            ]);
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              `📋 ${this.i18n.translate('notification.all', { lang })}`,
-              {
-                inline_keyboard: keyboard,
-              },
-            );
-          }
-          break;
-        case 'notification_settings': {
-          return this.ownerService.notificationSettings(
-            ctx,
-            Number(data.id),
-            lang,
-          );
-        }
-        case 'notification_clear':
-          {
-            const count = await this.prisma.notification.count({
-              where: {
-                ownerId: data.id,
-                isRead: true,
-              },
-            });
-
-            if (count === 0) {
-              await ctx.answerCbQuery(
-                this.i18n.translate('notification.no_messages_to_delete', {
-                  lang,
-                }),
-              );
-              return;
-            }
-
-            await this.utils.safeEditOrReply(
-              ctx,
-              this.i18n.translate('notification.confirm_delete', { lang }),
-              {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.schedules.delet', {
-                        lang,
-                      }),
-                      callback_data: JSON.stringify({
-                        type: 'notificationClear_yes',
-                        id: data.id,
-                      }),
-                    },
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: JSON.stringify({
-                        type: 'notification_back',
-                        id: data.id,
-                      }),
-                    },
-                  ],
-                ],
-              },
-            );
-          }
-          break;
-        case 'notificationClear_yes': {
-          await this.prisma.notification.deleteMany({
-            where: { ownerId: data.id, isRead: true },
-          });
-          await ctx.answerCbQuery(
-            this.i18n.translate('notification.all_read_deleted', { lang }),
-          );
-          return this.ownerService.renderNotification(ctx, data.id, lang);
-        }
-        default: {
-          await ctx.answerCbQuery();
-          return;
-        }
+    const rows: InlineKeyboardButton[][] = stadions.map((s) => [
+      {
+        text: `🏟 ${this.shortName(s.name)}`,
+        callback_data: this.jsonCb('stadion', { id: s.id }),
+      },
+    ]);
+    await this.utils.safeEditOrReply(ctx, t('stadions.select'), {
+      inline_keyboard: [...rows, add, back],
+    });
+  }
+
+  private async showNotificationList(
+    ctx: MyContext,
+    lang: string,
+    ownerId: number,
+    rawPage: number | undefined,
+    mode: keyof typeof BotUpdate.NOTIFICATION_LISTS,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const cfg = BotUpdate.NOTIFICATION_LISTS[mode];
+    const limit = 5;
+    const where = { ownerId, isRead: cfg.isRead };
+
+    const total = await this.prisma.notification.count({ where });
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    const page = Math.min(Math.max(1, Number(rawPage) || 1), totalPages);
+
+    const notifications = await this.prisma.notification.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    });
+    if (!notifications.length) {
+      await this.alertBox(ctx, t(cfg.empty));
+      return;
+    }
+
+    const rows: InlineKeyboardButton[][] = notifications.map((item) => {
+      const name =
+        NotificationNames[item.type]?.[lang] ??
+        NotificationNames[item.type]?.uz;
+      const itemType =
+        cfg.itemType ??
+        (item.isRead ? 'notification_read_view' : 'notification_view');
+      return [
+        {
+          text:
+            mode === 'all' ? `${item.isRead ? '✅' : '🟢'} ${name}` : `${name}`,
+          callback_data: this.jsonCb(itemType, { id: item.id, page }),
+        },
+      ];
+    });
+
+    if (totalPages > 1) {
+      const nav: InlineKeyboardButton[] = [];
+      if (page > 1) {
+        nav.push({
+          text: t('stadions.Previous'),
+          callback_data: this.jsonCb(cfg.listType, {
+            id: ownerId,
+            page: page - 1,
+          }),
+        });
       }
+      nav.push({ text: `${page} / ${totalPages}`, callback_data: 'ignore' });
+      if (page < totalPages) {
+        nav.push({
+          text: t('stadions.Next'),
+          callback_data: this.jsonCb(cfg.listType, {
+            id: ownerId,
+            page: page + 1,
+          }),
+        });
+      }
+      rows.push(nav);
+    }
+    rows.push([
+      {
+        text: t('schedule.back'),
+        callback_data: this.jsonCb('notification_back', { id: ownerId }),
+      },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, `${cfg.icon} ${t(cfg.title)}`, {
+      inline_keyboard: rows,
+    });
+  }
+
+  private async showNotificationDetail(
+    ctx: MyContext,
+    lang: string,
+    notification: {
+      translations: unknown;
+      sentAt: Date | null;
+      createdAt: Date;
+    },
+    backCallback: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const tr = notification.translations as NotificationTexts;
+    const title = tr[lang]?.title || tr.uz?.title || '';
+    const message = tr[lang]?.message || tr.uz?.message || '';
+
+    await this.utils.safeEditOrReply(
+      ctx,
+      t('notification.notification.detail', {
+        title,
+        message,
+        date: formatDate(notification.sentAt ?? notification.createdAt, lang),
+      }),
+      {
+        inline_keyboard: [
+          [{ text: t('schedule.back'), callback_data: backCallback }],
+        ],
+      },
+    );
+  }
+  private ensureStadionSession(ctx: MyContext) {
+    ctx.session.stadion ||= {
+      step: 0,
+      name: null,
+      lockation: null,
+      latitude: null,
+      longitude: null,
+      price: null,
+      max_count: null,
+      image: null,
+      region_id: null,
+      region_item_id: null,
+      owner_id: null,
+      length: null,
+      width: null,
+      payments_type: Payments.CASH,
+      payments: null,
+      schedule_day: null,
+      id: null,
+      schedule_id: null,
+      special: new Date(),
+      off: null,
+    };
+    return ctx.session.stadion;
+  }
+
+  @Action(/.+/)
+  async parseAction(@Ctx() ctx: MyContext): Promise<void> {
+    const raw = this.callbackData(ctx);
+    if (!raw) return;
+
+    const data = this.parsePayload(raw);
+    if (!data) {
+      this.logger.debug(`Handlersiz callback: ${raw}`);
+      await ctx.answerCbQuery().catch(() => undefined);
+      return;
+    }
+
+    try {
+      const lang = await this.utils.langs(ctx);
+      await this.dispatchAction(ctx, data, lang);
     } catch (error) {
-      await ctx.answerCbQuery();
-      await this.utils.errorFunction(ctx);
-      console.log(error);
+      if (error instanceof InvalidCallbackError) {
+        this.logger.warn(`${error.message} | userId: ${ctx.from?.id}`);
+        this.reportSecurity(ctx, error.message);
+      } else {
+        await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+      }
+    } finally {
+      await ctx.answerCbQuery().catch(() => undefined);
     }
   }
 
-  @On('contact')
-  async onContact(@Ctx() ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
-    if (ctx.session.step == 'owner_registor') {
-      return this.ownerService.registor_step(ctx, lang);
+  private async dispatchAction(
+    ctx: MyContext,
+    data: ActionPayload,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+
+    const ownerHelp = BotUpdate.HELP_OWNER.get(data.type);
+    if (ownerHelp) {
+      await this.utils.safeEditHelpReplyOwner(ctx, t(ownerHelp));
+      return;
     }
-    if (ctx.session.step == 'user_registor') {
-      return this.userService.registor_step(ctx, lang);
+    const userHelp = BotUpdate.HELP_USER.get(data.type);
+    if (userHelp) {
+      await this.utils.safeEditHelpReplyUser(ctx, t(userHelp));
+      return;
     }
-  }
-  @On('location')
-  async onLocation(@Ctx() ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
-    if (ctx.session.stadion_step === 'stadion') {
-      if (ctx.session.stadion.lockation === 'L') {
-        if (ctx.message && 'location' in ctx.message) {
-          const { latitude, longitude } = ctx.message.location;
-          ctx.session.stadion.latitude = latitude;
-          ctx.session.stadion.longitude = longitude;
-          ctx.session.stadion.lockation = null;
-          ctx.session.stadion.step = 4;
-          await ctx.reply(
-            this.i18n.translate('stadions.location_text', { lang }),
-            {
-              reply_markup: {
-                keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('stadions.back', { lang }),
-                    },
-                  ],
-                ],
-                one_time_keyboard: true,
-                resize_keyboard: true,
-              },
-            },
-          );
-          ctx.session.stadion.max_count = 0;
-          return;
-        }
-        await ctx.reply(
-          this.i18n.translate('stadions.location_else', { lang }),
+
+    switch (data.type) {
+      case 'noob':
+        return;
+
+      case 'Continue_back_stadion':
+        await this.userService.userbookingRegionItems(
+          ctx,
+          lang,
+          this.idOf(data),
+        );
+        return;
+      case 'user_back_regionItems':
+        await this.userService.userbookingRegion(ctx, lang, this.idOf(data));
+        return;
+      case 'user_back_regionItems_Id':
+        await this.clearMessages(ctx, 'stadionMessages');
+        return;
+
+      case 'stadion': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        await this.ownerService.stadionMenyu(ctx, id, lang);
+        return;
+      }
+      case 'miniStadionlar': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        await this.ownerService.miniStadionlar(ctx, id, lang);
+        return;
+      }
+      case 'Stadion_nomi': {
+        const stadion = await this.loadOwnedStadion(ctx, lang, this.idOf(data));
+        if (!stadion) return;
+
+        this.ensureStadionSession(ctx).id = stadion.id;
+        ctx.session.mini = stadion.stadion_mini;
+
+        const edit: InlineKeyboardButton = {
+          text: t('success.edit'),
+          callback_data: this.jsonCb('updateName', { id: stadion.id }),
+        };
+        const back: InlineKeyboardButton = {
+          text: t('schedule.back'),
+          callback_data: stadion.stadion_mini
+            ? `owner_miniStadion_${stadion.id}`
+            : this.jsonCb('stadion', { id: stadion.id }),
+        };
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('stadions.stadionSplit.name', { name: stadion.name }),
+          {
+            inline_keyboard: stadion.stadion_mini
+              ? [[edit, back]]
+              : [[edit], [back]],
+          },
         );
         return;
       }
-    }
-    if (ctx.session.step === 'location') {
-      if (ctx.message && 'location' in ctx.message) {
-        const { latitude, longitude } = ctx.message.location;
-        try {
-          await this.prisma.stadion.update({
-            where: { id: Number(ctx.session.stadion.id) },
-            data: { latitude, longitude },
-          });
-          await ctx.reply(
-            this.i18n.translate('stadions.menyu.update', { lang }),
-          );
-          ctx.session.step = null;
-          return this.botService.location(ctx, Number(ctx.session.stadion.id));
-        } catch (error) {
-          this.utils.errorFunction(ctx);
-        }
-      }
-    }
-    if (ctx.session.booking_step === 'user_location_send') {
-      if (ctx.message && 'location' in ctx.message) {
-        const { latitude, longitude } = ctx.message.location;
-        return this.userService.handleLocation(ctx, lang, latitude, longitude);
-      }
-    } else {
-      ctx.reply(this.i18n.translate('error.warning_locate', { lang }));
-    }
-  }
-  @On('photo')
-  async onPhoto(@Ctx() ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
-    try {
-      if (
-        ctx.session.stadion_step === 'stadion' &&
-        ctx.session.stadion.image === 'image'
-      ) {
-        if (
-          ctx.message &&
-          'photo' in ctx.message &&
-          ctx.message.photo.length > 0
-        ) {
-          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-          ctx.session.stadion.image = image;
-          ctx.session.stadion_step = 'stadion_type';
-          await ctx.reply(
-            this.i18n.translate('stadions.stadion_type.title', { lang }),
-            {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('stadions.stadion_type.big', {
-                        lang,
-                      }),
-                      callback_data: 'stadion_type_big',
-                    },
-                  ],
-                  [
-                    {
-                      text: this.i18n.translate('stadions.stadion_type.small', {
-                        lang,
-                      }),
-                      callback_data: 'stadion_type_smol',
-                    },
-                  ],
-                ],
-              },
-            },
-          );
-        }
+      case 'updateName': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        const session = this.ensureStadionSession(ctx);
+        session.id = id;
+        session.name = 'StadionEditName';
+        await ctx.reply(t('stadions.stadionSplit.enterNewName'));
         return;
       }
-      if (ctx.session.step === 'image') {
-        if (
-          ctx.message &&
-          'photo' in ctx.message &&
-          ctx.message.photo.length > 0
-        ) {
-          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-          const stadion = await this.prisma.stadion.update({
-            where: { id: Number(ctx.session.stadion.id) },
-            data: { image },
+      case 'players_count': {
+        const id = this.idOf(data);
+        const stadion = await this.prisma.stadion.findFirst({
+          where: { id, stadion_mini: true, ...this.ownedBy(ctx) },
+          select: { id: true, max_count: true },
+        });
+        if (!stadion) return this.deny(ctx, lang);
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('stadions.max_players', { count: stadion.max_count }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: t('success.edit'),
+                  callback_data: this.jsonCb('edit_miniStadion', { id }),
+                },
+                {
+                  text: t('schedule.back'),
+                  callback_data: `owner_miniStadion_${id}`,
+                },
+              ],
+            ],
+          },
+        );
+        return;
+      }
+      case 'edit_miniStadion': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.maxCount = 'maxCount';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('stadions.stadium_capacity_prompt'));
+        return;
+      }
+      case 'payment_method': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        await this.ownerService.stadionPayments(ctx, id, lang);
+        return;
+      }
+      case 'Update_Payments': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        const option = (
+          key: string,
+          value: Payments,
+        ): InlineKeyboardButton[] => [
+          { text: t(key), callback_data: `payments_${value}` },
+        ];
+        await this.utils.safeEditOrReply(ctx, t('stadions.paymenst_type'), {
+          inline_keyboard: [
+            option('stadions.card', Payments.CARD),
+            option('stadions.cash', Payments.CASH),
+            option('stadions.both', Payments.GIBRID),
+            [
+              {
+                text: t('schedule.back'),
+                callback_data: this.jsonCb('payment_method', { id }),
+              },
+            ],
+          ],
+        });
+        const session = this.ensureStadionSession(ctx);
+        session.payments = 'PAYMENTS';
+        session.id = id;
+        return;
+      }
+      case 'back_1':
+        await this.showOwnerStadions(ctx, lang);
+        return;
+      case 'delete': {
+        const stadion = await this.loadOwnedStadion(ctx, lang, this.idOf(data));
+        if (!stadion) return;
+        await this.utils.safeEditOrReply(ctx, t('schedule.type.delet'), {
+          inline_keyboard: [
+            [
+              {
+                text: t('schedule.type.yes'),
+                callback_data: this.jsonCb('delete_yes', { id: stadion.id }),
+              },
+              {
+                text: t('schedule.back'),
+                callback_data: stadion.stadion_mini
+                  ? `owner_miniStadion_${stadion.id}`
+                  : this.jsonCb('stadion', { id: stadion.id }),
+              },
+            ],
+          ],
+        });
+        return;
+      }
+      case 'delete_yes': {
+        const id = this.idOf(data);
+        const stadion = await this.prisma.stadion.findFirst({
+          where: { id, ...this.ownedBy(ctx) },
+          include: { parent: true, children: true },
+        });
+        if (!stadion) return this.deny(ctx, lang);
+
+        const stadionIds = getRelatedStadionIds(stadion);
+        const activeBookings = await this.prisma.booking.count({
+          where: {
+            stadion_id: { in: stadionIds },
+            status: { in: ACTIVE_BOOKING_STATUSES },
+          },
+        });
+        if (activeBookings > 0) {
+          await this.utils.safeEditOrReply(ctx, t('stadions.deleteAlert'), {
+            inline_keyboard: [
+              [
+                {
+                  text: t('schedule.back'),
+                  callback_data: stadion.stadion_mini
+                    ? `owner_miniStadion_${stadion.id}`
+                    : this.jsonCb('stadion', { id: stadion.id }),
+                },
+              ],
+            ],
           });
-          await ctx.reply(
-            this.i18n.translate('stadions.menyu.image_update', { lang }),
+          return;
+        }
+
+        await this.prisma.stadion.deleteMany({
+          where: { id: { in: stadionIds } },
+        });
+        this.logger.log(
+          `AUDIT stadion delete | owner chat: ${ctx.from?.id} | stadion: ${id}`,
+        );
+
+        if (stadion.stadion_mini) {
+          await this.ownerService.miniStadionlar(
+            ctx,
+            Number(stadion.parent_id),
+            lang,
           );
-          ctx.session.step = null;
-          return this.botService.stadion_image(ctx, stadion.id);
+          return;
         }
+        await this.showOwnerStadions(ctx, lang);
+        return;
       }
-      if (ctx.session.step === 'ADVERTISEMENT_IMAGE') {
-        if (
-          ctx.message &&
-          'photo' in ctx.message &&
-          ctx.message.photo.length > 0
-        ) {
-          const image = ctx.message.photo[ctx.message.photo.length - 1].file_id;
-          ctx.session.advertisement.image = image;
-          ctx.session.advertisements?.push(ctx.message.message_id);
-          ctx.session.step = null;
-          return this.ownerService.selectAdvertisementStadium(ctx, lang);
+
+      // ---------- Owner: jadval ----------
+      case 'schedule': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        if (data.back === 'back') ctx.session.step = null;
+
+        const row = (key: string, type: string): InlineKeyboardButton[] => [
+          { text: t(key), callback_data: this.jsonCb(type, { id }) },
+        ];
+        await this.utils.safeEditOrReply(ctx, t('schedule.schedule.name'), {
+          inline_keyboard: [
+            row('schedule.schedule.one_week', 'week_schedule'),
+            row('schedule.schedule.dey_off_dey', 'day_off'),
+            row('schedule.schedule.special_deys', 'special_table'),
+            row('schedule.back', 'stadion'),
+          ],
+        });
+        return;
+      }
+      case 'week_schedule':
+      case 'add_schedule':
+      case 'view_schedule':
+      case 'day_off':
+      case 'special_table':
+      case 'lokation':
+      case 'price':
+      case 'image':
+      case 'all_data': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        await this.openStadionView(ctx, data.type, id);
+        return;
+      }
+      case 'add_schedule_day': {
+        const id = this.idOf(data);
+        const day = this.num(data.day, 'day');
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        const session = this.ensureStadionSession(ctx);
+        session.schedule_day = day;
+        session.id = id;
+        ctx.session.step = 'enter_schedule_time';
+        await ctx.reply(
+          t('schedule.working_hours', { name: t(`schedule.week_days.${day}`) }),
+        );
+        return;
+      }
+      case 'edit_schedule': {
+        const id = this.idOf(data);
+        const day = this.num(data.day, 'day');
+        const scheduleId = this.num(data.schedule_id, 'schedule_id');
+        const owned = await this.prisma.stadion_chedule.count({
+          where: { id: scheduleId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
+
+        const session = this.ensureStadionSession(ctx);
+        session.schedule_day = day;
+        session.id = id;
+        session.schedule_id = scheduleId;
+        ctx.session.step = 'edit_schedule_time';
+        await ctx.reply(
+          t('schedule.update_hours', { day: t(`schedule.week_days.${day}`) }),
+        );
+        return;
+      }
+      case 'delete_schedule_day': {
+        const id = this.idOf(data);
+        const scheduleId = this.num(data.schedule_id, 'schedule_id');
+        const schedule = await this.prisma.stadion_chedule.findFirst({
+          where: { id: scheduleId, stadion: this.ownedBy(ctx) },
+          include: { stadion: { include: { parent: true, children: true } } },
+        });
+        if (!schedule) return this.deny(ctx, lang);
+
+        const bookings = await this.prisma.booking.findMany({
+          where: {
+            stadion_id: { in: getStadionIds(schedule.stadion) },
+            status: { in: ACTIVE_BOOKING_STATUSES },
+          },
+          select: { date: true },
+        });
+        const conflict = bookings.some(
+          (b) => new Date(b.date).getDay() === schedule.day_of_week,
+        );
+
+        if (!conflict) {
+          await this.prisma.stadion_chedule.delete({
+            where: { id: scheduleId },
+          });
+          await this.botService.viewSchedule(ctx, id);
+          return;
         }
-      } else {
-        await ctx.reply(this.i18n.translate('error.warning_image', { lang }));
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('schedule.schedule_delete_warning'),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: t('schedule.delete_yes'),
+                  callback_data: this.jsonCb('confirm_Schedule_delete', {
+                    id,
+                    schedule_id: scheduleId,
+                  }),
+                },
+                {
+                  text: t('schedule.back'),
+                  callback_data: this.jsonCb('view_schedule', { id }),
+                },
+              ],
+            ],
+          },
+        );
+        return;
       }
-    } catch (error) {
-      ctx.session.step = null;
-      this.utils.errorFunction(ctx);
-    }
-  }
-  @On('message')
-  async Message(@Ctx() ctx: MyContext) {
-    const lang = await this.utils.langs(ctx);
+      case 'confirm_Schedule_delete': {
+        const id = this.idOf(data);
+        const scheduleId = this.num(data.schedule_id, 'schedule_id');
+        const owned = await this.prisma.stadion_chedule.count({
+          where: { id: scheduleId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
 
-    try {
-      if (!ctx.message || !('text' in ctx.message)) return;
+        await this.prisma.stadion_chedule.delete({ where: { id: scheduleId } });
+        await this.alertBox(ctx, t('schedule.schedule_deleted'));
+        ctx.session.step = null;
+        const session = this.ensureStadionSession(ctx);
+        session.id = null;
+        session.schedule_id = null;
+        await this.botService.viewSchedule(ctx, id);
+        return;
+      }
 
-      const text = ctx.message.text.trim();
+      // ---------- Owner: dam olish va maxsus kunlar ----------
+      case 'off_stadion': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.step = 'add_off_stadion_week';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('schedule.off_day.add_day'));
+        return;
+      }
+      case 'week_edit': {
+        const id = this.idOf(data);
+        const offId = this.num(data.stadion_off, 'stadion_off');
+        const owned = await this.prisma.stadion_off_days.count({
+          where: { id: offId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
 
-      if (text.startsWith('checkin_ADMIN_')) {
-        const token = text.replace('checkin_ADMIN_', '');
-        try {
-          const data = this.qrservice.verifyQr(token);
+        ctx.session.step = 'week_edit';
+        const session = this.ensureStadionSession(ctx);
+        session.off = offId;
+        session.id = id;
+        await ctx.reply(t('schedule.off_day.add_day'));
+        return;
+      }
+      case 'delete_week': {
+        const id = this.idOf(data);
+        const offId = this.num(data.stadion_off, 'stadion_off');
+        const owned = await this.prisma.stadion_off_days.count({
+          where: { id: offId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
 
-          if (!data) {
-            ctx.reply(this.i18n.translate('error.qr_error', { lang }), {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: 'errorBack_1',
-                    },
-                  ],
-                ],
-              },
-            });
-            return;
-          }
+        await this.prisma.stadion_off_days.delete({ where: { id: offId } });
+        await this.botService.stadion_off_days(ctx, id);
+        return;
+      }
+      case 'add_special': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.step = 'add_special';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('schedule.specile'));
+        return;
+      }
+      case 'special_edit': {
+        const id = this.idOf(data);
+        const specialId = this.num(data.special_id, 'special_id');
+        const owned = await this.prisma.stadion_special_schedule.count({
+          where: { id: specialId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
 
-          const booking = await this.prisma.booking.findUnique({
-            where: { id: data.bookingId },
-            include: {
-              stadion: {
-                include: {
-                  owner: {
-                    select: {
-                      chatID: true,
-                    },
-                  },
-                },
-              },
-            },
-          });
+        ctx.session.step = 'edit_specile';
+        const session = this.ensureStadionSession(ctx);
+        session.id = id;
+        session.schedule_id = specialId;
+        await ctx.reply(t('schedule.update'));
+        return;
+      }
+      case 'special_delet': {
+        const id = this.idOf(data);
+        const specialId = this.num(data.special_id, 'special_id');
+        const owned = await this.prisma.stadion_special_schedule.count({
+          where: { id: specialId, stadion: this.ownedBy(ctx) },
+        });
+        if (!owned) return this.deny(ctx, lang);
 
-          if (!booking) {
-            ctx.reply(
-              this.i18n.translate('error.booking_not_found', { lang }),
+        await this.prisma.stadion_special_schedule.delete({
+          where: { id: specialId },
+        });
+        await this.botService.stadion_special(ctx, id);
+        return; // eski kodda break yo'q edi: 'lokation' ga o'tib ketardi
+      }
+
+      // ---------- Owner: lokatsiya, narx, rasm ----------
+      case 'update_location': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.step = 'location';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('stadions.location'), {
+          reply_markup: {
+            keyboard: [
+              [{ text: t('stadions.send_location'), request_location: true }],
+            ],
+            one_time_keyboard: true,
+            resize_keyboard: true,
+          },
+        });
+        return;
+      }
+      case 'Update_price': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.step = 'price';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('stadions.price'));
+        return;
+      }
+      case 'update_image': {
+        const id = this.idOf(data);
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.step = 'image';
+        this.ensureStadionSession(ctx).id = id;
+        await ctx.reply(t('stadions.image'));
+        return;
+      }
+
+      // ---------- Owner: sozlamalar ----------
+      case 'language': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.utils.safeEditOrReply(ctx, t('common.START'), {
+          inline_keyboard: [
+            [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
+            [{ text: '🇷🇺 Русский', callback_data: 'lang_ru' }],
+            [{ text: '🇬🇧 English', callback_data: 'lang_en' }],
+            [
               {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'errorBack_1',
-                      },
-                    ],
-                  ],
-                },
+                text: t('schedule.back'),
+                callback_data: this.jsonCb('phone_back', { id }),
               },
-            );
-            return;
-          }
-          if (String(ctx.from?.id) !== booking.stadion.owner.chatID) {
-            ctx.reply(
-              this.i18n.translate('error.not_admin_for_stadion', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'errorBack_1',
-                      },
-                    ],
-                  ],
+            ],
+          ],
+        });
+        ctx.session.step = 'language';
+        return;
+      }
+      case 'phone': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.ownerService.ownerContakt(ctx, id);
+        return;
+      }
+      case 'phone_back': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.showOwnerSettings(ctx, lang, id);
+        return;
+      }
+      case 'ownerSettings_back': {
+        const owner = await this.prisma.owners.findUnique({
+          where: { chatID: String(ctx.from?.id) },
+          select: { id: true },
+        });
+        if (!owner) throw new Error(`Owner topilmadi: chatID=${ctx.from?.id}`);
+        await this.showOwnerSettings(ctx, lang, owner.id);
+        return;
+      }
+      case 'phone_update': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        ctx.session.owner_registor ??= {
+          email: null,
+          full_name: null,
+          id: 0,
+          phone: null,
+          step: null,
+        };
+        ctx.session.owner_registor.phone = 'update_phone';
+        ctx.session.owner_registor.id = id;
+        await ctx.reply(t('registor.phone'));
+        return;
+      }
+
+      // ---------- Owner: premium ----------
+      case 'ownerPremium': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.ownerService.premium(ctx, id, lang);
+        return;
+      }
+      case 'premium_buy': {
+        const id = this.idOf(data);
+        const plan = this.parsePlan(data.plan);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('premium.premium_payment.message', {
+            label: PLAN_LABELS[lang][plan],
+            amount: PREMIUM_PLANS[plan].price.toLocaleString(),
+            currency: CURRENCY_LABELS[lang],
+          }),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: t('premium.button'),
+                  callback_data: this.jsonCb('premium_provider', { plan, id }),
                 },
-              },
-            );
-            return;
-          }
-
-          if (
-            (booking.payment_method === 'CARD' && booking.status !== 'PAID') ||
-            (booking.payment_method === 'CASH' &&
-              booking.status !== 'CONFIRMED')
-          ) {
-            ctx.reply(
-              this.i18n.translate('error.payment_unpaid_or_unconfirmed', {
-                lang,
-              }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'errorBack_1',
-                      },
-                    ],
-                  ],
+              ],
+              [
+                {
+                  text: t('schedule.back'),
+                  callback_data: this.jsonCb('ownerPremium', { id }),
                 },
-              },
-            );
-            return;
-          }
+              ],
+            ],
+          },
+        );
+        return;
+      }
+      case 'premium_provider': {
+        const id = this.idOf(data);
+        const plan = this.parsePlan(data.plan);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
 
-          await this.prisma.booking.update({
-            where: { id: booking.id },
-            data: { check_in: true },
-          });
-
-          await ctx.reply(
-            this.i18n.translate('success.user_checked_in', { lang }),
+        const back: InlineKeyboardButton[] = [
+          {
+            text: t('schedule.back'),
+            callback_data: this.jsonCb('premium_buy', { id, plan }),
+          },
+        ];
+        const providers = await this.availableProviders();
+        if (!providers.length) {
+          await this.utils.safeEditOrReply(
+            ctx,
+            t('premium.payment.no_methods'),
             {
-              reply_markup: {
-                inline_keyboard: [
-                  [
-                    {
-                      text: this.i18n.translate('schedule.back', { lang }),
-                      callback_data: 'errorBack_1',
-                    },
-                  ],
-                ],
-              },
+              inline_keyboard: [back],
             },
           );
           return;
-        } catch (error) {
-          await this.utils.errorFunction(ctx);
         }
-      }
-      if (ctx.session.stadion.name === 'SeorchName') {
-        try {
-          const searchName = text.trim();
-          const stadion = await this.prisma.stadion.findMany({
-            where: {
-              working_status: true,
-              admin_status: AdminStatus.APPROVED,
-              owner: {
-                status: Admin_S.ACTIVE,
-              },
-              name: { contains: searchName, mode: 'insensitive' },
-              stadionChedules: { some: {} },
-            },
-            take: 5,
-            include: {
-              region: true,
-              region_items: true,
-            },
-          });
-          if (!stadion.length) {
-            ctx.session.stadion.name = null;
-            await ctx.reply(
-              this.i18n.translate('booking.stadions.notFount_name', { lang }),
-              {
-                reply_markup: {
-                  inline_keyboard: [
-                    [
-                      {
-                        text: this.i18n.translate('schedule.back', { lang }),
-                        callback_data: 'back_user_6',
-                      },
-                    ],
-                  ],
-                },
-              },
-            );
-            return;
-          }
-          ctx.session.stadion.name = null;
-          for (const item of stadion) {
-            return this.userService.stadionAll_data(ctx, lang, item, '', true);
-          }
-        } catch (error) {
-          await this.utils.errorFunction(ctx);
-        }
+        const rows: InlineKeyboardButton[][] = providers.map((p) => [
+          {
+            text: `${p.icon} ${t(p.translationKey)}`,
+            callback_data: `premiumProvider|${p.key}|${plan}|${id}`,
+          },
+        ]);
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('premium.payment.choose_provider'),
+          {
+            inline_keyboard: [...rows, back],
+          },
+        );
+        return;
       }
 
-      if (ctx.session.step === 'menyu') {
+      // ---------- Owner: reklama ----------
+      case 'advertising': {
+        const ownerId = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, ownerId))) return;
+
+        const premium = await this.prisma.subscription.findFirst({
+          where: { ownerId, isActive: true, endDate: { gt: new Date() } },
+          select: { id: true },
+        });
+        if (!premium) {
+          await this.alertBox(ctx, t('premium.advertising.required'));
+          return;
+        }
+
+        const item = (key: string, action: string): InlineKeyboardButton[] => [
+          {
+            text: t(`advertisement.advertisement.${key}`),
+            callback_data: `advertisement_${action}_${ownerId}`,
+          },
+        ];
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('advertisement.advertisement.menu_title'),
+          {
+            inline_keyboard: [
+              item('create', 'create'),
+              item('my_ads', 'list'),
+              item('statistics', 'statistics'),
+              item('help', 'help'),
+              [
+                {
+                  text: t('schedule.back'),
+                  callback_data: this.jsonCb('ownerSettings_back'),
+                },
+              ],
+            ],
+          },
+        );
+
+        const oldMessages = ctx.session.advertisements;
+        if (oldMessages?.length) {
+          await ctx.deleteMessages(oldMessages).catch(() => undefined);
+          ctx.session.advertisements = [];
+        }
+        ctx.session.advertisement = {
+          title: null,
+          description: null,
+          image: null,
+          stadionId: null,
+          isAllStadiums: false,
+        };
+        return;
+      }
+      case 'advertisement_skip_image': {
+        if (!ctx.session.advertisement)
+          return this.alertBox(ctx, t('error.error'));
+        ctx.session.advertisement.image = null;
+        ctx.session.step = null;
+        await ctx.answerCbQuery().catch(() => undefined);
+        await this.ownerService.selectAdvertisementStadium(ctx, lang);
+        return;
+      }
+      case 'advertisement_select_stadium': {
+        const id = this.idOf(data);
+        if (!ctx.session.advertisement)
+          return this.alertBox(ctx, t('error.error'));
+        if (!(await this.allowStadion(ctx, lang, id))) return;
+        ctx.session.advertisement.stadionId = id;
+        await this.ownerService.advertisementPreview(ctx, lang);
+        return;
+      }
+      case 'advertisement_preview_booking':
+        await this.alertBox(ctx, t('advertisement.booking_only_users'));
+        return;
+      case 'advertisement_confirm':
+        await ctx.answerCbQuery().catch(() => undefined);
+        await this.ownerService.advertisement_created(ctx, lang);
+        return;
+
+      // ---------- Owner: bildirishnomalar ----------
+      case 'notification':
+      case 'notification_back': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.ownerService.renderNotification(ctx, id, lang);
+        return;
+      }
+      case 'notification_settings': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.ownerService.notificationSettings(ctx, id, lang);
+        return;
+      }
+      case 'notification_unread':
+      case 'notification_read':
+      case 'notification_all': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        const mode = data.type.replace('notification_', '');
+        if (mode !== 'unread' && mode !== 'read' && mode !== 'all') return;
+        await this.showNotificationList(ctx, lang, id, data.page, mode);
+        return;
+      }
+      case 'notification_view':
+      case 'notification_read_view': {
+        const notification = await this.prisma.notification.findUnique({
+          where: { id: this.idOf(data) },
+        });
+        if (!notification) {
+          await this.alertBox(ctx, t('notification.notification_not_found'));
+          return;
+        }
+        if (!(await this.allowOwner(ctx, lang, notification.ownerId))) return;
+
+        let backType = 'notification_read';
+        if (data.type === 'notification_view') {
+          if (!notification.isRead) {
+            await this.prisma.notification.update({
+              where: { id: notification.id },
+              data: { isRead: true },
+            });
+          }
+          const unread = await this.prisma.notification.count({
+            where: { ownerId: notification.ownerId, isRead: false },
+          });
+          backType = unread > 0 ? 'notification_unread' : 'notification_back';
+        }
+        await this.showNotificationDetail(
+          ctx,
+          lang,
+          notification,
+          this.jsonCb(backType, {
+            id: notification.ownerId,
+            page: data.page ?? 1,
+          }),
+        );
+        return;
+      }
+      case 'notification_clear': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        const count = await this.prisma.notification.count({
+          where: { ownerId: id, isRead: true },
+        });
+        if (count === 0) {
+          await this.alertBox(ctx, t('notification.no_messages_to_delete'));
+          return;
+        }
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('notification.confirm_delete'),
+          {
+            inline_keyboard: [
+              [
+                {
+                  text: t('schedule.schedules.delet'),
+                  callback_data: this.jsonCb('notificationClear_yes', { id }),
+                },
+                {
+                  text: t('schedule.back'),
+                  callback_data: this.jsonCb('notification_back', { id }),
+                },
+              ],
+            ],
+          },
+        );
+        return;
+      }
+      case 'notificationClear_yes': {
+        const id = this.idOf(data);
+        if (!(await this.allowOwner(ctx, lang, id))) return;
+        await this.prisma.notification.deleteMany({
+          where: { ownerId: id, isRead: true },
+        });
+        await this.alertBox(ctx, t('notification.all_read_deleted'));
+        await this.ownerService.renderNotification(ctx, id, lang);
+        return;
+      }
+
+      default:
+        this.logger.debug(`Noma'lum action turi: ${data.type}`);
+        return;
+    }
+  }
+
+  private async openStadionView(
+    ctx: MyContext,
+    type: string,
+    id: number,
+  ): Promise<void> {
+    switch (type) {
+      case 'week_schedule':
+        await this.botService.renderScheduleMenu(ctx, id);
+        return;
+      case 'add_schedule':
+        await this.botService.renderSchedule_week(ctx, id);
+        return;
+      case 'view_schedule':
+        await this.botService.viewSchedule(ctx, id);
+        return;
+      case 'day_off':
+        await this.botService.stadion_off_days(ctx, id);
+        return;
+      case 'special_table':
+        await this.botService.stadion_special(ctx, id);
+        return;
+      case 'lokation':
+        await this.botService.location(ctx, id);
+        return;
+      case 'price':
+        await this.botService.stadion_price(ctx, id);
+        return;
+      case 'image':
+        await this.botService.stadion_image(ctx, id);
+        return;
+      case 'all_data':
+        await this.botService.all_data(ctx, id);
+        return;
+    }
+  }
+  /*   ParseAction */
+
+  @On('contact')
+  async onContact(@Ctx() ctx: MyContext): Promise<void> {
+    try {
+      const message = ctx.message;
+      if (!message || !('contact' in message)) return;
+      const lang = await this.utils.langs(ctx);
+
+      if (message.contact.user_id !== ctx.from?.id) {
+        await ctx.reply(this.tr(lang)('error.contact_not_own'));
+        return;
+      }
+
+      switch (ctx.session.step) {
+        case 'owner_registor':
+          await this.ownerService.registor_step(ctx, lang);
+          return;
+        case 'user_registor':
+          await this.userService.registor_step(ctx, lang);
+          return;
+      }
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
+    }
+  }
+  @On('location')
+  async onLocation(@Ctx() ctx: MyContext): Promise<void> {
+    try {
+      const message = ctx.message;
+      if (!message || !('location' in message)) return;
+
+      const { latitude, longitude } = message.location;
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
+      const session = ctx.session;
+
+      if (
+        session.stadion_step === 'stadion' &&
+        session.stadion?.lockation === 'L'
+      ) {
+        session.stadion.latitude = latitude;
+        session.stadion.longitude = longitude;
+        session.stadion.lockation = null;
+        session.stadion.step = 4;
+        session.stadion.max_count = 0;
+
+        await ctx.reply(t('stadions.location_text'), {
+          reply_markup: {
+            keyboard: [[{ text: t('stadions.back') }]],
+            one_time_keyboard: true,
+            resize_keyboard: true,
+          },
+        });
+        return;
+      }
+
+      if (session.step === 'location') {
+        const stadionId = Number(session.stadion?.id);
+        if (
+          !Number.isInteger(stadionId) ||
+          !(await this.ownsStadion(ctx, stadionId))
+        ) {
+          await ctx.reply(t('admin.access_denied'));
+          session.step = null;
+          return;
+        }
+        await this.prisma.stadion.update({
+          where: { id: stadionId },
+          data: { latitude, longitude },
+        });
+        session.step = null;
+        await ctx.reply(t('stadions.menyu.update'));
+        await this.botService.location(ctx, stadionId);
+        return;
+      }
+
+      if (session.booking_step === 'user_location_send') {
+        await this.userService.handleLocation(ctx, lang, latitude, longitude);
+        return;
+      }
+      await ctx.reply(t('error.warning_locate'));
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    }
+  }
+  private photoFileId(ctx: MyContext): string | null {
+    const message = ctx.message;
+    if (!message || !('photo' in message) || !message.photo.length) return null;
+    return message.photo[message.photo.length - 1].file_id; // eng katta o'lcham
+  }
+  @On('photo')
+  async onPhoto(@Ctx() ctx: MyContext): Promise<void> {
+    try {
+      const message = ctx.message;
+      const image = this.photoFileId(ctx);
+      if (!message || !image) return;
+
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
+      const session = ctx.session;
+
+      if (
+        session.stadion_step === 'stadion' &&
+        session.stadion?.image === 'image'
+      ) {
+        session.stadion.image = image;
+        session.stadion_step = 'stadion_type';
+
+        await ctx.reply(t('stadions.stadion_type.title'), {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: t('stadions.stadion_type.big'),
+                  callback_data: 'stadion_type_big',
+                },
+              ],
+              [
+                {
+                  text: t('stadions.stadion_type.small'),
+                  callback_data: 'stadion_type_smol',
+                },
+              ],
+            ],
+          },
+        });
+        return;
+      }
+
+      if (session.step === 'image') {
+        const stadionId = Number(session.stadion?.id);
+        if (
+          !Number.isInteger(stadionId) ||
+          !(await this.ownsStadion(ctx, stadionId))
+        ) {
+          await ctx.reply(t('admin.access_denied'));
+          session.step = null;
+          return;
+        }
+
+        await this.prisma.stadion.update({
+          where: { id: stadionId },
+          data: { image },
+        });
+        session.step = null;
+        await ctx.reply(t('stadions.menyu.image_update'));
+        await this.botService.stadion_image(ctx, stadionId);
+        return;
+      }
+
+      if (session.step === 'ADVERTISEMENT_IMAGE') {
+        session.advertisement.image = image;
+        session.advertisements?.push(message.message_id);
+        session.step = null;
+        await this.ownerService.selectAdvertisementStadium(ctx, lang);
+        return;
+      }
+
+      if ('media_group_id' in message && message.media_group_id) return;
+
+      await ctx.reply(t('error.warning_image'));
+    } catch (error) {
+      ctx.session.step = null;
+      await this.utils.errorFunction(ctx, error, ErrorContext.STADION);
+    }
+  }
+  @On('message')
+  async Message(@Ctx() ctx: MyContext): Promise<void> {
+    try {
+      const message = ctx.message;
+      if (!message || !('text' in message)) return;
+
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
+      const text = message.text.trim();
+      const s = ctx.session;
+
+      if (text.startsWith('checkin_ADMIN_'))
+        return await this.handleCheckin(ctx, text, lang);
+
+      if (s.stadion?.name === 'SeorchName')
+        return await this.handleStadionSearch(ctx, text, lang);
+
+      if (s.step === 'menyu') {
         await ctx.reply(
-          this.i18n.translate('common.WELCOME', { lang }),
+          t('common.WELCOME'),
           Markup.keyboard([
-            [
-              this.i18n.translate('menyu_buttons.stadion', { lang }),
-              this.i18n.translate('menyu_buttons.bron', { lang }),
-            ],
-            [
-              this.i18n.translate('menyu_buttons.settings', { lang }),
-              this.i18n.translate('menyu_buttons.help', { lang }),
-            ],
-            [this.i18n.translate('menyu_buttons.card', { lang })],
+            [t('menyu_buttons.stadion'), t('menyu_buttons.bron')],
+            [t('menyu_buttons.settings'), t('menyu_buttons.help')],
+            [t('menyu_buttons.card')],
           ])
             .resize()
             .oneTime(),
         );
-        ctx.session.step = null;
-        ctx.session.stadion_step = null;
-        if (ctx.session.ownerStadions?.length) {
-          try {
-            await ctx.deleteMessages(ctx.session.ownerStadions);
-          } catch (error) {}
-          ctx.session.ownerStadions = [];
+        s.step = null;
+        s.stadion_step = null;
+        if (s.ownerStadions?.length) {
+          await ctx.deleteMessages(s.ownerStadions).catch(() => undefined);
+          s.ownerStadions = [];
         }
         return;
       }
-      if (ctx.session.step === 'registor') {
-        if (
-          text === `💼 ${this.i18n.translate('registor.button.0', { lang })}`
-        ) {
-          return this.ownerService.registor(ctx, lang);
-        } else if (
-          text === `🏃🏼 ${this.i18n.translate('registor.button.1', { lang })}`
-        ) {
-          return this.userService.registor(ctx, lang);
-        } else {
-          ctx.reply(this.i18n.translate('error.worning', { lang }));
-          return;
-        }
-      }
 
-      if (ctx.session.step === 'owner_registor') {
-        return this.ownerService.registor_step(ctx, lang);
+      if (s.step === 'registor') {
+        if (text === `💼 ${t('registor.button.0')}`)
+          return await this.ownerService.registor(ctx, lang);
+        if (text === `🏃🏼 ${t('registor.button.1')}`)
+          return await this.userService.registor(ctx, lang);
+        await ctx.reply(t('error.worning'));
+        return;
       }
-      if (ctx.session.step === 'user_registor') {
-        return this.userService.registor_step(ctx, lang);
-      }
+      if (s.step === 'owner_registor')
+        return await this.ownerService.registor_step(ctx, lang);
+      if (s.step === 'user_registor')
+        return await this.userService.registor_step(ctx, lang);
 
       switch (text) {
-        case this.i18n.translate('menyu_buttons.stadion', { lang }):
-          return this.ownerService.handleStadionMenu(ctx, lang);
-
-        case this.i18n.translate('menyu_buttons.bron', { lang }):
-          return this.ownerService.owner_Bron(ctx, lang);
-
-        case this.i18n.translate('menyu_buttons.card', { lang }):
-          return this.ownerService.owner_payout(ctx, lang);
-
-        case this.i18n.translate('menyu_buttons.settings', { lang }): {
+        case t('menyu_buttons.stadion'):
+          return await this.ownerService.handleStadionMenu(ctx, lang);
+        case t('menyu_buttons.bron'):
+          return await this.ownerService.owner_Bron(ctx, lang);
+        case t('menyu_buttons.card'):
+          return await this.ownerService.owner_payout(ctx, lang);
+        case t('menyu_buttons.user_stadion_booking'):
+          return await this.userService.userBooking(ctx, lang);
+        case t('menyu_buttons.settings'):
+        case t('menyu_buttons.help'): {
           const role = await this.utils.isChecket(String(ctx.from?.id), ctx);
-
           if (role === 'error') return;
-          if (role === 'none') return this.botService.checket(ctx);
+          if (role === 'none') return await this.botService.checket(ctx);
 
-          return role === 'owner'
-            ? this.ownerService.ownerSettings(ctx, lang)
-            : this.userService.settings(ctx, lang);
-        }
-        case this.i18n.translate('menyu_buttons.help', { lang }): {
-          const role = await this.utils.isChecket(String(ctx.from?.id), ctx);
-
-          if (role === 'error') return;
-          if (role === 'none') return this.botService.checket(ctx);
-
-          return role === 'owner'
+          if (text === t('menyu_buttons.settings')) {
+            return role === 'owner'
+              ? await this.ownerService.ownerSettings(ctx, lang)
+              : await this.userService.settings(ctx, lang);
+          }
+          await (role === 'owner'
             ? ctx.reply(
-                this.i18n.translate('help.help.title', { lang }),
+                t('help.help.title'),
                 helpMenuKeyboard_Owner(this.i18n, lang),
               )
             : ctx.reply(
-                this.i18n.translate('user_help.menu.title', { lang }),
+                t('user_help.menu.title'),
                 helpMenuKeyboard_Users(this.i18n, lang),
-              );
-        }
-        case this.i18n.translate('menyu_buttons.user_stadion_booking', {
-          lang,
-        }):
-          return this.userService.userBooking(ctx, lang);
-
-        case this.i18n.translate('stadions.back', { lang }):
-          if (ctx.session.stadion.step) {
-            return this.ownerService.handleStadionBack(ctx, lang);
-          } else {
-            return this.botService.checket(ctx);
-          }
-      }
-      if (ctx.session.stadion.name === 'StadionEditName') {
-        ctx.session.stadion.name = null;
-        try {
-          const isValidName = /^[a-zA-Zа-яА-ЯёЁ0-9\s'’-]+$/.test(text);
-
-          if (!isValidName) {
-            ctx.reply(this.i18n.translate('booking.stadions.format', { lang }));
-            return;
-          }
-          const UpdateName = text.trim();
-          const id = Number(ctx.session.stadion.id);
-          const stadion = await this.prisma.stadion.update({
-            where: { id },
-            data: { name: UpdateName },
-          });
-          await ctx.reply(
-            this.i18n.translate('success.stadium_name_updated', { lang }),
-          );
-          ctx.session.stadion.id = null;
-          if (ctx.session.mini === true) {
-            ctx.session.mini = null;
-            return this.ownerService.miniStadion(ctx, stadion.id, lang);
-          } else if (ctx.session.mini === false) {
-            ctx.session.mini = null;
-            return this.ownerService.stadionMenyu(ctx, stadion.id, lang);
-          }
-        } catch (error) {
-          await this.utils.errorFunction(ctx);
-        }
-      }
-      if (ctx.session.maxCount === 'maxCount') {
-        try {
-          if (typeof text !== 'string' || !text.trim()) {
-            await ctx.reply(
-              this.i18n.translate('error.enter_number_error', { lang }),
-            );
-            return;
-          }
-
-          const isNumber = /^[0-9]+$/.test(text);
-
-          if (!isNumber) {
-            await ctx.reply(
-              this.i18n.translate('error.only_number_error', { lang }),
-            );
-            return;
-          }
-
-          const maxCount = Number(text);
-
-          if (maxCount < 6 || maxCount > 20) {
-            await ctx.reply(
-              this.i18n.translate('error.invalid_range_error', { lang }),
-            );
-            return;
-          }
-
-          const id = Number(ctx.session.stadion.id);
-
-          const stadion = await this.prisma.stadion.update({
-            where: { id },
-            data: { max_count: maxCount },
-          });
-
-          await ctx.reply(
-            this.i18n.translate('success.max_players_updated', { lang }),
-          );
-
-          ctx.session.stadion.id = null;
-          ctx.session.maxCount = null;
-
-          return this.ownerService.miniStadion(ctx, stadion.id, lang);
-        } catch (error) {
-          console.log(error);
-          await this.utils.errorFunction(ctx);
-        }
-      }
-
-      if (ctx.session.owner_registor.phone === 'update_phone') {
-        return this.ownerService.updatePhone(ctx, lang, text);
-      }
-
-      if (ctx.session.stadion_step === 'stadion') {
-        return this.ownerService.handleStadionSteps(ctx, lang, text);
-      }
-
-      if (ctx.session.user_registor.phone === 'phone') {
-        return this.userService.userUpdate_phone(ctx, lang, text);
-      }
-      if (ctx.session.ownerBrons === 'dataFilter') {
-        return this.ownerService.handleDataFilter(ctx, text, lang);
-      }
-      if (ctx.session.ownerBrons === 'search') {
-        const input = this.utils.detectSearchType(text);
-        if (input.type === 'invalid') {
-          const send = await ctx.reply(
-            this.i18n.translate('owner_booking.search_empty_input', { lang }),
-          );
-          ctx.session.ownerActiveBooking ??= [];
-          ctx.session.ownerActiveBooking.push(send.message_id);
+              ));
           return;
         }
-        ctx.session.ownerBrons = null;
-        return this.ownerService.searchBooking(ctx, input, lang);
-      }
-      if (
-        ctx.session.step &&
-        ['ADVERTISEMENT_TITLE', 'ADVERTISEMENT_DESCRIPTION'].includes(
-          ctx.session.step,
-        )
-      ) {
-        const type = ctx.session.step;
-        return this.ownerService.ownerAdvertisement(ctx, type, text, lang);
+        case t('stadions.back'):
+          return s.stadion?.step
+            ? await this.ownerService.handleStadionBack(ctx, lang)
+            : await this.botService.checket(ctx);
       }
 
+      if (s.stadion?.name === 'StadionEditName')
+        return await this.handleStadionEditName(ctx, text, lang);
+      if (s.maxCount === 'maxCount')
+        return await this.handleMaxCount(ctx, text, lang);
+      if (s.owner_registor?.phone === 'update_phone')
+        return await this.ownerService.updatePhone(ctx, lang, text);
+      if (s.stadion_step === 'stadion')
+        return await this.ownerService.handleStadionSteps(ctx, lang, text);
+      if (s.user_registor?.phone === 'phone')
+        return await this.userService.userUpdate_phone(ctx, lang, text);
+      if (s.ownerBrons === 'dataFilter')
+        return await this.ownerService.handleDataFilter(ctx, text, lang);
+
+      if (s.ownerBrons === 'search') {
+        const input = this.utils.detectSearchType(text);
+        if (input.type === 'invalid') {
+          await this.trackOwnerBooking(
+            ctx,
+            t('owner_booking.search_empty_input'),
+          );
+          return;
+        }
+        s.ownerBrons = null;
+        return await this.ownerService.searchBooking(ctx, input, lang);
+      }
+
+      const step = s.step;
       if (
-        ctx.session.step &&
+        step === 'ADVERTISEMENT_TITLE' ||
+        step === 'ADVERTISEMENT_DESCRIPTION'
+      ) {
+        return await this.ownerService.ownerAdvertisement(
+          ctx,
+          step,
+          text,
+          lang,
+        );
+      }
+      if (
+        step &&
         [
           'enter_schedule_time',
           'edit_schedule_time',
           'special_time',
           'special_time_edit',
-        ].includes(ctx.session.step)
+        ].includes(step)
       ) {
-        return this.ownerService.handleSchedule(ctx, lang, text);
+        return await this.ownerService.handleSchedule(ctx, lang, text);
       }
-
       if (
-        ctx.session.step &&
+        step &&
         [
           'add_off_stadion_week',
           'add_special',
           'week_edit',
           'edit_specile',
-        ].includes(ctx.session.step)
+        ].includes(step)
       ) {
-        return this.ownerService.handleOffDays(ctx, lang, text);
+        return await this.ownerService.handleOffDays(ctx, lang, text);
+      }
+      if (step === 'price')
+        return await this.ownerService.handlePrice(ctx, lang, text);
+
+      if (s.adminOwnerSearch?.active) {
+        const { promptMessageId } = s.adminOwnerSearch;
+        s.adminOwnerSearch = undefined;
+        if (!this.isAdmin(ctx)) return;
+        await ctx
+          .deleteMessages([promptMessageId, message.message_id])
+          .catch(() => undefined);
+        return await this.adminPaneli.handleAdminOwnerSearchText(ctx, text);
       }
 
-      if (ctx.session.step === 'price') {
-        return this.ownerService.handlePrice(ctx, lang, text);
-      }
-      if (ctx.session.adminOwnerSearch) {
-        const searchState = ctx.session.adminOwnerSearch;
+      if (s.admin_step === 'admin_bron_name')
+        return await this.handleAdminBronName(ctx, text, lang);
+      if (s.admin_step === 'admin_bron_phone')
+        return await this.handleAdminBronPhone(ctx, text, lang);
 
-        if (searchState.active) {
-          const promptMessageId = searchState.promptMessageId;
-          const searchText = ctx.message.text;
-
-          ctx.session.adminOwnerSearch = undefined;
-
-          try {
-            await ctx.deleteMessages([promptMessageId, ctx.message.message_id]);
-          } catch {}
-
-          await this.adminPaneli.handleAdminOwnerSearchText(ctx, searchText);
-          return;
-        }
-        return;
-      }
-      if (ctx.session.admin_step === 'admin_bron_name') {
-        const name = text.trim();
-
-        if (!name || name.length < 2 || name.length > 50) {
-          const sent = await ctx.reply(
-            this.i18n.translate('admin.booking.invalid_name', { lang }),
-          );
-          ctx.session.admin_booking_messages ??= [];
-          ctx.session.admin_booking_messages.push(sent.message_id);
-          return;
-        }
-        ctx.session.admin_bron_name = text;
-        try {
-          await ctx.editMessageText(
-            this.i18n.translate('admin.booking.enter_phone', { lang }),
-          );
-        } catch (error) {
-          const sent = await ctx.reply(
-            this.i18n.translate('admin.booking.enter_phone', { lang }),
-          );
-          ctx.session.admin_booking_messages ??= [];
-          ctx.session.admin_booking_messages.push(sent.message_id);
-        }
-        ctx.session.admin_step = 'admin_bron_phone';
-        return;
-      }
-      if (ctx.session.admin_step === 'admin_bron_phone') {
-        try {
-          const phone = text;
-
-          const phoneRegex = /^(?:\+998|998)?[0-9]{9}$/;
-
-          if (!phone || !phoneRegex.test(phone)) {
-            const sent = await ctx.reply(
-              this.i18n.translate('error.phone_invalid', { lang }),
-            );
-            ctx.session.admin_booking_messages ??= [];
-            ctx.session.admin_booking_messages.push(sent.message_id);
-            return;
-          }
-
-          let normalizedPhone = phone;
-
-          if (phone.length === 9) {
-            normalizedPhone = `+998${phone}`;
-          } else if (phone.startsWith('998')) {
-            normalizedPhone = `+${phone}`;
-          }
-          ctx.session.admin_bron_phone = phone;
-          const owner = await this.prisma.owners.findUnique({
-            where: { chatID: String(ctx.from?.id) },
-          });
-          if (!owner) {
-            await this.utils.errorFunction(ctx);
-            return;
-          }
-          const stadions = await this.prisma.stadion.findMany({
-            where: { owner_id: owner.id },
-          });
-          if (!stadions.length) {
-            await ctx.answerCbQuery(
-              this.i18n.translate('stadions.not_fount', { lang }),
-            );
-            return;
-          }
-          const buttons: InlineKeyboardButton[][] = stadions.map((item) => [
-            {
-              text:
-                item.name.length > 20
-                  ? `🏟  ${item.name.slice(0, 20)}...`
-                  : `🏟  ` + item.name,
-              callback_data: `Newbooking_stadions_${item.id}_${lang}`,
-            },
-          ]);
-          buttons.push([
-            {
-              text: this.i18n.translate('schedule.back', { lang }),
-              callback_data: 'back_owner_11',
-            },
-          ]);
-          await this.utils.safeEditOrReply(
-            ctx,
-            this.i18n.translate('admin.select_stadium', { lang }),
-            { inline_keyboard: buttons },
-          );
-
-          return;
-        } catch (error) {
-          await this.utils.errorFunction(ctx);
-        }
-      }
-
-      ctx.reply(this.i18n.translate('error.else', { lang, args: { text } }));
+      await ctx.reply(
+        t('error.else', { text: escapeHtml(text.slice(0, 100)) }),
+      );
     } catch (error) {
-      this.utils.errorFunction(ctx);
+      await this.utils.errorFunction(ctx, error, ErrorContext.USER);
     }
+  }
+
+  private async trackOwnerBooking(ctx: MyContext, text: string): Promise<void> {
+    const sent = await ctx.reply(text);
+    ctx.session.ownerActiveBooking ??= [];
+    ctx.session.ownerActiveBooking.push(sent.message_id);
+  }
+
+  private static readonly NAME_REGEX = /^[\p{L}\p{M}0-9\s'’ʻʼ.-]+$/u;
+
+  private normalizeUzPhone(raw: string): string | null {
+    const compact = raw.replace(/[\s()-]/g, '');
+    const match = /^(?:\+?998)?(\d{9})$/.exec(compact);
+    return match ? `+998${match[1]}` : null;
+  }
+
+  private async replyWithBack(
+    ctx: MyContext,
+    lang: string,
+    key: string,
+    backCallback = 'errorBack_1',
+  ): Promise<void> {
+    const t = this.tr(lang);
+    await ctx.reply(t(key), {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: t('schedule.back'), callback_data: backCallback }],
+        ],
+      },
+    });
+  }
+
+  private async trackMessage(
+    ctx: MyContext,
+    key: 'admin_booking_messages',
+    text: string,
+  ): Promise<void> {
+    const sent = await ctx.reply(text);
+    ctx.session[key] ??= [];
+    ctx.session[key].push(sent.message_id);
+  }
+
+  private async handleCheckin(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    const token = text.slice('checkin_ADMIN_'.length);
+    const data = this.qrservice.verifyQr(token);
+    if (!data) return this.replyWithBack(ctx, lang, 'error.qr_error');
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: data.bookingId },
+      include: { stadion: { select: { owner: { select: { chatID: true } } } } },
+    });
+    if (!booking)
+      return this.replyWithBack(ctx, lang, 'error.booking_not_found');
+
+    if (String(ctx.from?.id) !== booking.stadion.owner.chatID) {
+      return this.replyWithBack(ctx, lang, 'error.not_admin_for_stadion');
+    }
+
+    const payable =
+      (booking.payment_method === 'CARD' && booking.status === 'PAID') ||
+      (booking.payment_method === 'CASH' && booking.status === 'CONFIRMED');
+    if (!payable)
+      return this.replyWithBack(
+        ctx,
+        lang,
+        'error.payment_unpaid_or_unconfirmed',
+      );
+
+    const result = await this.prisma.booking.updateMany({
+      where: { id: booking.id, check_in: false },
+      data: { check_in: true },
+    });
+    if (result.count === 0) {
+      return this.replyWithBack(ctx, lang, 'error.already_checked_in');
+    }
+    await this.replyWithBack(ctx, lang, 'success.user_checked_in');
+  }
+
+  private async handleStadionSearch(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    ctx.session.stadion.name = null;
+    const searchName = text.slice(0, 50);
+
+    const stadions = await this.prisma.stadion.findMany({
+      where: {
+        working_status: true,
+        admin_status: AdminStatus.APPROVED,
+        owner: { status: Admin_S.ACTIVE },
+        name: { contains: searchName, mode: 'insensitive' },
+        stadionChedules: { some: {} },
+      },
+      orderBy: { id: 'asc' },
+      take: 5,
+      include: { region: true, region_items: true },
+    });
+
+    if (!stadions.length) {
+      return this.replyWithBack(
+        ctx,
+        lang,
+        'booking.stadions.notFount_name',
+        'back_user_6',
+      );
+    }
+    for (const item of stadions) {
+      await this.userService.stadionAll_data(ctx, lang, item, '', true);
+    }
+  }
+
+  private async handleStadionEditName(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const name = text.trim();
+
+    if (
+      name.length < 2 ||
+      name.length > 50 ||
+      !BotUpdate.NAME_REGEX.test(name)
+    ) {
+      await ctx.reply(t('booking.stadions.format'));
+      return;
+    }
+
+    const id = Number(ctx.session.stadion?.id);
+    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id))) {
+      ctx.session.stadion.name = null;
+      await ctx.reply(t('admin.access_denied'));
+      return;
+    }
+
+    await this.prisma.stadion.update({ where: { id }, data: { name } });
+    await ctx.reply(t('success.stadium_name_updated'));
+
+    const mini = ctx.session.mini;
+    ctx.session.stadion.name = null;
+    ctx.session.stadion.id = null;
+    ctx.session.mini = null;
+
+    if (mini === true) return this.ownerService.miniStadion(ctx, id, lang);
+    if (mini === false) return this.ownerService.stadionMenyu(ctx, id, lang);
+  }
+
+  private async handleMaxCount(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+
+    if (!/^\d+$/.test(text)) {
+      await ctx.reply(t('error.only_number_error'));
+      return;
+    }
+    const maxCount = Number(text);
+    if (maxCount < 6 || maxCount > 20) {
+      await ctx.reply(t('error.invalid_range_error'));
+      return;
+    }
+
+    const id = Number(ctx.session.stadion?.id);
+    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id))) {
+      ctx.session.maxCount = null;
+      await ctx.reply(t('admin.access_denied'));
+      return;
+    }
+
+    await this.prisma.stadion.update({
+      where: { id },
+      data: { max_count: maxCount },
+    });
+    await ctx.reply(t('success.max_players_updated'));
+
+    ctx.session.stadion.id = null;
+    ctx.session.maxCount = null;
+    await this.ownerService.miniStadion(ctx, id, lang);
+  }
+
+  private async handleAdminBronName(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const name = text.trim();
+
+    if (
+      name.length < 2 ||
+      name.length > 50 ||
+      !BotUpdate.NAME_REGEX.test(name)
+    ) {
+      await this.trackMessage(
+        ctx,
+        'admin_booking_messages',
+        t('admin.booking.invalid_name'),
+      );
+      return;
+    }
+    ctx.session.admin_bron_name = name;
+    ctx.session.admin_step = 'admin_bron_phone';
+    await this.trackMessage(
+      ctx,
+      'admin_booking_messages',
+      t('admin.booking.enter_phone'),
+    );
+  }
+
+  private async handleAdminBronPhone(
+    ctx: MyContext,
+    text: string,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const phone = this.normalizeUzPhone(text);
+    if (!phone) {
+      await this.trackMessage(
+        ctx,
+        'admin_booking_messages',
+        t('error.phone_invalid'),
+      );
+      return;
+    }
+
+    const owner = await this.prisma.owners.findUnique({
+      where: { chatID: String(ctx.from?.id) },
+      select: { id: true },
+    });
+    if (!owner) {
+      ctx.session.admin_step = null;
+      await ctx.reply(t('admin.access_denied'));
+      return;
+    }
+
+    const stadions = await this.prisma.stadion.findMany({
+      where: { owner_id: owner.id },
+      select: { id: true, name: true },
+      orderBy: { id: 'asc' },
+    });
+    if (!stadions.length) {
+      await ctx.reply(t('stadions.not_found'));
+      return;
+    }
+
+    ctx.session.admin_bron_phone = phone;
+
+    const buttons: InlineKeyboardButton[][] = stadions.map((s) => [
+      {
+        text: `🏟 ${s.name.length > 20 ? `${s.name.slice(0, 20)}...` : s.name}`,
+        callback_data: `Newbooking_stadions_${s.id}_${lang}`,
+      },
+    ]);
+    buttons.push([
+      { text: t('schedule.back'), callback_data: 'back_owner_11' },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, t('admin.select_stadium'), {
+      inline_keyboard: buttons,
+    });
   }
 }
