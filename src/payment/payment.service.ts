@@ -14,14 +14,21 @@ import { escapeHtml } from 'src/helpers/stadions';
 import { FiscalService } from 'src/fiscal/fiscal.service';
 import { AlertService } from 'src/alert/alert.service';
 import { AlertType } from 'src/helpers/interface/enum';
+import { InjectBot } from 'nestjs-telegraf';
+import { Telegraf } from 'telegraf';
+import { MyContext } from 'src/helpers/bot.sesion';
+import { I18nService } from 'nestjs-i18n';
+import { PLAN_LABELS } from 'src/helpers/interface';
 @Injectable()
 export class PaymentService {
   private readonly logger = new Logger(PaymentService.name);
   constructor(
+    @InjectBot() private readonly bot: Telegraf<MyContext>,
     private readonly prisma: PrismaService,
     private readonly utils: UtilisService,
     private readonly fiscal: FiscalService,
     private readonly alert: AlertService,
+    private readonly i18n: I18nService,
   ) {}
 
   findAll() {
@@ -33,6 +40,19 @@ export class PaymentService {
       v,
     );
   }
+  private async sendPaidMessage(
+    chatId: string | number | null | undefined,
+    text: string,
+  ) {
+    if (!chatId) return;
+    try {
+      await this.bot.telegram.sendMessage(chatId, text);
+    } catch (e) {
+      // foydalanuvchi botni bloklagan bo'lishi mumkin: to'lovga ta'sir qilmaydi
+      this.logger.warn(`To'lov xabari yuborilmadi (chat ${chatId}): ${e}`);
+    }
+  }
+
   // imzoni provider_data ga yozmaymiz
   private paylovPayload(data: PaylovWebhookDto): Prisma.InputJsonValue {
     const { signature, ...rest } = data;
@@ -47,7 +67,7 @@ export class PaymentService {
     }
 
     try {
-      await this.prisma.$transaction(async (tx) => {
+      const result = await this.prisma.$transaction(async (tx) => {
         const payment = await tx.premiumTransaction.findUnique({
           where: { id: transactionId },
         });
@@ -94,7 +114,7 @@ export class PaymentService {
 
         const owner = await tx.owners.findUnique({
           where: { id: payment.owner_id },
-          select: { id: true },
+          select: { id: true, chatID: true },
         });
         if (!owner) {
           throw new BadRequestException(`Owner #${payment.owner_id} topilmadi`);
@@ -143,7 +163,33 @@ export class PaymentService {
         this.logger.log(
           `Premium faollashtirildi: owner #${owner.id}, plan ${payment.plan}, tugash ${endDate.toISOString()}`,
         );
+        const langs = await this.prisma.sesion.findUnique({
+          where: { chat_id: owner.chatID },
+          select: { lang: true },
+        });
+
+        return {
+          chatId: owner.chatID,
+          lang: langs?.lang ?? 'uz',
+          plan: payment.plan,
+          duration: payment.duration,
+          amount: payment.amount,
+        };
       });
+
+      if (result) {
+        void this.sendPaidMessage(
+          result.chatId,
+          this.i18n.translate('premium.payment.already_success', {
+            lang: result.lang,
+            args: {
+              plan: PLAN_LABELS[result.lang][result.plan],
+              duration: result.duration,
+              amount: formatSum(result.amount),
+            },
+          }),
+        );
+      }
 
       return { success: true };
     } catch (error) {
@@ -179,7 +225,7 @@ export class PaymentService {
       const result = await this.prisma.$transaction(async (tx) => {
         const payment = await tx.tranzaktion.findUnique({
           where: { id: transactionId },
-          include: { booking: true },
+          include: { booking: true, user: true },
         });
 
         if (!payment) {
@@ -246,13 +292,42 @@ export class PaymentService {
         this.logger.log(
           `Payment qabul qilindi: booking #${payment.booking.id}, tx #${payment.id}, tasdiqlandi=${confirmed.count > 0}`,
         );
-        return { processed: true, bookingConfirmed: confirmed.count > 0 };
+        const langs = await this.prisma.sesion.findUnique({
+          where: { chat_id: payment.user.chatID },
+          select: { lang: true },
+        });
+        return {
+          processed: true,
+          bookingConfirmed: confirmed.count > 0,
+          notify: {
+            chatId: payment.user?.chatID,
+            lang: langs?.lang ?? 'uz',
+            date: payment.booking.date,
+            start_time: payment.booking.start_time,
+            end_time: payment.booking.end_time,
+            total: payment.booking.total_price,
+          },
+        };
       });
 
-      // Commit'dan KEYIN ishlaydigan ishlar
       if (result.processed) {
         void this.fiscal.enqueueSale(transactionId);
 
+        if (result.bookingConfirmed && result.notify) {
+          const n = result.notify;
+          void this.sendPaidMessage(
+            n.chatId,
+            this.i18n.translate('booking.payment.already_success', {
+              lang: n.lang,
+              args: {
+                date: formatDate(n.date, n.lang),
+                start_time: n.start_time,
+                end_time: n.end_time,
+                amount: formatSum(n.total),
+              },
+            }),
+          );
+        }
         if (!result.bookingConfirmed) {
           // Pul olingan, lekin bron PENDING emas edi: qo'lda hal qilish yoki qaytarish kerak
           void this.alert.notify(
