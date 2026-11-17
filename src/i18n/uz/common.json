@@ -2,5 +2,6 @@
   "HELLO": "Assalomu alaykum {name}",
   "WELCOME": "Xush kelibsiz!",
   "START": "Tilni tanlayng",
-  "firstName": "Hurmatliy foydalanuvchi"
+  "firstName": "Hurmatliy foydalanuvchi",
+  "no_permission": "⛔ Sizda bu amal uchun ruxsat yo'q."
 }

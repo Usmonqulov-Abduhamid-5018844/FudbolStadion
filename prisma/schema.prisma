@@ -30,6 +30,50 @@ model Owners {
   subscriptions       Subscription[]
   premiumTransactions PremiumTransaction[]
   advertisements      Advertisement[]
+  managers            Manager[]
+}
+
+model Manager {
+  id         Int      @id @default(autoincrement())
+  ownerId    Int      @map("owner_id")
+  telegramId String   @unique @map("telegram_id")
+  name       String
+  phone      String?
+  isPaused   Boolean  @default(false) @map("is_paused")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  owner    Owners           @relation(fields: [ownerId], references: [id])
+  stadions ManagerStadion[]
+
+  @@index([ownerId])
+  @@map("managers")
+}
+
+model ManagerStadion {
+  managerId Int      @map("manager_id")
+  stadionId Int      @map("stadion_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  manager Manager @relation(fields: [managerId], references: [id], onDelete: Cascade)
+  stadion Stadion @relation(fields: [stadionId], references: [id], onDelete: Cascade)
+
+  @@id([managerId, stadionId])
+  @@index([stadionId])
+  @@map("manager_stadions")
+}
+
+model ManagerInvite {
+  id         Int       @id @default(autoincrement())
+  ownerId    Int       @map("owner_id")
+  tokenHash  String    @unique @map("token_hash")
+  stadionIds Int[]     @map("stadion_ids")
+  expiresAt  DateTime  @map("expires_at")
+  usedAt     DateTime? @map("used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("manager_invites")
 }
 
 model Users {
@@ -80,6 +124,7 @@ model Stadion {
   stadionOffDays          stadion_off_days[]
   stadionSpecialSchedules stadion_special_schedule[]
   advertisements          Advertisement[]
+  managerStadions         ManagerStadion[]
 
   @@index([owner_id])
 }
@@ -129,32 +174,71 @@ model Region_item {
 }
 
 model Booking {
-  id               Int            @id @default(autoincrement())
-  user_id          Int?
-  stadion_id       Int
-  customer_name    String?
-  customer_phone   String?
-  date             DateTime       @db.Date
-  start_time       String
-  end_time         String
-  total_price      Int
-  startAt          DateTime
-  endAt            DateTime
-  check_in         Boolean        @default(false)
-  status           Booking_status @default(PENDING)
-  payment_method   Pay_method
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  expires_at       DateTime?
-  status_pay_later Boolean        @default(false)
-  stadion          Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
-  user             Users?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tranzaktions     Tranzaktion[]
-  notifications    Notification[]
+  id                 Int            @id @default(autoincrement())
+  user_id            Int?
+  stadion_id         Int
+  customer_name      String?
+  customer_phone     String?
+  date               DateTime       @db.Date
+  start_time         String
+  end_time           String
+  total_price        Int
+  startAt            DateTime
+  endAt              DateTime
+  check_in           Boolean        @default(false)
+  status             Booking_status @default(PENDING)
+  payment_method     Pay_method
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  expires_at         DateTime?
+  handledByManagerId Int?           @map("handled_by_manager_id")
+  status_pay_later   Boolean        @default(false)
+  stadion            Stadion        @relation(fields: [stadion_id], references: [id], onDelete: Cascade)
+  user               Users?         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tranzaktions       Tranzaktion[]
+  notifications      Notification[]
 
   @@index([status, startAt, status_pay_later])
   @@index([status, endAt, check_in])
   @@index([stadion_id, date])
+}
+
+model Tranzaktion {
+  id                  String            @id @default(uuid()) @db.Uuid
+  user_id             Int
+  user                Users             @relation(fields: [user_id], references: [id])
+  booking_id          Int
+  booking             Booking           @relation(fields: [booking_id], references: [id], onDelete: Restrict)
+  provider            PaymentProvider?
+  gateway_method      GatewayMethod?
+  provider_data       Json?
+  amount              Int?
+  owner_amount        Int?
+  platform_amount     Int?
+  split_status        SplitStatus       @default(NONE)
+  split_partner_id    String?
+  split_sent_at       DateTime?
+  split_data          Json?
+  split_error         String?
+  provider_order_id   String?
+  provider_payment_id String?
+  refund_status       RefundStatus?
+  refunded_sum        Int?
+  refunded_at         DateTime?
+  status              TransactionStatus @default(PENDING)
+  currency            String            @default("UZS")
+  paid_at             DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  fiscal_receipts     FiscalReceipt[]
+
+  @@unique([provider, provider_order_id])
+  @@unique([provider, provider_payment_id])
+  @@index([split_status, paid_at])
+  @@index([user_id])
+  @@index([booking_id])
+  @@index([status, createdAt])
+  @@index([refund_status])
 }
 
 model Subscription {
@@ -173,41 +257,50 @@ model Subscription {
   @@index([ownerId, isActive])
 }
 
-model Tranzaktion {
-  id               String           @id @default(uuid()) @db.Uuid
-  user_id          Int
-  user             Users            @relation(fields: [user_id], references: [id])
-  booking_id       Int
-  booking          Booking          @relation(fields: [booking_id], references: [id], onDelete: Restrict)
-  provider         PaymentProvider?
-  gateway_method   GatewayMethod?
-  provider_data    Json?
-  amount           Int?
-  owner_amount     Int?
-  platform_amount  Int? 
-  split_status     SplitStatus      @default(NONE)
-  split_partner_id String?
-  split_sent_at    DateTime?
-  split_data       Json?
-  split_error      String?
-  provider_order_id   String?
-  provider_payment_id String?
-  refund_status       RefundStatus?
-  refunded_sum        Int?
-  refunded_at         DateTime?
-  status              TransactionStatus @default(PENDING)
-  currency            String            @default("UZS")
-  paid_at             DateTime?
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+model AdminAudit {
+  id        Int      @id @default(autoincrement())
+  adminChat String
+  action    String
+  entity    String
+  entityId  String
+  before    Json?
+  after     Json?
+  createdAt DateTime @default(now())
 
-  @@unique([provider, provider_order_id])
-  @@unique([provider, provider_payment_id])
-  @@index([split_status, paid_at])
-  @@index([user_id])
-  @@index([booking_id])
-  @@index([status, createdAt])
-  @@index([refund_status])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+enum FiscalType {
+  SALE
+  REFUND
+}
+
+enum FiscalStatus {
+  PENDING
+  DONE
+  FAILED
+  SKIPPED
+}
+
+model FiscalReceipt {
+  id              String       @id @default(uuid()) @db.Uuid
+  tranzaktion_id  String       @db.Uuid
+  tranzaktion     Tranzaktion  @relation(fields: [tranzaktion_id], references: [id], onDelete: Restrict)
+  type            FiscalType
+  status          FiscalStatus @default(PENDING)
+  amount          Int
+  receipt_url     String?
+  provider_data   Json?
+  error           String?
+  attempts        Int          @default(0)
+  next_attempt_at DateTime?
+  sent_at         DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@unique([tranzaktion_id, type])
+  @@index([status, next_attempt_at])
 }
 
 model PremiumTransaction {
@@ -425,9 +518,11 @@ enum PaymentProvider {
 enum GatewayMethod {
   CLICK
   PAYME
-  UZUM
   PAYLOV
+  UZUM
   CARD
+  UZQR
+  ALIF
 }
 
 enum SplitStatus {

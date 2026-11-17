@@ -29,7 +29,10 @@
       "click": "Click",
       "payme": "Payme",
       "uzum": "Uzum Bank",
-      "paylov": "Paylov"
+      "paylov": "Paylov",
+      "card": "Karta",
+      "uzqr": "UzQR",
+      "alif": "Alif"
     },
     "button": "💳 To'lash",
     "pay_now": "💳 To'lovni yakunlash uchun quyidagi tugmani bosing",

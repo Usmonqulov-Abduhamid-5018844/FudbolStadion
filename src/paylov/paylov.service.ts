@@ -11,20 +11,16 @@ import {
   PaylovMethod,
 } from 'src/helpers/interface/enum';
 
-// GET /payments/providers ishlamay qolsa, bot tugmasiz qolmasligi uchun
 const FALLBACK_METHODS: PaylovMethod[] = [
   { name: 'payme', label: 'Payme', sort_order: 1, is_active: true },
   { name: 'click', label: 'Click', sort_order: 2, is_active: true },
 ];
-
-// Botda ko'rsatilmaydigan usullar (karta ma'lumotini serverimiz orqali o'tkazmaymiz)
 const HIDDEN_METHODS = ['card'];
 
 @Injectable()
 export class PaylovService {
   private readonly logger = new Logger(PaylovService.name);
 
-  // .env dan o'qiladi; boshidagi/oxiridagi bo'sh joy va oxirgi "/" olib tashlanadi
   private get baseUrl(): string {
     return (process.env.PAYLOV_API_URL ?? '').trim().replace(/\/+$/, '');
   }
@@ -35,7 +31,6 @@ export class PaylovService {
     return (process.env.PAYLOV_API_SECRET ?? '').trim();
   }
 
-  /** 'https://apidev.wlcm.uz/api/v1' -> '/api/v1' (imzo shu yo'l bilan hisoblanadi) */
   private get basePath(): string {
     return new URL(this.baseUrl).pathname.replace(/\/+$/, '');
   }
@@ -51,7 +46,7 @@ export class PaylovService {
     const b = Buffer.from(receivedHex, 'hex');
     return a.length === b.length && timingSafeEqual(a, b);
   }
-  // ---- Chiquvchi so'rov imzosi (siz -> Paylov) ----
+
   private signRequest(
     method: string,
     signedPath: string,
@@ -64,7 +59,7 @@ export class PaylovService {
       [method, signedPath, ts, bodyHash].join('\n'),
     );
   }
-  // ---- Kiruvchi webhook imzosi (Paylov -> siz) ----
+
   verifyWebhookSignature(d: {
     order_id: number;
     payment_id: number;
@@ -79,12 +74,6 @@ export class PaylovService {
     return this.safeEqualHex(this.hmacHex(secret, msg), d.signature);
   }
 
-  /**
-   * Imzolangan so'rov yuborish.
-   * path: bazadan keyingi qism, masalan '/integrations/checkout'
-   * URL     = baseUrl  + path -> https://apidev.wlcm.uz/api/v1/integrations/checkout
-   * Imzo    = basePath + path -> /api/v1/integrations/checkout  (domensiz, to'liq yo'l)
-   */
   private async request<T>(
     method: 'GET' | 'POST',
     path: string,
@@ -96,6 +85,9 @@ export class PaylovService {
     const signature = this.signRequest(method, signedPath, ts, body);
     let res: Response;
     try {
+      this.logger.debug(
+        `Paylov debug: url=${this.baseUrl + path} keyLen=${this.apiKey?.length} keyStart=${this.apiKey?.slice(0, 4)} keyEnd=${this.apiKey?.slice(-2)}`,
+      );
       res = await fetch(this.baseUrl + path, {
         method,
         headers: {
@@ -117,9 +109,16 @@ export class PaylovService {
       this.logger.error(
         `Paylov ${method} ${signedPath} -> ${res.status}: ${text}`,
       );
-      throw new BadGatewayException(`Paylov xatosi (${res.status})`);
+      throw new BadGatewayException(
+        `Paylov xatosi (${res.status}): ${text.slice(0, 200)}`,
+      );
     }
-    return JSON.parse(text) as T;
+    if (!text) return {} as T;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new BadGatewayException('Paylov javobi JSON emas');
+    }
   }
 
   async getActiveMethods(): Promise<PaylovMethod[]> {
@@ -128,12 +127,11 @@ export class PaylovService {
       return this.methodsCache.data;
     }
     try {
-      
       const all = await this.request<PaylovMethod[]>(
         'GET',
         '/payments/providers',
       );
-      
+
       const data = all
         .filter(
           (m) => m.is_active && !HIDDEN_METHODS.includes(normalize(m.name)),
@@ -149,11 +147,6 @@ export class PaylovService {
     }
   }
 
-  /**
-   * Checkout yaratish.
-   * amountSom: so'mda (Paylov'ga tiyinda yuboriladi).
-   * method: faqat faol usullardan biri bo'lishi shart (soxta callback_data'dan himoya).
-   */
   async createCheckout(p: {
     externalId: string;
     amountSom: number;
@@ -171,11 +164,6 @@ export class PaylovService {
       throw new BadRequestException("Noto'g'ri summa");
     }
 
-    // const provider = ['paylov', 'uzum'].includes(method)
-    //   ? method.charAt(0).toUpperCase() + method.slice(1)
-    //   : method;
-
-      
     const res = await this.request<PaylovCheckoutResponse>(
       'POST',
       '/integrations/checkout',
@@ -193,5 +181,38 @@ export class PaylovService {
     }
 
     return res as PaylovCheckoutResponse & { checkout_url: string };
+  }
+
+  /** Fiskal chek ro'yxatdan o'tkazish. items[].price TIYINDA */
+  async registerFiscalReceipt(p: {
+    paymentId: string;
+    items: { title: string; price: number; count: number }[];
+  }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      'POST',
+      '/fiscalization/register',
+      {
+        payment_id: this.asPaymentId(p.paymentId),
+        items: p.items,
+      },
+    );
+  }
+
+  /** Avval fiskallangan to'lov uchun qaytarish cheki */
+  async refundFiscalReceipt(
+    paymentId: string,
+  ): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(
+      'POST',
+      '/fiscalization/refund',
+      {
+        payment_id: this.asPaymentId(paymentId),
+      },
+    );
+  }
+
+  private asPaymentId(id: string): number | string {
+    const n = Number(id);
+    return Number.isSafeInteger(n) ? n : id;
   }
 }

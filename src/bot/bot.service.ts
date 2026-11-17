@@ -21,6 +21,8 @@ import {
 } from 'src/helpers/interface/enum';
 import { canOwnerAcceptCard, escapeHtml } from 'src/helpers/stadions';
 import { AlertService } from 'src/alert/alert.service';
+import { ManagersService } from 'src/managers/managers.service';
+import { ActorService } from 'src/common/actor/actor.service';
 
 @Injectable()
 export class BotService {
@@ -44,20 +46,22 @@ export class BotService {
     private readonly utils: UtilisService,
     private readonly adminService: AdminService,
     private readonly alert: AlertService,
+    private readonly managers: ManagersService,
+    private readonly actorService: ActorService,
   ) {}
-
+ 
   private isSuperAdmin(ctx: MyContext): boolean {
-  const id = ctx.from?.id;
-  return id !== undefined && this.SuperAdminChatid.includes(Number(id));
-}
+    const id = ctx.from?.id;
+    return id !== undefined && this.SuperAdminChatid.includes(Number(id));
+  }
 
-private isAdmin(ctx: MyContext): boolean {
-  const id = ctx.from?.id;
-  return (
-    this.isSuperAdmin(ctx) ||
-    (id !== undefined && this.AdminChatid.includes(Number(id)))
-  );
-}
+  private isAdmin(ctx: MyContext): boolean {
+    const id = ctx.from?.id;
+    return (
+      this.isSuperAdmin(ctx) ||
+      (id !== undefined && this.AdminChatid.includes(Number(id)))
+    );
+  }
 
   async start(ctx: MyContext) {
     const lang = await this.utils.langs(ctx);
@@ -1053,9 +1057,11 @@ private isAdmin(ctx: MyContext): boolean {
         );
         return;
       }
-      if(this.isAdmin(ctx)){
-       await ctx.reply(this.i18n.translate("booking.booking_user_only",{lang}))
-        return
+      if (this.isAdmin(ctx)) {
+        await ctx.reply(
+          this.i18n.translate('booking.booking_user_only', { lang }),
+        );
+        return;
       }
       if (owner) {
         await ctx.reply(
@@ -1353,6 +1359,66 @@ private isAdmin(ctx: MyContext): boolean {
       return this.checket(ctx);
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.PAYMENT);
+    }
+  }
+
+  async handleManagerInvite(ctx: MyContext, token: string): Promise<void> {
+    const tgId = String(ctx.from?.id);
+    const name =
+      [ctx.from?.first_name, ctx.from?.last_name].filter(Boolean).join(' ') ||
+      'Manager';
+
+    const session = await this.prisma.sesion.findUnique({
+      where: { chat_id: tgId },
+    });
+    const lang = session?.lang ?? 'uz';
+    ctx.session.lang = lang;
+
+    const t = (key: string, args?: Record<string, string | number>): string =>
+      this.i18n.t(key, { lang, args });
+
+    const result = await this.managers.acceptInvite(tgId, name, token);
+
+    if (!result.ok) {
+      const key = {
+        INVALID: 'manager.invite_invalid',
+        IS_OWNER: 'manager.invite_is_owner',
+        OTHER_OWNER: 'manager.invite_other_owner',
+      }[result.reason];
+      await ctx.reply(t(key));
+      return;
+    }
+
+    ctx.actor = await this.actorService.resolve(tgId);
+
+    await ctx.reply(
+      t('manager.joined', { stadions: result.stadionNames.join(', ') }),
+    );
+
+    try {
+      const ownerSession = await this.prisma.sesion.findUnique({
+        where: { chat_id: result.ownerChatId },
+      });
+      const ownerT = (
+        key: string,
+        args?: Record<string, string | number>,
+      ): string => this.i18n.t(key, { lang: ownerSession?.lang ?? 'uz', args });
+
+      await ctx.telegram.sendMessage(
+        result.ownerChatId,
+        ownerT('manager.joined_owner', {
+          name: result.managerName,
+          stadions: result.stadionNames.join(', '),
+        }),
+      );
+    } catch (error) {
+      await this.utils.errorFunction(ctx, error, ErrorContext.COMMON);
+    }
+
+    if (session) {
+      await this.checket(ctx);
+    } else {
+      await this.start(ctx);
     }
   }
 }

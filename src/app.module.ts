@@ -21,6 +21,11 @@ import { WeeklyReportModule } from './mail/weekly-report.module';
 import { AppController } from './app.controller';
 import { PaylovModule } from './paylov/paylov.module';
 import { AlertModule } from './alert/alert.module';
+import { FiscalModule } from './fiscal/fiscal.module';
+import { ActorModule } from './common/actor/actor.module';
+import { ActorService } from './common/actor/actor.service';
+import { ActorMiddleware } from './bot/middlewares/actor.middleware';
+import { ManagersModule } from './managers/managers.module';
 
 @Module({
   controllers: [AppController],
@@ -38,20 +43,30 @@ import { AlertModule } from './alert/alert.module';
     ScheduleModule.forRoot(),
 
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
-    TelegrafModule.forRoot({
-      token: String(process.env.BOT_TOKEN),
-      middlewares: [
-        session({
-          defaultSession: () => ({
-            ...structuredClone(INITIAL_SESSION),
-            stadion: {
-              ...structuredClone(INITIAL_SESSION.stadion),
-              special: new Date(),
-            },
-          }),
-        }),
-      ],
+
+    TelegrafModule.forRootAsync({
+      inject: [ActorService],
+      useFactory: (actorService: ActorService) => {
+        const actorMw = new ActorMiddleware(actorService);
+        return {
+          token: String(process.env.BOT_TOKEN),
+          middlewares: [
+            session({
+              defaultSession: () => ({
+                ...structuredClone(INITIAL_SESSION),
+                stadion: {
+                  ...structuredClone(INITIAL_SESSION.stadion),
+                  special: new Date(),
+                },
+              }),
+            }),
+            actorMw.use,
+          ],
+        };
+      },
     }),
+    ManagersModule,
+    ActorModule,
     PrismaModule,
     BotModule,
     UtileModule,
@@ -65,6 +80,7 @@ import { AlertModule } from './alert/alert.module';
     NotifikationModule,
     PaylovModule,
     AlertModule,
+    FiscalModule,
   ],
 })
 export class AppModule {}

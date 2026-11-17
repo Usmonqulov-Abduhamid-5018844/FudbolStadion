@@ -181,6 +181,7 @@ export const INITIAL_SESSION: ISession = {
     special: new Date(),
     off: null,
   },
+  managerPick: [],
 };
 
 export enum PremiumPlan {

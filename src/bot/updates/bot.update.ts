@@ -1,5 +1,4 @@
 import { I18nService, logger } from 'nestjs-i18n';
-import { BotService } from './bot.service';
 import { Action, Ctx, On, Start, Update } from 'nestjs-telegraf';
 import { MyContext } from 'src/helpers/bot.sesion';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -70,6 +69,7 @@ import {
 import { Logger } from '@nestjs/common';
 import { PaylovService } from 'src/paylov/paylov.service';
 import { AlertService } from 'src/alert/alert.service';
+import { BotService } from '../bot.service';
 class InvalidCallbackError extends Error {
   constructor(message: string) {
     super(message);
@@ -514,6 +514,9 @@ export class BotUpdate {
       ctx.session = structuredClone(INITIAL_SESSION);
 
       const payload: string | undefined = ctx.payload;
+      if (payload?.startsWith('mgr_')) {
+        return await this.botService.handleManagerInvite(ctx, payload.slice(4));
+      }
       if (payload?.startsWith('stadionBooking_')) {
         return await this.botService.handlePayload(ctx, payload);
       }
@@ -1891,13 +1894,11 @@ export class BotUpdate {
         !transaction.provider ||
         !transaction.provider_payment_id
       ) {
-        // g'ayrioddiy holat: BOOKING kontekstida alert ketadi
         throw new Error(
           `Bron #${booking.id} PAID, lekin yaroqli SUCCESS tranzaksiya topilmadi`,
         );
       }
 
-      // Bron holati va tranzaksiya birga o'zgaradi: yarim holat qolmaydi
       const locked = await this.prisma.$transaction(async (tx) => {
         const res = await tx.booking.updateMany({
           where: { id: booking.id, status: 'PAID' },
@@ -3553,7 +3554,6 @@ export class BotUpdate {
       { context: ErrorContext.STADION },
     );
   }
-
   @Action(/^admin_back_(\d+)$/)
   async adminBack(@Ctx() ctx: MyContext): Promise<void> {
     await this.runAdmin(ctx, async (lang, parts) => {
@@ -3567,6 +3567,117 @@ export class BotUpdate {
       }
     });
   }
+
+  @Action(/^adminBk_list_([lpardxn])_(\d+)$/)
+  async adminBookingList(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminBookingList(ctx, m[1], Number(m[2]), lang);
+      },
+      { context: ErrorContext.ADMIN },
+    );
+  }
+
+  @Action(/^adminBk_v_(\d+)_([lpardxn])_(\d+)$/)
+  async adminBookingView(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminBookingView(
+          ctx,
+          Number(m[1]),
+          m[2],
+          Number(m[3]),
+          this.isSuperAdmin(ctx),
+          lang,
+        );
+      },
+      { context: ErrorContext.ADMIN },
+    );
+  }
+
+  @Action(
+    /^adminBk_(ask|do)_(\d+)_(CONFIRMED|COMPLETED|NOSHOW|CANCELED)_([lpardxn])_(\d+)$/,
+  )
+  async adminBookingChange(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminBookingChange(
+          ctx,
+          m[1] as 'ask' | 'do',
+          Number(m[2]),
+          m[3] as Booking_status,
+          m[4],
+          Number(m[5]),
+          lang,
+        );
+      },
+      { level: 'super', context: ErrorContext.BOOKING },
+    );
+  }
+
+  @Action(/^adminTx_menu$/)
+  async adminTxMenu(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => this.adminPaneli.adminTxMenu(ctx, lang),
+      { context: ErrorContext.ADMIN },
+    );
+  }
+
+  @Action(/^adminTx_list_([rpfsa])_(\d+)$/)
+  async adminTxList(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminTxList(ctx, m[1], Number(m[2]), lang);
+      },
+      { context: ErrorContext.ADMIN },
+    );
+  }
+
+  @Action(/^adminTx_v_([0-9a-f-]{36})_([rpfsab])_(\d+)$/)
+  async adminTxView(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminTxView(
+          ctx,
+          m[1],
+          m[2],
+          Number(m[3]),
+          this.isSuperAdmin(ctx),
+          lang,
+        );
+      },
+      { context: ErrorContext.ADMIN },
+    );
+  }
+
+  @Action(/^adminTx_(ask|do)_([0-9a-f-]{36})$/)
+  async adminTxRefund(@Ctx() ctx: MyContext): Promise<void> {
+    await this.runAdmin(
+      ctx,
+      (lang) => {
+        const m = ctx.match as RegExpMatchArray;
+        return this.adminPaneli.adminTxRefund(
+          ctx,
+          m[1] as 'ask' | 'do',
+          m[2],
+          lang,
+        );
+      },
+      { level: 'super', context: ErrorContext.REFUND },
+    );
+  }
+
   /////////////////////////////////////  ADMIN PANELi  /////////////////////////////////////
 
   private static readonly HELP_OWNER = new Map<string, string>([
@@ -3714,6 +3825,7 @@ export class BotUpdate {
         item('settings.notification', 'notification'),
         item('settings.phone', 'phone'),
         item('premium.advertising.button', 'advertising'),
+        [{text:t('manager.menu'),callback_data: 'ownMgr_list_1'}],
         item('premium.premium', 'ownerPremium'),
         [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
       ],

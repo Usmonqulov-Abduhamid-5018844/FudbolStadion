@@ -22,6 +22,95 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { UtilisService } from 'src/utils/utile.service';
 import { InlineKeyboardButton } from 'telegraf/types';
 
+import { Booking_status, RefundStatus } from '@prisma/client';
+import { statusMap } from 'src/helpers/bookingStatus';
+import { getPaymentText } from 'src/helpers/peyments_type';
+
+const REFUND_DONE = RefundStatus.SUCCEEDED;
+
+const BOOKING_PAGE_SIZE = 5;
+const TX_PAGE_SIZE = 5;
+
+const ADMIN_TEXT = {
+  empty: 'Hech narsa topilmadi',
+  notFound: 'Topilmadi',
+  stateChanged: "Holat o'zgargan, ro'yxatni yangilang",
+  notAllowed: "Bu o'tish ruxsat etilmagan",
+  hasPayment:
+    "Bronda muvaffaqiyatli to'lov bor. Bekor qilish uchun qaytarish oqimidan foydalaning",
+  noAmount: "Tranzaksiyada summa yo'q, qo'lda belgilab bo'lmaydi",
+  saved: 'Saqlandi',
+};
+
+type BookingFilterKey = 'l' | 'p' | 'a' | 'r' | 'd' | 'x' | 'n';
+const BOOKING_FILTERS: Record<
+  BookingFilterKey,
+  { label: string; statuses: Booking_status[] | null }
+> = {
+  l: { label: '📋 Hammasi', statuses: null },
+  p: { label: '🟡 Kutilayotgan', statuses: ['PENDING'] },
+  a: { label: '🟢 Faol', statuses: ['CONFIRMED', 'PAID'] },
+  r: { label: '💸 Qaytarish', statuses: ['REFUND_PENDING', 'REFUNDED'] },
+  d: { label: '✅ Yakunlangan', statuses: ['COMPLETED'] },
+  x: { label: '❌ Bekor qilingan', statuses: ['CANCELED'] },
+  n: { label: '🚫 Kelmagan', statuses: ['NOSHOW'] },
+};
+
+const BOOKING_EMOJI: Record<string, string> = {
+  PENDING: '🟡',
+  CONFIRMED: '🟢',
+  PAID: '💳',
+  COMPLETED: '✅',
+  CANCELED: '❌',
+  NOSHOW: '🚫',
+  REFUND_PENDING: '⏳',
+  REFUNDED: '💸',
+};
+
+/** Qo'lda ruxsat etilgan bron o'tishlari. */
+const BOOKING_TRANSITIONS: Partial<Record<Booking_status, Booking_status[]>> = {
+  PENDING: ['CONFIRMED', 'CANCELED'],
+  CONFIRMED: ['COMPLETED', 'NOSHOW', 'CANCELED'],
+  PAID: ['COMPLETED', 'NOSHOW'], // PAID ni bekor qilish: qaytarish oqimi orqali
+};
+
+const BOOKING_ACTION_LABEL: Partial<Record<Booking_status, string>> = {
+  CONFIRMED: '✅ Tasdiqlash',
+  COMPLETED: '🏁 Yakunlash',
+  NOSHOW: '🚫 Kelmadi',
+  CANCELED: '❌ Bekor qilish',
+};
+
+type TxFilterKey = 'r' | 'p' | 'f' | 's' | 'a';
+const TX_FILTERS: Record<
+  TxFilterKey,
+  { label: string; where: Prisma.TranzaktionWhereInput }
+> = {
+  r: {
+    label: '💸 Qaytarish kutilmoqda',
+    where: { refund_status: RefundStatus.PENDING },
+  },
+  p: {
+    label: "⏳ To'lov kutilmoqda",
+    where: { status: TransactionStatus.PENDING },
+  },
+  f: {
+    label: '⚠️ Muvaffaqiyatsiz',
+    where: { status: TransactionStatus.FAILED },
+  },
+  s: {
+    label: '✅ Muvaffaqiyatli',
+    where: { status: TransactionStatus.SUCCESS },
+  },
+  a: { label: '📋 Hammasi', where: {} },
+};
+
+const TX_EMOJI: Record<string, string> = {
+  PENDING: '⏳',
+  SUCCESS: '✅',
+  FAILED: '⚠️',
+};
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NOTIFY_LANGS = ['uz', 'ru', 'en'] as const;
 
@@ -109,6 +198,43 @@ export class AdminService {
     private readonly notificationService: NotifikationService,
   ) {}
 
+  private paginationRow(
+    t: (key: string) => string,
+    page: number,
+    totalPages: number,
+    cb: (page: number) => string,
+  ): InlineKeyboardButton[][] {
+    if (totalPages <= 1) return [];
+    const row: InlineKeyboardButton[] = [];
+    if (page > 1)
+      row.push({ text: t('admin.Previous'), callback_data: cb(page - 1) });
+    row.push({ text: `📄 ${page}/${totalPages}`, callback_data: 'ignore' });
+    if (page < totalPages)
+      row.push({ text: t('admin.Next'), callback_data: cb(page + 1) });
+    return [row];
+  }
+
+  private bookingFilter(key: string) {
+    const cfg = BOOKING_FILTERS[key as BookingFilterKey];
+    if (!cfg) throw new Error(`Noto'g'ri bron filtri: ${key}`);
+    return cfg;
+  }
+
+  private bookingStatusText(status: Booking_status, lang: string): string {
+    return statusMap(status, this.i18n, lang) || status;
+  }
+
+  private txStatusText(tx: {
+    status: string;
+    refund_status: string | null;
+  }): string {
+    const base = `${TX_EMOJI[tx.status] ?? '•'} ${tx.status}`;
+    return tx.refund_status ? `${base} · ↩️ ${tx.refund_status}` : base;
+  }
+
+  private async alertText(ctx: MyContext, text: string): Promise<void> {
+    await ctx.answerCbQuery(text, { show_alert: true }).catch(() => undefined);
+  }
 
   private tr(lang: string) {
     return (key: string, args?: Record<string, unknown>): string =>
@@ -439,13 +565,13 @@ export class AdminService {
         });
         return;
 
-      // hozircha tayyor emas: vaqtinchalik matnlar
       case 'stats':
         await ctx.reply('Statistika');
         return;
-      case 'bookings':
-        await ctx.reply('Bookings');
+      case 'bookings': {
+        await this.showBookingsMenu(ctx, lang);
         return;
+      }
       case 'premium':
         await ctx.reply('Premium');
         return;
@@ -527,7 +653,6 @@ export class AdminService {
         throw new Error(`admins_stadiums: noma'lum type: ${type}`);
     }
   }
-
 
   async stadium_status(
     ctx: MyContext,
@@ -778,240 +903,260 @@ export class AdminService {
     page: number,
     action?: 'activate' | 'block',
   ): Promise<void> {
-    const lang = await this.utils.langs(ctx);
-    const t = this.tr(lang);
-    const currentPage = Math.max(1, Number(page) || 1);
+    try {
+      const lang = await this.utils.langs(ctx);
+      const t = this.tr(lang);
+      const currentPage = Math.max(1, Number(page) || 1);
 
-    const loadOwner = async () => {
-      const owner = await this.prisma.owners.findUnique({
-        where: { id: ownerId },
-        select: { id: true, status: true, full_name: true },
-      });
-      if (!owner) throw new Error(`Owner topilmadi: id=${ownerId}`);
-      return owner;
-    };
-
-    switch (status) {
-      case 'pending':
-      case 'active':
-      case 'blocked':
-        await this.showOwnerList(ctx, status, currentPage, lang);
-        return;
-
-      case 'search': {
-        const sent = await ctx.reply(t('admin.search_prompt'));
-        ctx.session.adminOwnerSearch = {
-          active: true,
-          promptMessageId: sent.message_id,
-        };
-        return;
-      }
-
-      case 'detels': {
-        const [owner, bookingCount] = await Promise.all([
-          this.prisma.owners.findUnique({
-            where: { id: ownerId },
-            include: {
-              subscriptions: {
-                where: { isActive: true },
-                select: { id: true },
-              },
-              _count: { select: { stadions: true } },
-            },
-          }),
-          this.prisma.booking.count({
-            where: { stadion: { owner_id: ownerId } },
-          }),
-        ]);
+      const loadOwner = async () => {
+        const owner = await this.prisma.owners.findUnique({
+          where: { id: ownerId },
+          select: { id: true, status: true, full_name: true },
+        });
         if (!owner) throw new Error(`Owner topilmadi: id=${ownerId}`);
+        return owner;
+      };
 
-        const hasActivePremium = owner.subscriptions.length > 0;
-        const text = t('admin.details', {
-          id: owner.id,
-          fullName: escapeHtml(owner.full_name),
-          phone: escapeHtml(owner.phone),
-          email: escapeHtml(owner.email ?? t('admin.email_empty')),
-          stadiumCount: owner._count.stadions,
-          bookingCount,
-          premium: t(
-            hasActivePremium
-              ? 'admin.Premium.active'
-              : 'admin.Premium.inactive',
-          ),
-          status: t(`admin.status.${owner.status.toLowerCase()}`),
-        });
+      switch (status) {
+        case 'pending':
+        case 'active':
+        case 'blocked':
+          await this.showOwnerList(ctx, status, currentPage, lang);
+          return;
 
-        const statusBtn = (
-          act: 'activate' | 'block',
-        ): InlineKeyboardButton => ({
-          text: t(
-            act === 'block' ? 'admin.buttons.block' : 'admin.buttons.activate',
-          ),
-          callback_data: `AdminPanel_Owner_status_${act}_${owner.id}_${currentPage}`,
-        });
-        const statusButtons: InlineKeyboardButton[][] =
-          owner.status === 'PENDING'
-            ? [[statusBtn('activate'), statusBtn('block')]]
-            : owner.status === 'ACTIVE'
-              ? [[statusBtn('block')]]
-              : [[statusBtn('activate')]];
+        case 'search': {
+          const sent = await ctx.reply(t('admin.search_prompt'));
+          ctx.session.adminOwnerSearch = {
+            active: true,
+            promptMessageId: sent.message_id,
+          };
+          return;
+        }
 
-        const canDelete =
-          owner.status === 'BLOCKED' || owner.status === 'PENDING';
-
-        await this.utils.safeEditOrReply(ctx, text, {
-          inline_keyboard: [
-            [
-              {
-                text: t('admin.buttons.stadiums'),
-                callback_data: `AdminOwner_stadiums_${owner.id}_${currentPage}_1`,
+        case 'detels': {
+          const [owner, bookingCount] = await Promise.all([
+            this.prisma.owners.findUnique({
+              where: { id: ownerId },
+              include: {
+                subscriptions: {
+                  where: { isActive: true },
+                  select: { id: true },
+                },
+                _count: { select: { stadions: true } },
               },
-            ],
-            [
-              {
-                text: t('admin.buttons.premium'),
-                callback_data: `AdminOwner_premium_${owner.id}_${currentPage}_1`,
-              },
-            ],
-            ...statusButtons,
-            ...(canDelete
-              ? [
-                  [
-                    {
-                      text: t('admin.buttons.delete'),
-                      callback_data: `AdminPanel_Owner_delete_${owner.id}_${currentPage}`,
-                    },
-                  ],
-                ]
-              : []),
-            [
-              {
-                text: t('schedule.back'),
-                callback_data: `AdminPanel_Owner_${owner.status.toLowerCase()}_${owner.id}_${currentPage}`,
-              },
-            ],
-          ],
-        });
-        return;
-      }
+            }),
+            this.prisma.booking.count({
+              where: { stadion: { owner_id: ownerId } },
+            }),
+          ]);
+          if (!owner) throw new Error(`Owner topilmadi: id=${ownerId}`);
 
-      case 'status': {
-        if (!action)
-          throw new Error(`AdminPanel_owner: status uchun action yo'q`);
-        const owner = await loadOwner();
-        const isBlock = action === 'block';
-
-        await this.utils.safeEditOrReply(
-          ctx,
-          t(isBlock ? 'admin.confirm.block' : 'admin.confirm.activate', {
+          const hasActivePremium = owner.subscriptions.length > 0;
+          const text = t('admin.details', {
+            id: owner.id,
             fullName: escapeHtml(owner.full_name),
-          }),
-          {
-            inline_keyboard: [
-              [
-                {
-                  text: t(
-                    isBlock
-                      ? 'admin.confirm.buttons.confirm_block'
-                      : 'admin.confirm.buttons.confirm_activate',
-                  ),
-                  callback_data: `AdminPanel_Owner_confirm_${action}_${owner.id}_${currentPage}`,
-                },
-              ],
-              [
-                {
-                  text: t('schedule.back'),
-                  callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
-                },
-              ],
-            ],
-          },
-        );
-        return;
-      }
-
-      case 'confirm': {
-        if (!action)
-          throw new Error(`AdminPanel_owner: confirm uchun action yo'q`);
-        const owner = await loadOwner();
-
-        const updated = await this.prisma.owners.update({
-          where: { id: owner.id },
-          data: { status: action === 'block' ? 'BLOCKED' : 'ACTIVE' },
-        });
-
-        await ctx
-          .answerCbQuery(
-            t(
-              updated.status === 'ACTIVE'
-                ? 'admin.status_updated.active'
-                : 'admin.status_updated.blocked',
-              { fullName: owner.full_name },
+            phone: escapeHtml(owner.phone),
+            email: escapeHtml(owner.email ?? t('admin.email_empty')),
+            stadiumCount: owner._count.stadions,
+            bookingCount,
+            premium: t(
+              hasActivePremium
+                ? 'admin.Premium.active'
+                : 'admin.Premium.inactive',
             ),
-          )
-          .catch(() => undefined);
-        await this.AdminPanel_owner(ctx, 'detels', updated.id, currentPage);
-        return;
-      }
+            status: t(`admin.status.${owner.status.toLowerCase()}`),
+          });
 
-      case 'delete': {
-        const owner = await loadOwner();
-        if (owner.status === 'ACTIVE') {
-          throw new Error(`Faol egani o'chirishga urinish: owner=${owner.id}`);
-        }
+          const statusBtn = (
+            act: 'activate' | 'block',
+          ): InlineKeyboardButton => ({
+            text: t(
+              act === 'block'
+                ? 'admin.buttons.block'
+                : 'admin.buttons.activate',
+            ),
+            callback_data: `AdminPanel_Owner_status_${act}_${owner.id}_${currentPage}`,
+          });
+          const statusButtons: InlineKeyboardButton[][] =
+            owner.status === 'PENDING'
+              ? [[statusBtn('activate'), statusBtn('block')]]
+              : owner.status === 'ACTIVE'
+                ? [[statusBtn('block')]]
+                : [[statusBtn('activate')]];
 
-        await this.utils.safeEditOrReply(
-          ctx,
-          t('admin.delete_confirm.message', {
-            fullName: escapeHtml(owner.full_name),
-          }),
-          {
+          const canDelete =
+            owner.status === 'BLOCKED' || owner.status === 'PENDING';
+
+          await this.utils.safeEditOrReply(ctx, text, {
             inline_keyboard: [
               [
                 {
-                  text: t('admin.delete_confirm.confirm'),
-                  callback_data: `AdminPanel_Owner_deletConfirm_${owner.id}_${currentPage}`,
+                  text: t('admin.buttons.stadiums'),
+                  callback_data: `AdminOwner_stadiums_${owner.id}_${currentPage}_1`,
                 },
               ],
               [
                 {
+                  text: t('admin.buttons.premium'),
+                  callback_data: `AdminOwner_premium_${owner.id}_${currentPage}_1`,
+                },
+              ],
+              ...statusButtons,
+              ...(canDelete
+                ? [
+                    [
+                      {
+                        text: t('admin.buttons.delete'),
+                        callback_data: `AdminPanel_Owner_delete_${owner.id}_${currentPage}`,
+                      },
+                    ],
+                  ]
+                : []),
+              [
+                {
                   text: t('schedule.back'),
-                  callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
+                  callback_data: `AdminPanel_Owner_${owner.status.toLowerCase()}_${owner.id}_${currentPage}`,
                 },
               ],
             ],
-          },
-        );
-        return;
-      }
-
-      case 'deletConfirm': {
-        const owner = await loadOwner();
-        if (owner.status === 'ACTIVE') {
-          throw new Error(`Faol egani o'chirishga urinish: owner=${owner.id}`);
+          });
+          return;
         }
 
-        await this.prisma.owners.delete({ where: { id: owner.id } });
+        case 'status': {
+          if (!action)
+            throw new Error(`AdminPanel_owner: status uchun action yo'q`);
+          const owner = await loadOwner();
+          const isBlock = action === 'block';
 
-        await ctx
-          .answerCbQuery(
-            t('admin.status_updated.deleted', { fullName: owner.full_name }),
-          )
-          .catch(() => undefined);
-
-        const blockedCount = await this.prisma.owners.count({
-          where: { status: 'BLOCKED' },
-        });
-        if (blockedCount > 0) {
-          await this.showOwnerList(ctx, 'blocked', 1, lang);
-        } else {
-          await this.admins_stadiums(ctx, 'owners', lang);
+          await this.utils.safeEditOrReply(
+            ctx,
+            t(isBlock ? 'admin.confirm.block' : 'admin.confirm.activate', {
+              fullName: escapeHtml(owner.full_name),
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: t(
+                      isBlock
+                        ? 'admin.confirm.buttons.confirm_block'
+                        : 'admin.confirm.buttons.confirm_activate',
+                    ),
+                    callback_data: `AdminPanel_Owner_confirm_${action}_${owner.id}_${currentPage}`,
+                  },
+                ],
+                [
+                  {
+                    text: t('schedule.back'),
+                    callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
+                  },
+                ],
+              ],
+            },
+          );
+          return;
         }
-        return;
-      }
 
-      default:
-        throw new Error(`AdminPanel_owner: noma'lum status: ${status}`);
+        case 'confirm': {
+          if (!action)
+            throw new Error(`AdminPanel_owner: confirm uchun action yo'q`);
+          const owner = await loadOwner();
+
+          const updated = await this.prisma.owners.update({
+            where: { id: owner.id },
+            data: { status: action === 'block' ? 'BLOCKED' : 'ACTIVE' },
+          });
+
+          await ctx
+            .answerCbQuery(
+              t(
+                updated.status === 'ACTIVE'
+                  ? 'admin.status_updated.active'
+                  : 'admin.status_updated.blocked',
+                { fullName: owner.full_name },
+              ),
+            )
+            .catch(() => undefined);
+          await this.AdminPanel_owner(ctx, 'detels', updated.id, currentPage);
+          return;
+        }
+
+        case 'delete': {
+          const owner = await loadOwner();
+          if (owner.status === 'ACTIVE') {
+            throw new Error(
+              `Faol egani o'chirishga urinish: owner=${owner.id}`,
+            );
+          }
+
+          await this.utils.safeEditOrReply(
+            ctx,
+            t('admin.delete_confirm.message', {
+              fullName: escapeHtml(owner.full_name),
+            }),
+            {
+              inline_keyboard: [
+                [
+                  {
+                    text: t('admin.delete_confirm.confirm'),
+                    callback_data: `AdminPanel_Owner_deletConfirm_${owner.id}_${currentPage}`,
+                  },
+                ],
+                [
+                  {
+                    text: t('schedule.back'),
+                    callback_data: `AdminPanel_Owner_detels_${owner.id}_${currentPage}`,
+                  },
+                ],
+              ],
+            },
+          );
+          return;
+        }
+
+        case 'deletConfirm': {
+          const owner = await loadOwner();
+          if (owner.status === 'ACTIVE') {
+            throw new Error(
+              `Faol egani o'chirishga urinish: owner=${owner.id}`,
+            );
+          }
+          const txCount = await this.prisma.tranzaktion.count({
+            where: { booking: { stadion: { owner_id: owner.id } } },
+          });
+          if (txCount > 0) {
+            await ctx.answerCbQuery(
+              "Bu egada to'lov tranzaksiyalari bor, o'chirib bo'lmaydi",
+              { show_alert: true },
+            );
+            return;
+          }
+
+          await this.prisma.owners.delete({ where: { id: owner.id } });
+
+          await ctx
+            .answerCbQuery(
+              t('admin.status_updated.deleted', { fullName: owner.full_name }),
+            )
+            .catch(() => undefined);
+
+          const blockedCount = await this.prisma.owners.count({
+            where: { status: 'BLOCKED' },
+          });
+          if (blockedCount > 0) {
+            await this.showOwnerList(ctx, 'blocked', 1, lang);
+          } else {
+            await this.admins_stadiums(ctx, 'owners', lang);
+          }
+          return;
+        }
+
+        default:
+          throw new Error(`AdminPanel_owner: noma'lum status: ${status}`);
+      }
+    } catch (error) {
+      this.utils.errorFunction(ctx, error, ErrorContext.ADMIN);
     }
   }
 
@@ -1535,6 +1680,600 @@ export class AdminService {
         `Premium bildirishnomasi yuborilmadi: owner=${owner.id}`,
         error instanceof Error ? error.stack : String(error),
       );
+    }
+  }
+
+  async showBookingsMenu(ctx: MyContext, lang: string): Promise<void> {
+    const t = this.tr(lang);
+    const [grouped, refundPending] = await Promise.all([
+      this.prisma.booking.groupBy({ by: ['status'], _count: { _all: true } }),
+      this.prisma.tranzaktion.count({
+        where: { refund_status: RefundStatus.PENDING },
+      }),
+    ]);
+    const countOf = (statuses: Booking_status[] | null) =>
+      grouped
+        .filter((g) => !statuses || statuses.includes(g.status))
+        .reduce((sum, g) => sum + g._count._all, 0);
+
+    const rows = (
+      Object.entries(BOOKING_FILTERS) as [
+        BookingFilterKey,
+        (typeof BOOKING_FILTERS)[BookingFilterKey],
+      ][]
+    ).map(([key, cfg]) => [
+      {
+        text: `${cfg.label} (${countOf(cfg.statuses)})`,
+        callback_data: `adminBk_list_${key}_1`,
+      },
+    ]);
+
+    await this.utils.safeEditOrReply(
+      ctx,
+      '📅 <b>Bronlar va tranzaksiyalar</b>',
+      {
+        inline_keyboard: [
+          ...rows,
+          [
+            {
+              text: `💸 Qaytarish kutilmoqda (${refundPending})`,
+              callback_data: 'adminTx_list_r_1',
+            },
+          ],
+          [{ text: '💳 Tranzaksiyalar', callback_data: 'adminTx_menu' }],
+          [{ text: t('schedule.back'), callback_data: 'admin_back_1' }],
+        ],
+      },
+    );
+  }
+
+  async adminBookingList(
+    ctx: MyContext,
+    filterKey: string,
+    page: number,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const cfg = this.bookingFilter(filterKey);
+    const where: Prisma.BookingWhereInput = cfg.statuses
+      ? { status: { in: cfg.statuses } }
+      : {};
+
+    const total = await this.prisma.booking.count({ where });
+    if (!total) {
+      await this.alertText(ctx, ADMIN_TEXT.empty);
+      return;
+    }
+    const totalPages = Math.ceil(total / BOOKING_PAGE_SIZE);
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+
+    const items = await this.prisma.booking.findMany({
+      where,
+      orderBy: [{ startAt: 'desc' }, { id: 'desc' }],
+      skip: (currentPage - 1) * BOOKING_PAGE_SIZE,
+      take: BOOKING_PAGE_SIZE,
+      select: {
+        id: true,
+        status: true,
+        date: true,
+        start_time: true,
+        total_price: true,
+      },
+    });
+
+    const rows: InlineKeyboardButton[][] = items.map((b) => [
+      {
+        text: `${BOOKING_EMOJI[b.status] ?? '•'} #${b.id} · ${this.utils.formatCalendarDate(b.date).slice(0, 5)} ${b.start_time} · ${formatSum(b.total_price)}`,
+        callback_data: `adminBk_v_${b.id}_${filterKey}_${currentPage}`,
+      },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, `${cfg.label} · ${total} ta`, {
+      inline_keyboard: [
+        ...rows,
+        ...this.paginationRow(
+          t,
+          currentPage,
+          totalPages,
+          (p) => `adminBk_list_${filterKey}_${p}`,
+        ),
+        [{ text: t('schedule.back'), callback_data: 'admins_bookings' }],
+      ],
+    });
+  }
+
+  async adminBookingView(
+    ctx: MyContext,
+    bookingId: number,
+    filterKey: string,
+    page: number,
+    canEdit: boolean,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const b = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        stadion: {
+          select: { name: true, owner: { select: { full_name: true } } },
+        },
+        user: { select: { full_name: true, phone: true, username: true } },
+        tranzaktions: {
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, status: true, amount: true, refund_status: true },
+        },
+      },
+    });
+    if (!b) {
+      await this.alertText(ctx, ADMIN_TEXT.notFound);
+      return;
+    }
+
+    const customer = b.user
+      ? [
+          escapeHtml(b.user.full_name),
+          escapeHtml(b.user.phone),
+          b.user.username ? `@${escapeHtml(b.user.username)}` : null,
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : `${escapeHtml(b.customer_name ?? '—')} · ${escapeHtml(b.customer_phone ?? '—')}`;
+
+    const txLines = b.tranzaktions.length
+      ? b.tranzaktions
+          .map(
+            (tx) =>
+              `• <code>${tx.id.slice(0, 8)}</code> ${this.txStatusText(tx)} · ${formatSum(tx.amount ?? 0)}`,
+          )
+          .join('\n')
+      : '—';
+
+    const text = [
+      `📅 <b>Bron #${b.id}</b>`,
+      `🏟 ${escapeHtml(b.stadion.name)} (${escapeHtml(b.stadion.owner.full_name)})`,
+      `🗓 ${this.utils.formatCalendarDate(b.date)} · ⏰ ${b.start_time}–${b.end_time}`,
+      `👤 ${customer}`,
+      `💰 ${formatSum(b.total_price)} so'm · ${getPaymentText(b.payment_method, this.i18n.translate('peyments', { lang }))}`,
+      `📌 Holat: <b>${this.bookingStatusText(b.status, lang)}</b>${b.check_in ? ' · ✔️ kelgan' : ''}`,
+      `🕒 Yaratilgan: ${formatDateTime(b.createdAt, lang)}`,
+      b.expires_at && b.status === 'PENDING'
+        ? `⌛ Muddati: ${formatDateTime(b.expires_at, lang)}`
+        : null,
+      '',
+      '<b>💳 Tranzaksiyalar</b>',
+      txLines,
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
+
+    const actionRows: InlineKeyboardButton[][] = (
+      canEdit ? (BOOKING_TRANSITIONS[b.status] ?? []) : []
+    ).map((target) => [
+      {
+        text: BOOKING_ACTION_LABEL[target] ?? target,
+        callback_data: `adminBk_ask_${b.id}_${target}_${filterKey}_${page}`,
+      },
+    ]);
+    const txRows: InlineKeyboardButton[][] = b.tranzaktions.map((tx) => [
+      {
+        text: `💳 ${tx.id.slice(0, 8)} · ${tx.status}`,
+        callback_data: `adminTx_v_${tx.id}_b_${b.id}`,
+      },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, text, {
+      inline_keyboard: [
+        ...txRows,
+        ...actionRows,
+        [
+          {
+            text: t('schedule.back'),
+            callback_data: `adminBk_list_${filterKey}_${page}`,
+          },
+        ],
+      ],
+    });
+  }
+
+  /** mode 'ask': tasdiqlash ekrani; mode 'do': o'zgartirish (super-admin handleri chaqiradi). */
+  async adminBookingChange(
+    ctx: MyContext,
+    mode: 'ask' | 'do',
+    bookingId: number,
+    target: Booking_status,
+    filterKey: string,
+    page: number,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+
+    if (mode === 'ask') {
+      const b = await this.prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { status: true },
+      });
+      if (!b) return this.alertText(ctx, ADMIN_TEXT.notFound);
+      if (!(BOOKING_TRANSITIONS[b.status] ?? []).includes(target)) {
+        return this.alertText(ctx, ADMIN_TEXT.notAllowed);
+      }
+
+      await this.utils.safeEditOrReply(
+        ctx,
+        `⚠️ <b>Bron #${bookingId}</b> holati <b>${this.bookingStatusText(b.status, lang)}</b> dan <b>${this.bookingStatusText(target, lang)}</b> ga o'zgartiriladi.\n\nTasdiqlaysizmi?`,
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '✅ Ha',
+                callback_data: `adminBk_do_${bookingId}_${target}_${filterKey}_${page}`,
+              },
+            ],
+            [
+              {
+                text: t('schedule.back'),
+                callback_data: `adminBk_v_${bookingId}_${filterKey}_${page}`,
+              },
+            ],
+          ],
+        },
+      );
+      return;
+    }
+
+    const adminChat = String(ctx.from?.id);
+    const result = await this.prisma.$transaction(async (db) => {
+      const b = await db.booking.findUnique({
+        where: { id: bookingId },
+        select: {
+          status: true,
+          tranzaktions: {
+            where: { status: TransactionStatus.SUCCESS },
+            select: { id: true },
+          },
+        },
+      });
+      if (!b) return 'not_found' as const;
+      if (!(BOOKING_TRANSITIONS[b.status] ?? []).includes(target)) {
+        return 'not_allowed' as const;
+      }
+      if (target === 'CANCELED' && b.tranzaktions.length > 0) {
+        return 'has_payment' as const;
+      }
+
+      // holat hali o'zgarmagan bo'lsagina yangilanadi (ikki admin birdaniga bossa)
+      const res = await db.booking.updateMany({
+        where: { id: bookingId, status: b.status },
+        data: { status: target },
+      });
+      if (res.count === 0) return 'changed' as const;
+
+      await db.adminAudit.create({
+        data: {
+          adminChat,
+          action: 'BOOKING_STATUS',
+          entity: 'Booking',
+          entityId: String(bookingId),
+          before: { status: b.status },
+          after: { status: target },
+        },
+      });
+      return 'ok' as const;
+    });
+
+    const messages = {
+      not_found: ADMIN_TEXT.notFound,
+      not_allowed: ADMIN_TEXT.notAllowed,
+      has_payment: ADMIN_TEXT.hasPayment,
+      changed: ADMIN_TEXT.stateChanged,
+      ok: ADMIN_TEXT.saved,
+    } as const;
+    await this.alertText(ctx, messages[result]);
+
+    if (result !== 'not_found') {
+      await this.adminBookingView(ctx, bookingId, filterKey, page, true, lang);
+    }
+  }
+
+  async adminTxMenu(ctx: MyContext, lang: string): Promise<void> {
+    const t = this.tr(lang);
+    const entries = Object.entries(TX_FILTERS) as [
+      TxFilterKey,
+      (typeof TX_FILTERS)[TxFilterKey],
+    ][];
+    const counts = await Promise.all(
+      entries.map(([, cfg]) =>
+        this.prisma.tranzaktion.count({ where: cfg.where }),
+      ),
+    );
+
+    await this.utils.safeEditOrReply(ctx, '💳 <b>Tranzaksiyalar</b>', {
+      inline_keyboard: [
+        ...entries.map(([key, cfg], i) => [
+          {
+            text: `${cfg.label} (${counts[i]})`,
+            callback_data: `adminTx_list_${key}_1`,
+          },
+        ]),
+        [{ text: t('schedule.back'), callback_data: 'admins_bookings' }],
+      ],
+    });
+  }
+
+  async adminTxList(
+    ctx: MyContext,
+    filterKey: string,
+    page: number,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const cfg = TX_FILTERS[filterKey as TxFilterKey];
+    if (!cfg) throw new Error(`Noto'g'ri tranzaksiya filtri: ${filterKey}`);
+
+    const total = await this.prisma.tranzaktion.count({ where: cfg.where });
+    if (!total) {
+      await this.alertText(ctx, ADMIN_TEXT.empty);
+      return;
+    }
+    const totalPages = Math.ceil(total / TX_PAGE_SIZE);
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+
+    const items = await this.prisma.tranzaktion.findMany({
+      where: cfg.where,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: (currentPage - 1) * TX_PAGE_SIZE,
+      take: TX_PAGE_SIZE,
+      select: {
+        id: true,
+        amount: true,
+        status: true,
+        refund_status: true,
+        booking_id: true,
+      },
+    });
+
+    const rows: InlineKeyboardButton[][] = items.map((tx) => [
+      {
+        text: `${tx.refund_status === RefundStatus.PENDING ? '💸' : (TX_EMOJI[tx.status] ?? '•')} ${formatSum(tx.amount ?? 0)} · Bron #${tx.booking_id} · ${tx.id.slice(0, 6)}`,
+        callback_data: `adminTx_v_${tx.id}_${filterKey}_${currentPage}`,
+      },
+    ]);
+
+    await this.utils.safeEditOrReply(ctx, `${cfg.label} · ${total} ta`, {
+      inline_keyboard: [
+        ...rows,
+        ...this.paginationRow(
+          t,
+          currentPage,
+          totalPages,
+          (p) => `adminTx_list_${filterKey}_${p}`,
+        ),
+        [
+          {
+            text: t('schedule.back'),
+            callback_data:
+              filterKey === 'r' ? 'admins_bookings' : 'adminTx_menu',
+          },
+        ],
+      ],
+    });
+  }
+
+  /** src: ro'yxat filtri harfi yoki 'b' (bron sahifasidan), n: sahifa yoki bron ID si. */
+  async adminTxView(
+    ctx: MyContext,
+    txId: string,
+    src: string,
+    n: number,
+    canEdit: boolean,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+    const tx = await this.prisma.tranzaktion.findUnique({
+      where: { id: txId },
+      include: {
+        booking: {
+          select: {
+            id: true,
+            status: true,
+            stadion: { select: { name: true } },
+          },
+        },
+        user: { select: { full_name: true, phone: true } },
+      },
+    });
+    if (!tx) {
+      await this.alertText(ctx, ADMIN_TEXT.notFound);
+      return;
+    }
+
+    const code = (v: string | null) =>
+      v ? `<code>${escapeHtml(v)}</code>` : '—';
+    const text = [
+      '💳 <b>Tranzaksiya</b>',
+      `<code>${tx.id}</code>`,
+      `📅 Bron #${tx.booking.id} · ${escapeHtml(tx.booking.stadion.name)} · ${this.bookingStatusText(tx.booking.status, lang)}`,
+      `👤 ${escapeHtml(tx.user.full_name)} · ${escapeHtml(tx.user.phone)}`,
+      `💰 <b>${formatSum(tx.amount ?? 0)}</b> ${tx.currency}` +
+        (tx.owner_amount != null || tx.platform_amount != null
+          ? ` (egasi: ${formatSum(tx.owner_amount ?? 0)} · platforma: ${formatSum(tx.platform_amount ?? 0)})`
+          : ''),
+      `🏦 ${tx.provider ?? '—'} · ${tx.gateway_method ?? '—'}`,
+      `📌 Holat: ${this.txStatusText(tx)}`,
+      `🕒 Yaratilgan: ${formatDateTime(tx.createdAt, lang)}` +
+        (tx.paid_at ? ` · To'langan: ${formatDateTime(tx.paid_at, lang)}` : ''),
+      `🔎 Order: ${code(tx.provider_order_id)}`,
+      `🔎 Payment: ${code(tx.provider_payment_id)}`,
+      tx.refund_status
+        ? `↩️ Qaytarish: ${tx.refund_status}` +
+          (tx.refunded_sum != null ? ` · ${formatSum(tx.refunded_sum)}` : '') +
+          (tx.refunded_at ? ` · ${formatDateTime(tx.refunded_at, lang)}` : '')
+        : null,
+      `🔀 Split: ${tx.split_status}` +
+        (tx.split_error
+          ? ` · ${escapeHtml(tx.split_error.slice(0, 200))}`
+          : ''),
+    ]
+      .filter((line): line is string => line !== null)
+      .join('\n');
+
+    const canMarkRefunded =
+      canEdit &&
+      tx.status === TransactionStatus.SUCCESS &&
+      tx.refund_status === RefundStatus.PENDING;
+
+    await this.utils.safeEditOrReply(ctx, text, {
+      inline_keyboard: [
+        ...(canMarkRefunded
+          ? [
+              [
+                {
+                  text: '💸 Qaytarildi deb belgilash',
+                  callback_data: `adminTx_ask_${tx.id}`,
+                },
+              ],
+            ]
+          : []),
+        [
+          {
+            text: `📅 Bron #${tx.booking.id}`,
+            callback_data: `adminBk_v_${tx.booking.id}_l_1`,
+          },
+        ],
+        [
+          {
+            text: t('schedule.back'),
+            callback_data:
+              src === 'b' ? `adminBk_v_${n}_l_1` : `adminTx_list_${src}_${n}`,
+          },
+        ],
+      ],
+    });
+  }
+
+  /** Pul Paylov kabinetidan qaytarilgandan keyin belgilash. mode: 'ask' (tasdiqlash) yoki 'do'. */
+  async adminTxRefund(
+    ctx: MyContext,
+    mode: 'ask' | 'do',
+    txId: string,
+    lang: string,
+  ): Promise<void> {
+    const t = this.tr(lang);
+
+    if (mode === 'ask') {
+      const tx = await this.prisma.tranzaktion.findUnique({
+        where: { id: txId },
+        select: {
+          status: true,
+          refund_status: true,
+          amount: true,
+          booking: { select: { id: true, status: true, total_price: true } },
+        },
+      });
+      if (!tx) return this.alertText(ctx, ADMIN_TEXT.notFound);
+      if (
+        tx.status !== TransactionStatus.SUCCESS ||
+        tx.refund_status !== RefundStatus.PENDING
+      ) {
+        return this.alertText(ctx, ADMIN_TEXT.stateChanged);
+      }
+
+      const amount = tx.amount ?? tx.booking.total_price;
+      await this.utils.safeEditOrReply(
+        ctx,
+        [
+          '💸 <b>Qaytarishni tasdiqlash</b>',
+          '',
+          `Tranzaksiya: <code>${txId}</code>`,
+          `Bron: #${tx.booking.id} (${this.bookingStatusText(tx.booking.status, lang)})`,
+          `Summa: <b>${formatSum(amount)}</b> so'm`,
+          '',
+          'Pul Paylov kabinetidan mijozga <b>qaytarilganini</b> tekshirdingizmi? Tasdiqlasangiz, tranzaksiya qaytarilgan deb belgilanadi va bu amal audit jurnaliga yoziladi.',
+        ].join('\n'),
+        {
+          inline_keyboard: [
+            [
+              {
+                text: '✅ Ha, qaytarilgan',
+                callback_data: `adminTx_do_${txId}`,
+              },
+            ],
+            [
+              {
+                text: t('schedule.back'),
+                callback_data: `adminTx_v_${txId}_r_1`,
+              },
+            ],
+          ],
+        },
+      );
+      return;
+    }
+
+    const adminChat = String(ctx.from?.id);
+    const result = await this.prisma.$transaction(async (db) => {
+      const tx = await db.tranzaktion.findUnique({
+        where: { id: txId },
+        select: {
+          status: true,
+          refund_status: true,
+          amount: true,
+          booking_id: true,
+          booking: { select: { total_price: true } },
+        },
+      });
+      if (!tx) return 'not_found' as const;
+      if (
+        tx.status !== TransactionStatus.SUCCESS ||
+        tx.refund_status !== RefundStatus.PENDING
+      ) {
+        return 'changed' as const;
+      }
+      const amount = tx.amount ?? tx.booking.total_price;
+      if (!amount) return 'no_amount' as const;
+
+      const res = await db.tranzaktion.updateMany({
+        where: {
+          id: txId,
+          status: TransactionStatus.SUCCESS,
+          refund_status: RefundStatus.PENDING,
+        },
+        data: {
+          refund_status: REFUND_DONE,
+          refunded_sum: amount,
+          refunded_at: new Date(),
+        },
+      });
+      if (res.count === 0) return 'changed' as const;
+
+      // bron REFUND_PENDING da turgan bo'lsa, REFUNDED ga o'tadi (REFUNDED bo'lsa o'zgarmaydi)
+      await db.booking.updateMany({
+        where: { id: tx.booking_id, status: 'REFUND_PENDING' },
+        data: { status: 'REFUNDED' },
+      });
+
+      await db.adminAudit.create({
+        data: {
+          adminChat,
+          action: 'TX_REFUND_DONE',
+          entity: 'Tranzaktion',
+          entityId: txId,
+          before: { refund_status: RefundStatus.PENDING },
+          after: { refund_status: REFUND_DONE, refunded_sum: amount },
+        },
+      });
+      return 'ok' as const;
+    });
+
+    const messages = {
+      not_found: ADMIN_TEXT.notFound,
+      changed: ADMIN_TEXT.stateChanged,
+      no_amount: ADMIN_TEXT.noAmount,
+      ok: ADMIN_TEXT.saved,
+    } as const;
+    await this.alertText(ctx, messages[result]);
+
+    if (result !== 'not_found') {
+      await this.adminTxView(ctx, txId, 'r', 1, true, lang);
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
 import { AdvertisementStatus, Payments, Prisma } from '@prisma/client';
 import { InlineKeyboardButton } from '@telegraf/types';
 import { toZonedTime, format, formatInTimeZone } from 'date-fns-tz';
@@ -24,6 +24,7 @@ import {
 } from 'src/types/notifikation';
 import { formatSum, UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
+import { isOwnerActor, stadionScope } from 'src/common/actor/actor';
 
 const STADION_LIMITS = { maxCount: 100, side: 300, price: 1_500_000 } as const;
 const STADION_NAME_REGEX = /^[\p{L}\p{N}\s'’‘ʻʼ.-]{2,50}$/u;
@@ -89,6 +90,7 @@ export class OwnersService {
     private readonly prisma: PrismaService,
     private readonly i18n: I18nService,
     private readonly utils: UtilisService,
+    @Inject(forwardRef(() => BotService))
     private readonly botService: BotService,
   ) {}
 
@@ -515,6 +517,15 @@ export class OwnersService {
         );
         return;
       }
+      const actor = ctx.actor;
+
+      if (!actor) {
+        await ctx
+          .answerCbQuery(t('common.no_permission'), { show_alert: true })
+          .catch(() => undefined);
+        return;
+      }
+      const isOwner = isOwnerActor(actor);
 
       const row = (key: string, type: string): InlineKeyboardButton[] => [
         { text: t(key), callback_data: JSON.stringify({ id: owner.id, type }) },
@@ -526,6 +537,7 @@ export class OwnersService {
             row('settings.notification', 'notification'),
             row('settings.phone', 'phone'),
             row('premium.advertising.button', 'advertising'),
+            [{text:t('manager.menu'),callback_data: 'ownMgr_list_1'}],
             row('premium.premium', 'ownerPremium'),
             [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
           ],
@@ -1268,20 +1280,29 @@ export class OwnersService {
   async stadionMenyu(ctx: MyContext, stadionID: number, lang: string) {
     try {
       const t = this.tr(lang);
+      const actor = ctx.actor;
+
+      if (!actor) {
+        await ctx
+          .answerCbQuery(t('common.no_permission'), { show_alert: true })
+          .catch(() => undefined);
+        return;
+      }
+
       const stadion = await this.prisma.stadion.findFirst({
-        where: { id: stadionID, owner: { chatID: String(ctx.from?.id) } },
+        where: { id: stadionID, ...stadionScope(actor) },
         select: { id: true, mini: true, stadion_mini: true },
       });
       if (!stadion) {
         await this.utils.errorFunction(
           ctx,
-          new Error(
-            `Stadion topilmadi yoki egasiga tegishli emas: ${stadionID}`,
-          ),
+          new Error(`Stadion topilmadi yoki ruxsat yo'q: ${stadionID}`),
           ErrorContext.STADION,
         );
         return;
       }
+
+      const isOwner = isOwnerActor(actor);
 
       const b = (key: string, type: string) =>
         this.btnJson(lang, key, type, stadion.id);
@@ -1293,11 +1314,15 @@ export class OwnersService {
       const keyboard: InlineKeyboardButton[][] = [
         [
           b('stadions.stadium.name', 'Stadion_nomi'),
-          b('stadions.payment_method', 'payment_method'),
+          ...(isOwner ? [b('stadions.payment_method', 'payment_method')] : []),
         ],
-        [b('schedule.working', 'schedule'), b('schedule.price', 'price')],
+        [
+          b('schedule.working', 'schedule'),
+          ...(isOwner ? [b('schedule.price', 'price')] : []),
+        ],
         [b('schedule.location', 'lokation'), b('schedule.image', 'image')],
       ];
+
       if (!stadion.stadion_mini && !stadion.mini) {
         keyboard.push(
           [b('stadions.mini_stadium.my_stadiums', 'miniStadionlar')],
@@ -1306,9 +1331,12 @@ export class OwnersService {
       } else if (!stadion.stadion_mini) {
         keyboard.push([workingBtn]);
       }
+
+      keyboard.push([b('stadions.menyu.all_data', 'all_data')]);
       keyboard.push(
-        [b('stadions.menyu.all_data', 'all_data')],
-        [b('schedule.delete', 'delete'), b('schedule.back', 'back_1')],
+        isOwner
+          ? [b('schedule.delete', 'delete'), b('schedule.back', 'back_1')]
+          : [b('schedule.back', 'back_1')],
       );
 
       await this.utils.safeEditOrReply(ctx, t('stadions.stadion_settings'), {
@@ -2588,7 +2616,6 @@ export class OwnersService {
           .catch(() => undefined);
         return;
       }
-
 
       const totalPages = Math.ceil(total / cfg.limit);
       const currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);

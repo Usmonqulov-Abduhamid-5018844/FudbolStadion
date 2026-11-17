@@ -30,7 +30,10 @@
       "click": "Click",
       "payme": "Payme",
       "uzum": "Uzum Bank",
-      "paylov": "Paylov"
+      "paylov": "Paylov",
+      "card": "Karta",
+      "uzqr": "UzQR",
+      "alif": "Alif"
     },
     "button": "💳 Оплатить",
     "pay_now": "💳 Нажмите кнопку ниже, чтобы завершить оплату",

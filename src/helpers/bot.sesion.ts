@@ -1,6 +1,7 @@
 import { Payments } from '@prisma/client';
 import { Context } from 'telegraf';
 import { scheduleType } from './interface/enum';
+import { Actor } from 'src/common/actor/actor';
 
 export interface ISession {
   name: string | null;
@@ -49,6 +50,7 @@ export interface ISession {
     stadionId: number | null;
     isAllStadiums: boolean;
   };
+  managerPick: number[]
 }
 export interface Stadion {
   step: number;
@@ -92,6 +94,7 @@ export interface MyContext extends Context {
   session: ISession;
   match?: RegExpMatchArray;
   advertisement: AdvertisementSession;
+  actor: Actor | null;
 }
 
 export interface AdvertisementSession {
