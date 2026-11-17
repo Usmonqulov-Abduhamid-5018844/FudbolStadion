@@ -87,7 +87,7 @@ export class PaylovService {
     try {
       res = await fetch(this.baseUrl + path, {
         method,
-        headers: {
+        headers: { 
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
           'X-Timestamp': ts,
@@ -169,6 +169,7 @@ export class PaylovService {
         amount: p.amountSom * 100,
         payment_provider: method,
         return_url: p.returnUrl,
+        webkitURL:"https://www.stadionbronbot.uz/payment/webhook"
       },
     );
 
