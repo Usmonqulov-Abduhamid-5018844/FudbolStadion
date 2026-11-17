@@ -232,13 +232,13 @@ export const getPremiumPaymentDescription = (
 };
 
 export enum Premium_price {
-  MONTH_1 = '39k',
+  MONTH_1 = '1k',
   MONTH_3 = '99k',
   YEAR_1 = '299k',
 }
 export const PREMIUM_PLANS = {
   MONTH_1: {
-    price: 39000,
+    price: 1000,
     discount: null,
   },
   MONTH_3: {

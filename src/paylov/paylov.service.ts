@@ -85,9 +85,6 @@ export class PaylovService {
     const signature = this.signRequest(method, signedPath, ts, body);
     let res: Response;
     try {
-      this.logger.debug(
-        `Paylov debug: url=${this.baseUrl + path} keyLen=${this.apiKey?.length} keyStart=${this.apiKey?.slice(0, 4)} keyEnd=${this.apiKey?.slice(-2)}`,
-      );
       res = await fetch(this.baseUrl + path, {
         method,
         headers: {
