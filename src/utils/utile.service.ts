@@ -84,13 +84,18 @@ export class UtilisService implements OnModuleInit {
   async isChecket(
     chatID: string,
     ctx: MyContext,
-  ): Promise<'owner' | 'user' | 'none' | 'error'> {
+  ): Promise<'owner' |'manager'| 'user' | 'none' | 'error'> {
     try {
       const owner = await this.prisma.owners.findUnique({
         where: { chatID },
         select: { id: true },
       });
       if (owner) return 'owner';
+      const manager = await this.prisma.manager.findUnique({
+        where:{telegramId:chatID},
+        select:{id:true}
+      })
+      if(manager) return "manager"
 
       const user = await this.prisma.users.findUnique({
         where: { chatID },

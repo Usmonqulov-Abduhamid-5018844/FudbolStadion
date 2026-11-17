@@ -168,8 +168,7 @@ export class PaylovService {
         external_id: p.externalId,
         amount: p.amountSom * 100,
         payment_provider: method,
-        return_url: p.returnUrl,
-        webkitURL:"https://www.stadionbronbot.uz/payment/webhook"
+        return_url: p.returnUrl
       },
     );
 

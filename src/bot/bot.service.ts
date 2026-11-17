@@ -23,6 +23,7 @@ import { canOwnerAcceptCard, escapeHtml } from 'src/helpers/stadions';
 import { AlertService } from 'src/alert/alert.service';
 import { ManagersService } from 'src/managers/managers.service';
 import { ActorService } from 'src/common/actor/actor.service';
+import { stadionScope } from 'src/common/actor/actor';
 
 @Injectable()
 export class BotService {
@@ -49,7 +50,7 @@ export class BotService {
     private readonly managers: ManagersService,
     private readonly actorService: ActorService,
   ) {}
- 
+
   private isSuperAdmin(ctx: MyContext): boolean {
     const id = ctx.from?.id;
     return id !== undefined && this.SuperAdminChatid.includes(Number(id));
@@ -136,12 +137,35 @@ export class BotService {
         ctx.session.kalanConfirment = [];
       }
 
-      const owners = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
+      const tgId = String(ctx.from?.id);
+
+      const owner = await this.prisma.owners.findUnique({
+        where: { chatID: tgId },
       });
-      if (!owners) {
+
+      // Owner bo'lmasa, menejerligini tekshiramiz
+      const manager = owner
+        ? null
+        : await this.prisma.manager.findFirst({
+            where: { telegramId: tgId, isActive: true },
+            select: { ownerId: true, isPaused: true },
+          });
+
+      // To'xtatilgan menejer ro'yxatdan o'tishga tushib ketmasin
+      if (manager?.isPaused) {
+        await ctx.reply(
+          this.i18n.translate('manager.paused_notice', { lang }),
+          Markup.removeKeyboard(),
+        );
+        return;
+      }
+
+      const ownerId = owner?.id ?? manager?.ownerId;
+
+      // Na owner, na menejer: mijoz yoki ro'yxatdan o'tish
+      if (!ownerId) {
         const users = await this.prisma.users.findUnique({
-          where: { chatID: String(ctx.from?.id) },
+          where: { chatID: tgId },
         });
         if (!users) {
           if (ctx.from && this.isAdmin(ctx)) {
@@ -209,7 +233,7 @@ export class BotService {
           phone: null,
           step: null,
         };
-      ctx.session.owner_registor.id = owners.id;
+      ctx.session.owner_registor.id = ownerId;
       const welcomeMessage = this.i18n.translate('common.HELLO', {
         lang,
         args: {
@@ -218,23 +242,24 @@ export class BotService {
             : this.i18n.translate('common.firstName', { lang }),
         },
       });
+
+      const rows = [
+        [
+          this.i18n.translate('menyu_buttons.stadion', { lang }),
+          this.i18n.translate('menyu_buttons.bron', { lang }),
+        ],
+        [
+          this.i18n.translate('menyu_buttons.settings', { lang }),
+          this.i18n.translate('menyu_buttons.help', { lang }),
+        ],
+        ...(owner
+          ? [[this.i18n.translate('menyu_buttons.card', { lang })]]
+          : []),
+      ];
+
       await ctx.reply(
-        `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', {
-          lang,
-        })}`,
-        Markup.keyboard([
-          [
-            this.i18n.translate('menyu_buttons.stadion', { lang }),
-            this.i18n.translate('menyu_buttons.bron', { lang }),
-          ],
-          [
-            this.i18n.translate('menyu_buttons.settings', { lang }),
-            this.i18n.translate('menyu_buttons.help', { lang }),
-          ],
-          [this.i18n.translate('menyu_buttons.card', { lang })],
-        ])
-          .resize()
-          .oneTime(),
+        `${welcomeMessage}  ${this.i18n.translate('common.WELCOME', { lang })}`,
+        Markup.keyboard(rows).resize().oneTime(),
       );
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.USER);
@@ -304,6 +329,11 @@ export class BotService {
   async createStadion(ctx: MyContext, type: EStadion_type) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!ctx.actor || ctx.actor.isManager) {
+        ctx.session.stadion_step = null;
+        await ctx.reply(this.i18n.translate('admin.access_denied', { lang }));
+        return;
+      }
       const data = {
         name: String(ctx.session.stadion.name),
         latitude: Number(ctx.session.stadion.latitude),
@@ -365,6 +395,10 @@ export class BotService {
   async renderScheduleMenu(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         select: { day_of_week: true },
@@ -484,6 +518,10 @@ export class BotService {
   async renderSchedule_week(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const existingSchedules = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         select: { day_of_week: true },
@@ -531,6 +569,10 @@ export class BotService {
   async viewSchedule(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const schedule = await this.prisma.stadion_chedule.findMany({
         where: { stadion_id },
         orderBy: { day_of_week: 'asc' },
@@ -581,6 +623,10 @@ export class BotService {
   async stadion_off_days(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const stadion_off_day = await this.prisma.stadion_off_days.findMany({
         where: { stadion_id },
         orderBy: { createdAt: 'asc' },
@@ -644,6 +690,10 @@ export class BotService {
   async stadion_special(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const data = await this.prisma.stadion_special_schedule.findMany({
         where: { stadion_id },
       });
@@ -705,6 +755,10 @@ export class BotService {
   async location(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -762,6 +816,10 @@ export class BotService {
   async stadion_price(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -826,6 +884,10 @@ export class BotService {
   async stadion_image(ctx: MyContext, stadion_id: number) {
     try {
       const lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
       });
@@ -891,6 +953,10 @@ export class BotService {
   async all_data(ctx: MyContext, stadion_id: number) {
     try {
       let lang = await this.utils.langs(ctx);
+      if (!(await this.canAccessStadionById(ctx, stadion_id))) {
+        await this.denyStadion(ctx, lang);
+        return;
+      }
       const stadion = await this.prisma.stadion.findUnique({
         where: { id: stadion_id },
         include: {
@@ -1054,6 +1120,13 @@ export class BotService {
           ctx,
           new Error(`Advertisement topilmadi: id=${adId}`),
           ErrorContext.USER,
+        );
+        return;
+      }
+      if (ctx.actor?.isManager) {
+        await ctx.reply(
+          this.i18n.translate('advertisement.owner_cannot_book', { lang }),
+          { parse_mode: 'HTML' },
         );
         return;
       }
@@ -1420,5 +1493,26 @@ export class BotService {
     } else {
       await this.start(ctx);
     }
+  }
+
+  private async canAccessStadionById(
+    ctx: MyContext,
+    stadionId: number,
+  ): Promise<boolean> {
+    const actor = ctx.actor;
+    if (!actor) return false;
+    const found = await this.prisma.stadion.findFirst({
+      where: { AND: [{ id: stadionId }, stadionScope(actor)] },
+      select: { id: true },
+    });
+    return Boolean(found);
+  }
+
+  private async denyStadion(ctx: MyContext, lang: string): Promise<void> {
+    await ctx
+      .answerCbQuery(this.i18n.translate('admin.access_denied', { lang }), {
+        show_alert: true,
+      })
+      .catch(() => undefined);
   }
 }

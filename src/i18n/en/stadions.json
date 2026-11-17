@@ -127,5 +127,6 @@
   },
   "pending": {
     "cannot_add_stadium": "⏳ Your application for stadium owner status is still under review.\n\n✅ Once approved by the administrator, you will be able to add your stadium."
-  }
+  },
+  "none_assigned": "No stadium has been assigned to you yet. Please contact the stadium owner."
 }

@@ -9,20 +9,13 @@ const BLOCKED_TYPES = new Set([
   'delete',
   'premium_buy',
   'ownerPremium',
-  'advertising',
-  'advertisement_confirm',
-  'advertisement_select_stadium',
-  'advertisement_skip_image',
-  'notification',
-  'notification_unread',
-  'notification_read',
-  'notification_all',
-  'notification_settings',
-  'notification_clear',
-  'notification_back',
-  'phone',
   'phone_update',
+  'Update_price',
+  'delete_yes',
+  'premium_provider',
 ]);
+
+
 
 // Oddiy matnli tugmalar
 const BLOCKED_PREFIXES = [
@@ -32,7 +25,10 @@ const BLOCKED_PREFIXES = [
   'payments_',
   'toggleNotification|',
   'SelectOwnerPremium_',
-  'advertisement',
+  'premiumProvider|',
+  'BookingOwner_statistica',
+  'backOwner_premium_',
+  'stadion_type_workingStatus',
 ];
 
 const DENY: Record<string, string> = {

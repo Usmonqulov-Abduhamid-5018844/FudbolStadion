@@ -24,7 +24,7 @@ import {
 } from 'src/types/notifikation';
 import { formatSum, UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
-import { isOwnerActor, stadionScope } from 'src/common/actor/actor';
+import { Actor, isOwnerActor, stadionScope } from 'src/common/actor/actor';
 
 const STADION_LIMITS = { maxCount: 100, side: 300, price: 1_500_000 } as const;
 const STADION_NAME_REGEX = /^[\p{L}\p{N}\s'’‘ʻʼ.-]{2,50}$/u;
@@ -105,11 +105,18 @@ export class OwnersService {
     return m ? `+998${m[1]}` : null;
   }
 
-  private async ownedStadionId(ctx: MyContext): Promise<number | null> {
+  private async ownedStadionId(
+    ctx: MyContext,
+    ownerOnly = false,
+  ): Promise<number | null> {
+    const actor = ctx.actor;
+    if (!actor || (ownerOnly && actor.isManager)) return null;
+
     const id = Number(ctx.session.stadion?.id);
     if (!Number.isInteger(id) || id <= 0) return null;
+
     const found = await this.prisma.stadion.findFirst({
-      where: { id, owner: { chatID: String(ctx.from?.id) } },
+      where: { AND: [{ id }, stadionScope(actor)] },
       select: { id: true },
     });
     return found?.id ?? null;
@@ -169,15 +176,6 @@ export class OwnersService {
     });
   }
 
-  private async requireOwner(ctx: MyContext): Promise<{ id: number }> {
-    const owner = await this.prisma.owners.findUnique({
-      where: { chatID: String(ctx.from?.id) },
-      select: { id: true },
-    });
-    if (!owner) throw new Error(`Owner topilmadi: chatID=${ctx.from?.id}`);
-    return owner;
-  }
-
   async hasActivePremium(ownerId: number): Promise<boolean> {
     const sub = await this.prisma.subscription.findFirst({
       where: { ownerId, isActive: true, endDate: { gt: new Date() } },
@@ -234,15 +232,16 @@ export class OwnersService {
     };
   }
 
-  private mainMenuKeyboard(lang: string) {
+  mainMenuKeyboard(lang: string, isManager = false) {
     const t = this.tr(lang);
-    return Markup.keyboard([
+
+    const rows = [
       [t('menyu_buttons.stadion'), t('menyu_buttons.bron')],
       [t('menyu_buttons.settings'), t('menyu_buttons.help')],
-      [t('menyu_buttons.card')],
-    ])
-      .resize()
-      .oneTime();
+    ];
+    if (!isManager) rows.push([t('menyu_buttons.card')]);
+
+    return Markup.keyboard(rows).resize().oneTime();
   }
 
   private paymentTypeKeyboard(lang: string): InlineKeyboardButton[][] {
@@ -455,21 +454,19 @@ export class OwnersService {
   async handleStadionMenu(ctx: MyContext, lang: string) {
     try {
       const t = this.tr(lang);
-      const owner = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-        select: { id: true },
-      });
-      if (!owner) {
+      const actor = ctx.actor;
+
+      if (!actor) {
         await this.utils.errorFunction(
           ctx,
-          new Error(`Owner topilmadi: chatID=${ctx.from?.id}`),
+          new Error(`Actor topilmadi: chatID=${ctx.from?.id}`),
           ErrorContext.OWNER,
         );
         return;
       }
 
       const stadions = await this.prisma.stadion.findMany({
-        where: { owner_id: owner.id, stadion_mini: false },
+        where: { AND: [stadionScope(actor), { stadion_mini: false }] },
         select: { id: true, name: true },
         orderBy: { updatedAt: 'desc' },
       });
@@ -481,10 +478,16 @@ export class OwnersService {
         { text: t('stadions.back'), callback_data: 'back_owner_1' },
       ];
 
+      // Menejerga "qo'shish" tugmasi ko'rsatilmaydi (middleware baribir bloklaydi)
+      const actionRows = isOwnerActor(actor) ? [addRow, backRow] : [backRow];
+
       if (!stadions.length) {
-        await ctx.reply(t('stadions.stadion'), {
-          reply_markup: { inline_keyboard: [addRow, backRow] },
-        });
+        await ctx.reply(
+          t(
+            isOwnerActor(actor) ? 'stadions.stadion' : 'stadions.none_assigned',
+          ),
+          { reply_markup: { inline_keyboard: actionRows } },
+        );
         return;
       }
 
@@ -494,8 +497,9 @@ export class OwnersService {
           callback_data: JSON.stringify({ type: 'stadion', id: s.id }),
         },
       ]);
+
       await ctx.reply(t('stadions.select'), {
-        reply_markup: { inline_keyboard: [...rows, addRow, backRow] },
+        reply_markup: { inline_keyboard: [...rows, ...actionRows] },
       });
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
@@ -505,43 +509,45 @@ export class OwnersService {
   async ownerSettings(ctx: MyContext, lang: string) {
     try {
       const t = this.tr(lang);
-      const owner = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-        select: { id: true },
-      });
-      if (!owner) {
-        await this.utils.errorFunction(
-          ctx,
-          new Error(`Owner topilmadi: chatID=${ctx.from?.id}`),
-          ErrorContext.OWNER,
-        );
-        return;
-      }
       const actor = ctx.actor;
-
       if (!actor) {
         await ctx
-          .answerCbQuery(t('common.no_permission'), { show_alert: true })
+          .answerCbQuery(t('admin.access_denied'), { show_alert: true })
           .catch(() => undefined);
         return;
       }
       const isOwner = isOwnerActor(actor);
 
       const row = (key: string, type: string): InlineKeyboardButton[] => [
-        { text: t(key), callback_data: JSON.stringify({ id: owner.id, type }) },
+        {
+          text: t(key),
+          callback_data: JSON.stringify({ id: actor.ownerId, type }),
+        },
       ];
-      await ctx.reply(t('settings.title'), {
-        reply_markup: {
-          inline_keyboard: [
+      const back: InlineKeyboardButton[] = [
+        { text: t('schedule.back'), callback_data: 'back_owner_1' },
+      ];
+
+      const rows: InlineKeyboardButton[][] = isOwner
+        ? [
             row('settings.language', 'language'),
             row('settings.notification', 'notification'),
             row('settings.phone', 'phone'),
             row('premium.advertising.button', 'advertising'),
-            [{text:t('manager.menu'),callback_data: 'ownMgr_list_1'}],
+            [{ text: t('manager.menu'), callback_data: 'ownMgr_list_1' }],
             row('premium.premium', 'ownerPremium'),
-            [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
-          ],
-        },
+            back,
+          ]
+        : [
+            row('settings.language', 'language'),
+            row('settings.notification', 'notification'),
+            row('settings.phone', 'phone'),
+            row('premium.advertising.button', 'advertising'),
+            back,
+          ];
+
+      await ctx.reply(t('settings.title'), {
+        reply_markup: { inline_keyboard: rows },
       });
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
@@ -989,7 +995,10 @@ export class OwnersService {
 
       switch (data) {
         case '1':
-          await ctx.reply(t('menyu_buttons.menu'), this.mainMenuKeyboard(lang));
+          await ctx.reply(
+            t('menyu_buttons.menu'),
+            this.mainMenuKeyboard(lang, !!ctx.actor?.isManager),
+          );
           await this.utils.deleteClickedMessage(ctx);
           return;
 
@@ -1215,19 +1224,20 @@ export class OwnersService {
   async miniStadionlar(ctx: MyContext, stadionId: number, lang: string) {
     try {
       const t = this.tr(lang);
+      const actor = ctx.actor;
+      if (!actor) return;
+
       await this.deleteTracked(ctx, 'stadionMessages');
       await ctx.answerCbQuery().catch(() => undefined);
 
       const stadion = await this.prisma.stadion.findFirst({
-        where: { id: stadionId, owner: { chatID: String(ctx.from?.id) } },
+        where: { id: stadionId, ...stadionScope(actor) },
         include: { children: { orderBy: { updatedAt: 'desc' } } },
       });
       if (!stadion) {
         await this.utils.errorFunction(
           ctx,
-          new Error(
-            `Stadion topilmadi yoki egasiga tegishli emas: ${stadionId}`,
-          ),
+          new Error(`Stadion topilmadi yoki ruxsat yo'q: ${stadionId}`),
           ErrorContext.STADION,
         );
         return;
@@ -1238,20 +1248,22 @@ export class OwnersService {
       ];
 
       if (!stadion.children.length) {
-        await this.utils.safeEditOrReply(
-          ctx,
-          t('stadions.stadium_not_divided'),
-          {
-            inline_keyboard: [
+        // Stadionni bo'lish faqat owner uchun
+        const divideRow: InlineKeyboardButton[][] = isOwnerActor(actor)
+          ? [
               [
                 {
                   text: t('stadions.stadium_divide'),
                   callback_data: `owner_stadionSplit_${stadion.id}`,
                 },
               ],
-              backRow,
-            ],
-          },
+            ]
+          : [];
+
+        await this.utils.safeEditOrReply(
+          ctx,
+          t('stadions.stadium_not_divided'),
+          { inline_keyboard: [...divideRow, backRow] },
         );
         return;
       }
@@ -2814,5 +2826,19 @@ export class OwnersService {
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
     }
+  }
+  private actorOf(ctx: MyContext): Actor {
+    if (!ctx.actor) throw new Error(`Actor topilmadi: chatID=${ctx.from?.id}`);
+    return ctx.actor;
+  }
+
+  private async requireOwner(ctx: MyContext): Promise<{ id: number }> {
+    const actor = this.actorOf(ctx);
+    if (actor.isManager) {
+      throw new Error(
+        `Menejer egasiga xos amalga urindi: chatID=${ctx.from?.id}`,
+      );
+    }
+    return { id: actor.ownerId };
   }
 }

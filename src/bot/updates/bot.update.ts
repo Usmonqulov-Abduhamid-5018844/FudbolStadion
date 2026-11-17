@@ -5,7 +5,6 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { OwnersService } from 'src/owners/owners.service';
 import { UsersService } from 'src/users/users.service';
 import { InlineKeyboardButton } from 'telegraf/types';
-import { Markup } from 'telegraf';
 import {
   Admin_S,
   AdminStatus,
@@ -70,6 +69,13 @@ import { Logger } from '@nestjs/common';
 import { PaylovService } from 'src/paylov/paylov.service';
 import { AlertService } from 'src/alert/alert.service';
 import { BotService } from '../bot.service';
+import {
+  Actor,
+  bookingScope,
+  canAccessStadion,
+  isOwnerActor,
+  stadionScope,
+} from '../../common/actor/actor';
 class InvalidCallbackError extends Error {
   constructor(message: string) {
     super(message);
@@ -178,6 +184,83 @@ export class BotUpdate {
   private async deny(ctx: MyContext, lang: string): Promise<void> {
     await this.alertBox(ctx, this.tr(lang)('admin.access_denied'));
   }
+  private isSameOwner(ctx: MyContext, ownerId: number): boolean {
+    return !!ctx.actor && ctx.actor.ownerId === ownerId; // egasi va menejer
+  }
+
+  private async isOwnerOf(ctx: MyContext, ownerId: number): Promise<boolean> {
+    const a = ctx.actor;
+    return !!a && !a.isManager && a.ownerId === ownerId; // faqat egasi
+  }
+
+  private async requireOwner(
+    ctx: MyContext,
+    lang: string,
+  ): Promise<Actor | null> {
+    const a = ctx.actor;
+    if (!a || a.isManager) {
+      await this.deny(ctx, lang);
+      return null;
+    }
+    return a;
+  }
+
+  private ownedBy(ctx: MyContext): Prisma.StadionWhereInput {
+    // actor yo'q bo'lsa hech narsa topilmaydi (fail-closed)
+    return ctx.actor ? stadionScope(ctx.actor) : { id: -1 };
+  }
+
+  private async ownsStadion(
+    ctx: MyContext,
+    stadionId: number,
+    ownerOnly = false,
+  ): Promise<boolean> {
+    const a = ctx.actor;
+    if (!a || (ownerOnly && a.isManager)) return false;
+    const found = await this.prisma.stadion.findFirst({
+      where: { AND: [{ id: stadionId }, stadionScope(a)] },
+      select: { id: true },
+    });
+    return Boolean(found);
+  }
+
+  private async loadOwnedStadion(
+    ctx: MyContext,
+    lang: string,
+    id: number,
+    ownerOnly = false,
+  ) {
+    const a = ctx.actor;
+    const stadion =
+      a && !(ownerOnly && a.isManager)
+        ? await this.prisma.stadion.findFirst({
+            where: { AND: [{ id }, stadionScope(a)] },
+          })
+        : null;
+    if (!stadion) await this.deny(ctx, lang);
+    return stadion;
+  }
+
+  private async allowStadion(
+    ctx: MyContext,
+    lang: string,
+    id: number,
+    ownerOnly = false,
+  ): Promise<boolean> {
+    if (await this.ownsStadion(ctx, id, ownerOnly)) return true;
+    await this.deny(ctx, lang);
+    return false;
+  }
+
+  private async allowOwner(
+    ctx: MyContext,
+    lang: string,
+    ownerId: number,
+  ): Promise<boolean> {
+    if (await this.isOwnerOf(ctx, ownerId)) return true; // faqat egasi
+    await this.deny(ctx, lang);
+    return false;
+  }
 
   private async notFound(
     ctx: MyContext,
@@ -190,25 +273,6 @@ export class BotUpdate {
       new Error(`${what} topilmadi: ${id}`),
       context,
     );
-  }
-
-  private async isOwnerOf(ctx: MyContext, ownerId: number): Promise<boolean> {
-    const owner = await this.prisma.owners.findUnique({
-      where: { chatID: String(ctx.from?.id) },
-      select: { id: true },
-    });
-    return owner?.id === ownerId;
-  }
-
-  private async ownsStadion(
-    ctx: MyContext,
-    stadionId: number,
-  ): Promise<boolean> {
-    const found = await this.prisma.stadion.findFirst({
-      where: { id: stadionId, owner: { chatID: String(ctx.from?.id) } },
-      select: { id: true },
-    });
-    return Boolean(found);
   }
 
   private isBookingOwner(
@@ -558,38 +622,16 @@ export class BotUpdate {
       ctx.session.lang = lang;
 
       if (ctx.session.step === 'language') {
-        const owner = await this.prisma.owners.findUnique({
-          where: { chatID: chat_id },
-        });
-        if (!owner) {
+        const actor = ctx.actor;
+        if (!actor) {
           await this.utils.errorFunction(
             ctx,
-            new Error(`Owner topilmadi: chatID=${chat_id}`),
+            new Error(`Actor topilmadi: chatID=${chat_id}`),
             ErrorContext.OWNER,
           );
           return;
         }
-
-        const t = (key: string): string => this.i18n.translate(key, { lang });
-        const row = (key: string, type: string) => [
-          {
-            text: t(key),
-            callback_data: JSON.stringify({ id: owner.id, type }),
-          },
-        ];
-
-        await ctx.reply(t('settings.title'), {
-          reply_markup: {
-            inline_keyboard: [
-              row('settings.language', 'language'),
-              row('settings.notification', 'notification'),
-              row('settings.phone', 'phone'),
-              row('premium.advertising.button', 'advertising'),
-              row('premium.premium', 'ownerPremium'),
-              [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
-            ],
-          },
-        });
+        await this.showOwnerSettings(ctx, lang, actor.ownerId);
         return;
       }
 
@@ -679,16 +721,18 @@ export class BotUpdate {
       if (!ctx.callbackQuery || !('data' in ctx.callbackQuery)) return;
       const [, type, Id, lang] = ctx.callbackQuery.data.split('_');
       const t = (key: string): string => this.i18n.translate(key, { lang });
-      const chatId = String(ctx.from?.id);
       const denied = () =>
         ctx.answerCbQuery(t('admin.access_denied'), { show_alert: true });
 
+      const actor = ctx.actor;
+      if (!actor) {
+        await denied();
+        return;
+      }
+
       switch (type) {
         case 'owners': {
-          const owner = await this.prisma.owners.findUnique({
-            where: { id: Number(Id) },
-          });
-          if (!owner || owner.chatID !== chatId) {
+          if (actor.ownerId !== Number(Id)) {
             await denied();
             return;
           }
@@ -706,15 +750,12 @@ export class BotUpdate {
         }
 
         case 'firstName': {
-          const owner = await this.prisma.owners.findUnique({
-            where: { id: Number(Id) },
-          });
-          if (!owner || owner.chatID !== chatId) {
+          if (actor.ownerId !== Number(Id)) {
             await denied();
             return;
           }
           const stadions = await this.prisma.stadion.findMany({
-            where: { owner_id: owner.id },
+            where: stadionScope(actor),
           });
           if (!stadions.length) {
             await ctx.answerCbQuery(t('stadions.not_fount'));
@@ -739,11 +780,11 @@ export class BotUpdate {
         }
 
         case 'stadions': {
-          const stadion = await this.prisma.stadion.findUnique({
-            where: { id: Number(Id) },
-            select: { owner: { select: { chatID: true } } },
+          const allowed = await this.prisma.stadion.findFirst({
+            where: { AND: [{ id: Number(Id) }, stadionScope(actor)] },
+            select: { id: true },
           });
-          if (!stadion || stadion.owner?.chatID !== chatId) {
+          if (!allowed) {
             await denied();
             return;
           }
@@ -758,6 +799,7 @@ export class BotUpdate {
       await ctx.answerCbQuery().catch(() => undefined);
     }
   }
+
   @Action(/^ownerBooking_(\w+)_(\d+)_(\d+)$/)
   async ownerBooking(@Ctx() ctx: MyContext) {
     try {
@@ -770,9 +812,13 @@ export class BotUpdate {
       const page = Math.max(1, Number(pageStr));
       const limit = 1;
 
-      const where: Prisma.BookingWhereInput = {
-        stadion: { owner_id: ownerId },
-      };
+      const actor = ctx.actor;
+      if (!actor || actor.ownerId !== ownerId) {
+        await this.deny(ctx, lang);
+        return;
+      }
+
+      const where: Prisma.BookingWhereInput = { ...bookingScope(actor) };
       let orderBy: Prisma.BookingOrderByWithRelationInput[] = [
         { createdAt: 'desc' },
         { id: 'desc' },
@@ -783,12 +829,10 @@ export class BotUpdate {
           where.status = { in: ['PAID', 'CONFIRMED'] };
           orderBy = this.BY_START;
           break;
-
         case 'pending':
           where.status = 'PENDING';
           orderBy = this.BY_START;
           break;
-
         case 'today':
         case 'tomorrow': {
           const base = this.utils.todayLocal();
@@ -798,12 +842,10 @@ export class BotUpdate {
           orderBy = this.BY_START;
           break;
         }
-
         case 'cancelled':
           where.status = 'CANCELED';
           orderBy = this.BY_START;
           break;
-
         case 'upcoming': {
           const now = new Date();
           where.status = { in: ['PAID', 'CONFIRMED'] };
@@ -814,7 +856,6 @@ export class BotUpdate {
           orderBy = this.BY_START;
           break;
         }
-
         case 'now': {
           const now = new Date();
           where.status = { in: ['PAID', 'CONFIRMED'] };
@@ -847,7 +888,6 @@ export class BotUpdate {
       }
 
       await ctx.answerCbQuery(t('loading.loading'));
-
       await this.utils.clearSessionMessages(ctx);
       await this.utils.deleteClickedMessage(ctx);
 
@@ -907,7 +947,8 @@ export class BotUpdate {
         );
         return;
       }
-      if (booking.stadion.owner?.chatID !== String(ctx.from?.id)) {
+      const actor = ctx.actor;
+      if (!actor || !canAccessStadion(actor, booking.stadion)) {
         await ctx.answerCbQuery(t('admin.access_denied'), { show_alert: true });
         return;
       }
@@ -1030,6 +1071,11 @@ export class BotUpdate {
       const action = match[1];
       const ownerId = Number(match[2]);
       const page = Math.max(1, Number(match[3]));
+      const actor = ctx.actor;
+      if (!actor || actor.ownerId !== ownerId) {
+        await this.deny(ctx, lang);
+        return;
+      }
 
       if (action === 'all') {
         await this.utils.clearSessionMessages(ctx);
@@ -1103,7 +1149,7 @@ export class BotUpdate {
 
         const limit = 5;
         const where: Prisma.BookingWhereInput = {
-          stadion: { owner_id: ownerId },
+          ...bookingScope(actor),
           status,
         };
         const [bookings, total] = await Promise.all([
@@ -1161,7 +1207,7 @@ export class BotUpdate {
 
       if (action === 'stadiumFilter') {
         const stadions = await this.prisma.stadion.findMany({
-          where: { owner_id: ownerId },
+          where: stadionScope(actor),
           select: { id: true, name: true },
         });
         if (!stadions.length) {
@@ -1200,7 +1246,7 @@ export class BotUpdate {
         }
 
         const count = await this.prisma.booking.count({
-          where: { stadion_id: stadionId, stadion: { owner_id: ownerId } },
+          where: { AND: [{ stadion_id: stadionId }, bookingScope(actor)] },
         });
         if (count === 0) {
           await ctx.answerCbQuery(
@@ -1281,12 +1327,20 @@ export class BotUpdate {
 
       if (!['7days', '30days', 'active', 'allFilter'].includes(action)) return;
 
-      const limit = 4;
       const lang = await this.utils.langs(ctx);
+      const actor = ctx.actor;
+      if (!actor) {
+        await this.deny(ctx, lang);
+        return;
+      }
+      const limit = 4;
       const t = (key: string): string => this.i18n.translate(key, { lang });
       const base = this.utils.todayLocal();
 
-      const where: Prisma.BookingWhereInput = { stadion_id: stadionId };
+      const where: Prisma.BookingWhereInput = {
+        AND: [{ stadion_id: stadionId }, bookingScope(actor)],
+      };
+
       const orderBy: Prisma.BookingOrderByWithRelationInput[] = [
         { date: 'asc' },
         { startAt: 'asc' },
@@ -2773,8 +2827,11 @@ export class BotUpdate {
       const lang = await this.utils.langs(ctx);
       const t = this.tr(lang);
 
+      const actor = await this.requireOwner(ctx, lang);
+      if (!actor) return;
+
       const owner = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
+        where: { id: actor.ownerId },
         select: { status: true },
       });
       if (!owner) {
@@ -3068,6 +3125,11 @@ export class BotUpdate {
       if (!(await this.ownsStadion(ctx, stadionId))) {
         await this.deny(ctx, lang);
         return;
+      }
+
+      // Bo'lish faqat egasi uchun
+      if (type === 'stadionSplit' || type.startsWith('Split-')) {
+        if (!(await this.requireOwner(ctx, lang))) return;
       }
 
       if (type === 'stadionSplit') {
@@ -3778,38 +3840,6 @@ export class BotUpdate {
     return name.length > max ? `${name.slice(0, max)}...` : name;
   }
 
-  private ownedBy(ctx: MyContext) {
-    return { owner: { chatID: String(ctx.from?.id) } };
-  }
-
-  private async loadOwnedStadion(ctx: MyContext, lang: string, id: number) {
-    const stadion = await this.prisma.stadion.findFirst({
-      where: { id, ...this.ownedBy(ctx) },
-    });
-    if (!stadion) await this.deny(ctx, lang);
-    return stadion;
-  }
-
-  private async allowStadion(
-    ctx: MyContext,
-    lang: string,
-    id: number,
-  ): Promise<boolean> {
-    if (await this.ownsStadion(ctx, id)) return true;
-    await this.deny(ctx, lang);
-    return false;
-  }
-
-  private async allowOwner(
-    ctx: MyContext,
-    lang: string,
-    ownerId: number,
-  ): Promise<boolean> {
-    if (await this.isOwnerOf(ctx, ownerId)) return true;
-    await this.deny(ctx, lang);
-    return false;
-  }
-
   private async showOwnerSettings(
     ctx: MyContext,
     lang: string,
@@ -3819,29 +3849,37 @@ export class BotUpdate {
     const item = (key: string, type: string): InlineKeyboardButton[] => [
       { text: t(key), callback_data: this.jsonCb(type, { id: ownerId }) },
     ];
+    const back: InlineKeyboardButton[] = [
+      { text: t('schedule.back'), callback_data: 'back_owner_1' },
+    ];
+    const isManager = !!ctx.actor?.isManager;
+
+    const rows: InlineKeyboardButton[][] = [
+      item('settings.language', 'language'),
+      item('settings.notification', 'notification'),
+      item('settings.phone', 'phone'),
+      item('premium.advertising.button', 'advertising'),
+      ...(isManager
+        ? []
+        : [
+            [{ text: t('manager.menu'), callback_data: 'ownMgr_list_1' }],
+            item('premium.premium', 'ownerPremium'),
+          ]),
+      back,
+    ];
+
     await this.utils.safeEditOrReply(ctx, t('settings.title'), {
-      inline_keyboard: [
-        item('settings.language', 'language'),
-        item('settings.notification', 'notification'),
-        item('settings.phone', 'phone'),
-        item('premium.advertising.button', 'advertising'),
-        [{text:t('manager.menu'),callback_data: 'ownMgr_list_1'}],
-        item('premium.premium', 'ownerPremium'),
-        [{ text: t('schedule.back'), callback_data: 'back_owner_1' }],
-      ],
+      inline_keyboard: rows,
     });
   }
 
   private async showOwnerStadions(ctx: MyContext, lang: string): Promise<void> {
     const t = this.tr(lang);
-    const owner = await this.prisma.owners.findUnique({
-      where: { chatID: String(ctx.from?.id) },
-      select: { id: true },
-    });
-    if (!owner) throw new Error(`Owner topilmadi: chatID=${ctx.from?.id}`);
+    const actor = ctx.actor;
+    if (!actor) throw new Error(`Actor topilmadi: chatID=${ctx.from?.id}`);
 
     const stadions = await this.prisma.stadion.findMany({
-      where: { owner_id: owner.id, stadion_mini: false },
+      where: { AND: [stadionScope(actor), { stadion_mini: false }] },
       orderBy: { updatedAt: 'desc' },
       select: { id: true, name: true },
     });
@@ -3852,11 +3890,14 @@ export class BotUpdate {
     const back: InlineKeyboardButton[] = [
       { text: t('stadions.back'), callback_data: 'back_owner_1' },
     ];
+    const actionRows = isOwnerActor(actor) ? [add, back] : [back];
 
     if (!stadions.length) {
-      await this.utils.safeEditOrReply(ctx, t('stadions.stadion'), {
-        inline_keyboard: [add, back],
-      });
+      await this.utils.safeEditOrReply(
+        ctx,
+        t(isOwnerActor(actor) ? 'stadions.stadion' : 'stadions.none_assigned'),
+        { inline_keyboard: actionRows },
+      );
       return;
     }
     const rows: InlineKeyboardButton[][] = stadions.map((s) => [
@@ -3866,7 +3907,7 @@ export class BotUpdate {
       },
     ]);
     await this.utils.safeEditOrReply(ctx, t('stadions.select'), {
-      inline_keyboard: [...rows, add, back],
+      inline_keyboard: [...rows, ...actionRows],
     });
   }
 
@@ -4108,7 +4149,7 @@ export class BotUpdate {
       }
       case 'updateName': {
         const id = this.idOf(data);
-        if (!(await this.allowStadion(ctx, lang, id))) return;
+        if (!(await this.allowStadion(ctx, lang, id, true))) return;
         const session = this.ensureStadionSession(ctx);
         session.id = id;
         session.name = 'StadionEditName';
@@ -4145,7 +4186,7 @@ export class BotUpdate {
       }
       case 'edit_miniStadion': {
         const id = this.idOf(data);
-        if (!(await this.allowStadion(ctx, lang, id))) return;
+        if (!(await this.allowStadion(ctx, lang, id, true))) return;
         ctx.session.maxCount = 'maxCount';
         this.ensureStadionSession(ctx).id = id;
         await ctx.reply(t('stadions.stadium_capacity_prompt'));
@@ -4188,7 +4229,12 @@ export class BotUpdate {
         await this.showOwnerStadions(ctx, lang);
         return;
       case 'delete': {
-        const stadion = await this.loadOwnedStadion(ctx, lang, this.idOf(data));
+        const stadion = await this.loadOwnedStadion(
+          ctx,
+          lang,
+          this.idOf(data),
+          true,
+        );
         if (!stadion) return;
         await this.utils.safeEditOrReply(ctx, t('schedule.type.delet'), {
           inline_keyboard: [
@@ -4209,6 +4255,7 @@ export class BotUpdate {
         return;
       }
       case 'delete_yes': {
+        if (!(await this.requireOwner(ctx, lang))) return;
         const id = this.idOf(data);
         const stadion = await this.prisma.stadion.findFirst({
           where: { id, ...this.ownedBy(ctx) },
@@ -4481,7 +4528,7 @@ export class BotUpdate {
       }
       case 'Update_price': {
         const id = this.idOf(data);
-        if (!(await this.allowStadion(ctx, lang, id))) return;
+        if (!(await this.allowStadion(ctx, lang, id, true))) return;
         ctx.session.step = 'price';
         this.ensureStadionSession(ctx).id = id;
         await ctx.reply(t('stadions.price'));
@@ -4498,7 +4545,7 @@ export class BotUpdate {
 
       case 'language': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+        if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         await this.utils.safeEditOrReply(ctx, t('common.START'), {
           inline_keyboard: [
             [{ text: "🇺🇿 O'zbekcha", callback_data: 'lang_uz' }],
@@ -4523,17 +4570,14 @@ export class BotUpdate {
       }
       case 'phone_back': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+        if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         await this.showOwnerSettings(ctx, lang, id);
         return;
       }
       case 'ownerSettings_back': {
-        const owner = await this.prisma.owners.findUnique({
-          where: { chatID: String(ctx.from?.id) },
-          select: { id: true },
-        });
-        if (!owner) throw new Error(`Owner topilmadi: chatID=${ctx.from?.id}`);
-        await this.showOwnerSettings(ctx, lang, owner.id);
+        const actor = ctx.actor;
+        if (!actor) return this.deny(ctx, lang);
+        await this.showOwnerSettings(ctx, lang, actor.ownerId);
         return;
       }
       case 'phone_update': {
@@ -4680,6 +4724,7 @@ export class BotUpdate {
         return;
       }
       case 'advertisement_skip_image': {
+        if (!(await this.requireOwner(ctx, lang))) return;
         if (!ctx.session.advertisement)
           return this.alertBox(ctx, t('error.error'));
         ctx.session.advertisement.image = null;
@@ -5031,13 +5076,7 @@ export class BotUpdate {
       if (s.step === 'menyu') {
         await ctx.reply(
           t('common.WELCOME'),
-          Markup.keyboard([
-            [t('menyu_buttons.stadion'), t('menyu_buttons.bron')],
-            [t('menyu_buttons.settings'), t('menyu_buttons.help')],
-            [t('menyu_buttons.card')],
-          ])
-            .resize()
-            .oneTime(),
+          this.ownerService.mainMenuKeyboard(lang, !!ctx.actor?.isManager),
         );
         s.step = null;
         s.stadion_step = null;
@@ -5067,6 +5106,10 @@ export class BotUpdate {
         case t('menyu_buttons.bron'):
           return await this.ownerService.owner_Bron(ctx, lang);
         case t('menyu_buttons.card'):
+          if (ctx.actor?.isManager) {
+            await ctx.reply(t('admin.access_denied'));
+            return;
+          }
           return await this.ownerService.owner_payout(ctx, lang);
         case t('menyu_buttons.user_stadion_booking'):
           return await this.userService.userBooking(ctx, lang);
@@ -5077,11 +5120,11 @@ export class BotUpdate {
           if (role === 'none') return await this.botService.checket(ctx);
 
           if (text === t('menyu_buttons.settings')) {
-            return role === 'owner'
+            return role === 'owner' || role === 'manager'
               ? await this.ownerService.ownerSettings(ctx, lang)
               : await this.userService.settings(ctx, lang);
           }
-          await (role === 'owner'
+          await (role === 'owner' || role === "manager"
             ? ctx.reply(
                 t('help.help.title'),
                 helpMenuKeyboard_Owner(this.i18n, lang),
@@ -5235,11 +5278,19 @@ export class BotUpdate {
 
     const booking = await this.prisma.booking.findUnique({
       where: { id: data.bookingId },
-      include: { stadion: { select: { owner: { select: { chatID: true } } } } },
+      include: {
+        stadion: {
+          select: { owner: true, id: true, owner_id: true, parent_id: true },
+        },
+      },
     });
     if (!booking)
       return this.replyWithBack(ctx, lang, 'error.booking_not_found');
 
+    const actor = ctx.actor;
+    if (!actor || !canAccessStadion(actor, booking.stadion)) {
+      return this.replyWithBack(ctx, lang, 'error.not_admin_for_stadion');
+    }
     if (String(ctx.from?.id) !== booking.stadion.owner.chatID) {
       return this.replyWithBack(ctx, lang, 'error.not_admin_for_stadion');
     }
@@ -5316,7 +5367,7 @@ export class BotUpdate {
     }
 
     const id = Number(ctx.session.stadion?.id);
-    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id))) {
+    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id, true))) {
       ctx.session.stadion.name = null;
       await ctx.reply(t('admin.access_denied'));
       return;
@@ -5352,7 +5403,7 @@ export class BotUpdate {
     }
 
     const id = Number(ctx.session.stadion?.id);
-    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id))) {
+    if (!Number.isInteger(id) || !(await this.ownsStadion(ctx, id,true))) {
       ctx.session.maxCount = null;
       await ctx.reply(t('admin.access_denied'));
       return;
@@ -5424,8 +5475,15 @@ export class BotUpdate {
       return;
     }
 
+    const actor = ctx.actor;
+    if (!actor) {
+      ctx.session.admin_step = null;
+      await ctx.reply(t('admin.access_denied'));
+      return;
+    }
+
     const stadions = await this.prisma.stadion.findMany({
-      where: { owner_id: owner.id },
+      where: stadionScope(actor),
       select: { id: true, name: true },
       orderBy: { id: 'asc' },
     });
