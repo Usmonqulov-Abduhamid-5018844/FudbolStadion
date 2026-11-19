@@ -23,14 +23,24 @@ export class PaylovService implements OnModuleInit {
   private readonly logger = new Logger(PaylovService.name);
 
   async onModuleInit() {
-    if (process.env.REGISTER_WEBHOOK !== '1') return;
-    try {
-      const res = await this.request('POST', '/partners/me/webhooks', {
-        url: 'https://stadionbronbot.uz/payment/webhook',
-      });
-      console.log('WEBHOOK NATIJA:', JSON.stringify(res));
-    } catch (e) {
-      console.log('WEBHOOK XATO:', String(e));
+    if (process.env.REGISTER_WEBHOOK === '1') {
+      try {
+        const res = await this.request('POST', '/partners/me/webhooks', {
+          url: 'https://stadionbronbot.uz/payment/webhook',
+        });
+        console.log('WEBHOOK NATIJA:', JSON.stringify(res));
+      } catch (e) {
+        console.log('WEBHOOK XATO:', String(e));
+      }
+    }
+
+    if (process.env.CHECK_WEBHOOK === '1') {
+      try {
+        const res = await this.request('GET', '/partners/me/webhooks');
+        console.log("WEBHOOK RO'YXAT:", JSON.stringify(res));
+      } catch (e) {
+        console.log('WEBHOOK XATO:', String(e));
+      }
     }
   }
 
