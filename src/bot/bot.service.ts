@@ -1372,17 +1372,6 @@ export class BotService {
       );
       if (result !== 'ok' || !transaction) return;
 
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('premium.payment.already_success', {
-          lang,
-          args: {
-            plan: PLAN_LABELS[lang][transaction.plan],
-            duration: transaction.duration,
-            amount: formatSum(transaction.amount),
-          },
-        }),
-      );
       return this.checket(ctx);
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.PREMIUM);
@@ -1415,20 +1404,6 @@ export class BotService {
         );
         return;
       }
-
-      await this.utils.safeEditOrReply(
-        ctx,
-        this.i18n.translate('booking.payment.already_success', {
-          lang,
-          args: {
-            date: formatDate(transaction.booking.date, lang),
-            start_time: transaction.booking.start_time,
-            end_time: transaction.booking.end_time,
-            amount: formatSum(transaction.booking.total_price),
-          },
-        }),
-      );
-
       return this.checket(ctx);
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.PAYMENT);

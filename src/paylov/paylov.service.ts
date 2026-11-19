@@ -23,41 +23,41 @@ export class PaylovService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaylovService.name);
 
   async onApplicationBootstrap(): Promise<void> {
-    if (process.env.CHECK_WEBHOOK === '1') {
-      try {
-        const res = await this.request<unknown>('GET', '/partners/me/webhooks');
-        this.logger.warn(`WEBHOOK RO'YXAT: ${this.redact(res)}`);
-      } catch (e) {
-        this.logger.error(`WEBHOOK RO'YXAT XATO: ${String(e)}`);
-      }
-    }
+    // if (process.env.CHECK_WEBHOOK === '1') {
+    //   try {
+    //     const res = await this.request<unknown>('GET', '/partners/me/webhooks');
+    //     this.logger.warn(`WEBHOOK RO'YXAT: ${this.redact(res)}`);
+    //   } catch (e) {
+    //     this.logger.error(`WEBHOOK RO'YXAT XATO: ${String(e)}`);
+    //   }
+    // }
 
-    if (process.env.REGISTER_WEBHOOK === '1') {
-      try {
-        const res = await this.request<unknown>(
-          'POST',
-          '/partners/me/webhooks',
-          {
-            url: 'https://stadionbronbot.uz/payment/webhook',
-            secret_key: this.apiSecret,
-          },
-        );
-        this.logger.warn(`WEBHOOK NATIJA: ${this.redact(res)}`);
-      } catch (e) {
-        this.logger.error(`WEBHOOK XATO: ${String(e)}`);
-      }
-    }
-    if (process.env.DELETE_WEBHOOK_ID) {
-      try {
-        const res = await this.request<unknown>(
-          'DELETE',
-          `/partners/me/webhooks/${encodeURIComponent(process.env.DELETE_WEBHOOK_ID)}`,
-        );
-        this.logger.warn(`WEBHOOK O'CHIRILDI: ${this.redact(res)}`);
-      } catch (e) {
-        this.logger.error(`WEBHOOK O'CHIRISH XATO: ${String(e)}`);
-      }
-    }
+    // if (process.env.REGISTER_WEBHOOK === '1') {
+    //   try {
+    //     const res = await this.request<unknown>(
+    //       'POST',
+    //       '/partners/me/webhooks',
+    //       {
+    //         url: 'https://stadionbronbot.uz/payment/webhook',
+    //         secret_key: this.apiSecret,
+    //       },
+    //     );
+    //     this.logger.warn(`WEBHOOK NATIJA: ${this.redact(res)}`);
+    //   } catch (e) {
+    //     this.logger.error(`WEBHOOK XATO: ${String(e)}`);
+    //   }
+    // }
+    // if (process.env.DELETE_WEBHOOK_ID) {
+    //   try {
+    //     const res = await this.request<unknown>(
+    //       'DELETE',
+    //       `/partners/me/webhooks/${encodeURIComponent(process.env.DELETE_WEBHOOK_ID)}`,
+    //     );
+    //     this.logger.warn(`WEBHOOK O'CHIRILDI: ${this.redact(res)}`);
+    //   } catch (e) {
+    //     this.logger.error(`WEBHOOK O'CHIRISH XATO: ${String(e)}`);
+    //   }
+    // }
   }
 
   private redact(v: unknown): string {

@@ -46,7 +46,7 @@ export class PaymentService {
   ) {
     if (!chatId) return;
     try {
-      await this.bot.telegram.sendMessage(chatId, text);
+      await this.bot.telegram.sendMessage(chatId, text,{parse_mode:"HTML"});
     } catch (e) {
       // foydalanuvchi botni bloklagan bo'lishi mumkin: to'lovga ta'sir qilmaydi
       this.logger.warn(`To'lov xabari yuborilmadi (chat ${chatId}): ${e}`);
