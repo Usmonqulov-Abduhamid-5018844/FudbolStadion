@@ -48,8 +48,10 @@ export class PaymentController {
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
   async paylov(@Body() data: PaylovWebhookDto) {
-    this.logger.log(
-      `paylov webhook: ext=${data.external_id} state=${data.state} payment=${data.payment_id}`,
+    this.logger.warn(
+      `WEBHOOK DEBUG keys=${Object.keys(data).join(',')} ` +
+        `msg=${data.order_id}:${data.payment_id}:${data.state}:${data.timestamp} ` +
+        `sigLen=${data.signature?.length ?? 0}`,
     );
 
     // 1) Imzo
