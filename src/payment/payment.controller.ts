@@ -7,14 +7,11 @@ import {
   HttpCode,
   HttpStatus,
   UnauthorizedException,
-  Req,
-  RawBodyRequest,
 } from '@nestjs/common';
 import { PaymentService } from './payment.service';
 import { PaylovWebhookDto } from './dto/create-paylov.dto';
 import { PaylovService } from 'src/paylov/paylov.service';
 import { PaylovState } from 'src/helpers/interface/enum';
-import { Request } from 'express';
 
 @Controller('payment')
 export class PaymentController {
@@ -50,14 +47,14 @@ export class PaymentController {
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async paylov(@Body() data: PaylovWebhookDto, @Req() req: RawBodyRequest<Request>,) {
+  async paylov(@Body() data: PaylovWebhookDto) {
     this.logger.warn(
       `WEBHOOK DEBUG keys=${Object.keys(data).join(',')} ` +
         `msg=${data.order_id}:${data.payment_id}:${data.state}:${data.timestamp} ` +
         `sigLen=${data.signature?.length ?? 0}`,
     );
 
-    this.paylove.debugWebhook(data, req.rawBody);
+    this.paylove.debugWebhook2(data);
     
     // 1) Imzo
     if (!this.paylove.verifyWebhookSignature(data)) {
