@@ -24,7 +24,12 @@ import {
 } from 'src/types/notifikation';
 import { formatSum, UtilisService } from 'src/utils/utile.service';
 import { Markup } from 'telegraf';
-import { Actor, isOwnerActor, stadionScope } from 'src/common/actor/actor';
+import {
+  Actor,
+  bookingScope,
+  isOwnerActor,
+  stadionScope,
+} from 'src/common/actor/actor';
 
 const STADION_LIMITS = { maxCount: 100, side: 300, price: 1_500_000 } as const;
 const STADION_NAME_REGEX = /^[\p{L}\p{N}\s'’‘ʻʼ.-]{2,50}$/u;
@@ -1166,28 +1171,36 @@ export class OwnersService {
 
   async miniStadion(ctx: MyContext, childId: number, lang: string) {
     try {
+      const actor = this.actorOf(ctx);
+
       const child = await this.prisma.stadion.findFirst({
         where: {
-          id: childId,
-          parent_id: { not: null },
-          stadion_mini: true,
-          owner: { chatID: String(ctx.from?.id) },
+          AND: [
+            { id: childId, parent_id: { not: null }, stadion_mini: true },
+            stadionScope(actor),
+          ],
         },
         select: { id: true, parent_id: true },
       });
       if (!child) {
         await this.utils.errorFunction(
           ctx,
-          new Error(
-            `Mini stadion topilmadi yoki egasiga tegishli emas: ${childId}`,
-          ),
+          new Error(`Mini stadion topilmadi yoki ruxsat yo'q: ${childId}`),
           ErrorContext.STADION,
         );
         return;
       }
 
+      const isOwner = isOwnerActor(actor);
       const b = (key: string, type: string) =>
         this.btnJson(lang, key, type, child.id);
+      const backBtn = this.btnJson(
+        lang,
+        'schedule.back',
+        'miniStadionlar',
+        child.parent_id,
+      );
+
       await this.utils.safeEditOrReply(
         ctx,
         this.tr(lang)('stadions.mini_stadium_settings'),
@@ -1195,22 +1208,14 @@ export class OwnersService {
           inline_keyboard: [
             [
               b('stadions.stadium.name', 'Stadion_nomi'),
-              b('schedule.price', 'price'),
+              ...(isOwner ? [b('schedule.price', 'price')] : []),
             ],
             [
               b('stadions.players_count', 'players_count'),
               b('schedule.image', 'image'),
             ],
             [b('stadions.menyu.all_data', 'all_data')],
-            [
-              b('schedule.delete', 'delete'),
-              this.btnJson(
-                lang,
-                'schedule.back',
-                'miniStadionlar',
-                child.parent_id,
-              ),
-            ],
+            isOwner ? [b('schedule.delete', 'delete'), backBtn] : [backBtn],
           ],
         },
       );
@@ -1402,21 +1407,20 @@ export class OwnersService {
   async owner_Bron(ctx: MyContext, lang: string) {
     try {
       const t = (key: string): string => this.i18n.translate(key, { lang });
-
-      const ownerData = await this.prisma.owners.findUnique({
-        where: { chatID: String(ctx.from?.id) },
-        select: { id: true, _count: { select: { stadions: true } } },
-      });
-      if (!ownerData) {
+      const actor = ctx.actor;
+      if (!actor) {
         await this.utils.errorFunction(
           ctx,
-          new Error(`Owner topilmadi: chatID=${ctx.from?.id}`),
+          new Error(`Actor topilmadi: chatID=${ctx.from?.id}`),
           ErrorContext.OWNER,
         );
         return;
       }
 
-      if (ownerData._count.stadions === 0) {
+      const stadionCount = await this.prisma.stadion.count({
+        where: stadionScope(actor),
+      });
+      if (stadionCount === 0) {
         await ctx.reply(t('owner_booking.no_stadion'), {
           reply_markup: {
             inline_keyboard: [
@@ -1427,13 +1431,14 @@ export class OwnersService {
         return;
       }
 
-      const id = ownerData.id;
+      const id = actor.ownerId;
       const btn = (key: string, callback_data: string) => ({
         text: t(key),
         callback_data,
       });
       const menu = (name: string) =>
         `owner_booking.booking_menu.buttons.${name}`;
+      const searchBtn = btn(menu('search'), `bookingAllData_search_${id}_1`);
 
       await this.utils.safeEditOrReply(
         ctx,
@@ -1457,10 +1462,12 @@ export class OwnersService {
               btn(menu('all'), `bookingAllData_all_${id}_1`),
               btn(menu('cancelled'), `ownerBooking_cancelled_${id}_1`),
             ],
-            [
-              btn(menu('stats'), `BookingOwner_statistica_stats_${id}`),
-              btn(menu('search'), `bookingAllData_search_${id}_1`),
-            ],
+            isOwnerActor(actor)
+              ? [
+                  btn(menu('stats'), `BookingOwner_statistica_stats_${id}`),
+                  searchBtn,
+                ]
+              : [searchBtn],
             [btn('schedule.back', 'back_owner_1')],
           ],
         },
@@ -1524,8 +1531,16 @@ export class OwnersService {
     try {
       const t = (key: string): string => this.i18n.translate(key, { lang });
 
-      const booking = await this.prisma.booking.findUnique({
-        where: { id: bookingId },
+      const actor = ctx.actor;
+      if (!actor) {
+        await ctx
+          .answerCbQuery(t('admin.access_denied'), { show_alert: true })
+          .catch(() => undefined);
+        return;
+      }
+
+      const booking = await this.prisma.booking.findFirst({
+        where: { AND: [{ id: bookingId }, bookingScope(actor)] },
         include: {
           stadion: {
             select: {
@@ -1542,7 +1557,7 @@ export class OwnersService {
       if (!booking) {
         await this.utils.errorFunction(
           ctx,
-          new Error(`Bron topilmadi: ${bookingId}`),
+          new Error(`Bron topilmadi yoki ruxsat yo'q: ${bookingId}`),
           ErrorContext.OWNER,
         );
         return;
@@ -1699,12 +1714,12 @@ export class OwnersService {
     ctx: MyContext,
     text: string,
     lang: string,
-    _ownerId?: number, // moslik uchun qoldirilgan: egasi chatID bo'yicha aniqlanadi
+    _ownerId?: number,
     page = 1,
   ) {
     try {
       const t = this.tr(lang);
-      const owner = await this.requireOwner(ctx);
+      const actor = this.actorOf(ctx);
       const limit = 5;
       const input = text.trim();
 
@@ -1733,8 +1748,7 @@ export class OwnersService {
       }
 
       const where: Prisma.BookingWhereInput = {
-        stadion: { owner_id: owner.id },
-        date: selectedDate,
+        AND: [bookingScope(actor), { date: selectedDate }],
       };
       const [bookings, total] = await Promise.all([
         this.prisma.booking.findMany({
@@ -1798,11 +1812,21 @@ export class OwnersService {
         total,
         limit,
         lang,
-        `bookingAllData_all_${owner.id}`,
+        `bookingAllData_all_${actor.ownerId}`,
       );
     } catch (error) {
       await this.utils.errorFunction(ctx, error, ErrorContext.OWNER);
     }
+  }
+
+  private async alertBox(ctx: MyContext, text: string): Promise<void> {
+    await ctx.answerCbQuery(text, { show_alert: true }).catch(() => undefined);
+  }
+  private async deny(ctx: MyContext, lang: string): Promise<void> {
+    await this.alertBox(ctx, this.tr(lang)('admin.access_denied'));
+  }
+  private isSameOwner(ctx: MyContext, ownerId: number): boolean {
+    return !!ctx.actor && ctx.actor.ownerId === ownerId; // egasi va menejer
   }
 
   async searchBooking(
@@ -1813,33 +1837,53 @@ export class OwnersService {
   ) {
     try {
       const t = this.tr(lang);
-      const owner = await this.requireOwner(ctx);
+      const actor = ctx.actor;
+      if (!actor) {
+        await ctx
+          .answerCbQuery(t('common.no_permission'), { show_alert: true })
+          .catch(() => undefined);
+        return;
+      }
       const limit = 10;
 
-      const where: Prisma.BookingWhereInput = {
-        stadion: { owner_id: owner.id },
-      };
+      // Egalik chegarasi har doim birinchi turadi
+      const filters: Prisma.BookingWhereInput[] = [bookingScope(actor)];
 
       switch (input.type) {
         case 'phone': {
           // foydalanuvchi raqami `+`siz saqlangan, admin kiritgani esa qanday yozilgan bo'lsa shunday
           const withPlus = String(input.value);
           const digits = withPlus.replace(/\D/g, '');
-          where.OR = [
-            { user: { phone: { in: [withPlus, digits] } } },
-            { customer_phone: { in: [withPlus, digits] } },
-          ];
+          filters.push({
+            OR: [
+              { user: { phone: { in: [withPlus, digits] } } },
+              { customer_phone: { in: [withPlus, digits] } },
+            ],
+          });
           break;
         }
-        case 'id':
-          where.id = Number(input.value);
+        case 'id': {
+          const id = Number(input.value);
+          if (!Number.isInteger(id) || id <= 0) {
+            await this.replyTracked(
+              ctx,
+              'ownerActiveBooking',
+              t('owner_booking.search_by_user'),
+            );
+            await ctx.deleteMessage().catch(() => undefined);
+            return;
+          }
+          filters.push({ id });
           break;
+        }
         case 'name': {
           const name = String(input.value);
-          where.OR = [
-            { user: { full_name: { contains: name, mode: 'insensitive' } } },
-            { customer_name: { contains: name, mode: 'insensitive' } },
-          ];
+          filters.push({
+            OR: [
+              { user: { full_name: { contains: name, mode: 'insensitive' } } },
+              { customer_name: { contains: name, mode: 'insensitive' } },
+            ],
+          });
           break;
         }
         default:
@@ -1854,7 +1898,7 @@ export class OwnersService {
       }
 
       const bookings = await this.prisma.booking.findMany({
-        where,
+        where: { AND: filters },
         orderBy: [{ startAt: 'desc' }, { id: 'desc' }],
         skip: (Math.max(1, page) - 1) * limit,
         take: limit,
@@ -2017,14 +2061,14 @@ export class OwnersService {
   async renderNotification(ctx: MyContext, _ownerId: number, lang: string) {
     try {
       const t = this.tr(lang);
-      const owner = await this.requireOwner(ctx);
-
+       if (!this.isSameOwner(ctx, _ownerId)) return this.deny(ctx, lang);
+       
       const [unread, read] = await Promise.all([
         this.prisma.notification.count({
-          where: { ownerId: owner.id, isRead: false },
+          where: { ownerId: _ownerId, isRead: false },
         }),
         this.prisma.notification.count({
-          where: { ownerId: owner.id, isRead: true },
+          where: { ownerId: _ownerId, isRead: true },
         }),
       ]);
 
@@ -2036,7 +2080,7 @@ export class OwnersService {
       ): InlineKeyboardButton[] => [
         {
           text: `${emoji} ${t(key)}${count === undefined ? '' : `  ${count} ${t('notification.count')}`}`,
-          callback_data: JSON.stringify({ type, id: owner.id }),
+          callback_data: JSON.stringify({ type, id: _ownerId }),
         },
       ];
 
@@ -2047,7 +2091,7 @@ export class OwnersService {
           row('📋', 'notification.all', 'notification_all', unread + read),
           row('⚙️', 'notification.settings', 'notification_settings'),
           row('🗑', 'notification.clear', 'notification_clear'),
-          [this.btnJson(lang, 'schedule.back', 'phone_back', owner.id)],
+          [this.btnJson(lang, 'schedule.back', 'phone_back', _ownerId)],
         ],
       });
     } catch (error) {

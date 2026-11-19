@@ -4753,13 +4753,13 @@ export class BotUpdate {
       case 'notification':
       case 'notification_back': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+        if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         await this.ownerService.renderNotification(ctx, id, lang);
         return;
       }
       case 'notification_settings': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+        if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         await this.ownerService.notificationSettings(ctx, id, lang);
         return;
       }
@@ -4767,7 +4767,7 @@ export class BotUpdate {
       case 'notification_read':
       case 'notification_all': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+         if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         const mode = data.type.replace('notification_', '');
         if (mode !== 'unread' && mode !== 'read' && mode !== 'all') return;
         await this.showNotificationList(ctx, lang, id, data.page, mode);
@@ -4782,7 +4782,7 @@ export class BotUpdate {
           await this.alertBox(ctx, t('notification.notification_not_found'));
           return;
         }
-        if (!(await this.allowOwner(ctx, lang, notification.ownerId))) return;
+         if (!this.isSameOwner(ctx, notification.ownerId)) return this.deny(ctx, lang);
 
         let backType = 'notification_read';
         if (data.type === 'notification_view') {
@@ -4810,7 +4810,7 @@ export class BotUpdate {
       }
       case 'notification_clear': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+         if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         const count = await this.prisma.notification.count({
           where: { ownerId: id, isRead: true },
         });
@@ -4840,7 +4840,7 @@ export class BotUpdate {
       }
       case 'notificationClear_yes': {
         const id = this.idOf(data);
-        if (!(await this.allowOwner(ctx, lang, id))) return;
+        if (!this.isSameOwner(ctx, id)) return this.deny(ctx, lang);
         await this.prisma.notification.deleteMany({
           where: { ownerId: id, isRead: true },
         });

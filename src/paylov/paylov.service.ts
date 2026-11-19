@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  OnModuleInit,
 } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import {
@@ -18,8 +19,20 @@ const FALLBACK_METHODS: PaylovMethod[] = [
 const HIDDEN_METHODS = ['card'];
 
 @Injectable()
-export class PaylovService {
+export class PaylovService implements OnModuleInit {
   private readonly logger = new Logger(PaylovService.name);
+
+  async onModuleInit() {
+    if (process.env.REGISTER_WEBHOOK !== '1') return;
+    try {
+      const res = await this.request('POST', '/partners/me/webhooks', {
+        url: 'https://stadionbronbot.uz/payment/webhook',
+      });
+      console.log('WEBHOOK NATIJA:', JSON.stringify(res));
+    } catch (e) {
+      console.log('WEBHOOK XATO:', String(e));
+    }
+  }
 
   private get baseUrl(): string {
     return (process.env.PAYLOV_API_URL ?? '').trim().replace(/\/+$/, '');
@@ -87,7 +100,7 @@ export class PaylovService {
     try {
       res = await fetch(this.baseUrl + path, {
         method,
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'X-API-Key': this.apiKey,
           'X-Timestamp': ts,
@@ -168,7 +181,7 @@ export class PaylovService {
         external_id: p.externalId,
         amount: p.amountSom * 100,
         payment_provider: method,
-        return_url: p.returnUrl
+        return_url: p.returnUrl,
       },
     );
 
