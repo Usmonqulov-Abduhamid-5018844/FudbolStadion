@@ -11,6 +11,7 @@ import {
   PaylovCheckoutResponse,
   PaylovMethod,
 } from 'src/helpers/interface/enum';
+import { PaylovWebhookDto } from 'src/payment/dto/create-paylov.dto';
 
 const FALLBACK_METHODS: PaylovMethod[] = [
   { name: 'payme', label: 'Payme', sort_order: 1, is_active: true },
@@ -82,6 +83,70 @@ export class PaylovService implements OnModuleInit {
       [method, signedPath, ts, bodyHash].join('\n'),
     );
   }
+  debugWebhook(d: PaylovWebhookDto, raw?: Buffer): void {
+    const received = String(d.signature ?? '').toLowerCase();
+    const rest: Record<string, unknown> = Object.fromEntries(
+      Object.entries(d).filter(([k]) => k !== 'signature'),
+    );
+
+    const secrets: Record<string, string> = {
+      API_SECRET: this.apiSecret,
+      API_KEY: this.apiKey,
+    };
+    const seps = [':', '\n', '', '|', ',', '&'];
+    const amountVariants: Record<string, Record<string, unknown>> = {
+      amountAsIs: rest,
+      amountNum: { ...rest, amount: String(Number(rest.amount)) },
+    };
+    const hits: string[] = [];
+
+    const check = (label: string, msg: string): void => {
+      for (const [sn, s] of Object.entries(secrets)) {
+        if (!s) continue;
+        if (this.hmacHex(s, msg) === received)
+          hits.push(`HMAC ${label} secret=${sn}`);
+        const plain = createHash('sha256')
+          .update(msg + s)
+          .digest('hex');
+        if (plain === received)
+          hits.push(`SHA256(msg+secret) ${label} secret=${sn}`);
+      }
+    };
+
+    for (const [vn, obj] of Object.entries(amountVariants)) {
+      const original = Object.keys(obj);
+      const sorted = [...original].sort();
+      for (const [on, keys] of [
+        ['orig', original],
+        ['sorted', sorted],
+      ] as const) {
+        for (let mask = 1; mask < 1 << keys.length; mask++) {
+          const picked = keys.filter((_, i) => mask & (1 << i));
+          for (const sep of seps) {
+            const msg = picked.map((k) => String(obj[k])).join(sep);
+            check(
+              `${vn}/${on} [${picked.join('+')}] sep=${JSON.stringify(sep)}`,
+              msg,
+            );
+          }
+        }
+      }
+      check(`${vn} JSON orig`, JSON.stringify(obj));
+      check(
+        `${vn} JSON sorted`,
+        JSON.stringify(
+          Object.fromEntries(
+            Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)),
+          ),
+        ),
+      );
+    }
+    if (raw) check('rawBody', raw.toString('utf8'));
+
+    this.logger.warn(
+      `WEBHOOK DIAG hits=${hits.length ? hits.join(' || ') : 'YOQ'}`,
+    );
+  }
 
   verifyWebhookSignature(d: {
     order_id: number;
@@ -94,8 +159,7 @@ export class PaylovService implements OnModuleInit {
     if (!secret) return false;
 
     const msg = `${d.order_id}:${d.payment_id}:${d.state}:${d.timestamp}`;
-    console.log("\n\n\nverifyWebhookSignature ichida"+msg);
-    
+
     return this.safeEqualHex(this.hmacHex(secret, msg), d.signature);
   }
 
