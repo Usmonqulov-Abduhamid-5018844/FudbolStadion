@@ -3,7 +3,7 @@ import {
   BadRequestException,
   Injectable,
   Logger,
-  OnModuleInit,
+  OnApplicationBootstrap,
 } from '@nestjs/common';
 import { createHash, createHmac, timingSafeEqual } from 'crypto';
 import {
@@ -11,38 +11,59 @@ import {
   PaylovCheckoutResponse,
   PaylovMethod,
 } from 'src/helpers/interface/enum';
-import { PaylovWebhookDto } from 'src/payment/dto/create-paylov.dto';
 
 const FALLBACK_METHODS: PaylovMethod[] = [
   { name: 'payme', label: 'Payme', sort_order: 1, is_active: true },
   { name: 'click', label: 'Click', sort_order: 2, is_active: true },
 ];
-const HIDDEN_METHODS = ['card'];
+const HIDDEN_METHODS = ['card', 'uzqr', 'alif'];
 
 @Injectable()
-export class PaylovService implements OnModuleInit {
+export class PaylovService implements OnApplicationBootstrap {
   private readonly logger = new Logger(PaylovService.name);
 
-  async onModuleInit() {
-    if (process.env.REGISTER_WEBHOOK === '1') {
+  async onApplicationBootstrap(): Promise<void> {
+    if (process.env.CHECK_WEBHOOK === '1') {
       try {
-        const res = await this.request('POST', '/partners/me/webhooks', {
-          url: 'https://stadionbronbot.uz/payment/webhook',
-        });
-        console.log('WEBHOOK NATIJA:', JSON.stringify(res));
+        const res = await this.request<unknown>('GET', '/partners/me/webhooks');
+        this.logger.warn(`WEBHOOK RO'YXAT: ${this.redact(res)}`);
       } catch (e) {
-        console.log('WEBHOOK XATO:', String(e));
+        this.logger.error(`WEBHOOK RO'YXAT XATO: ${String(e)}`);
       }
     }
 
-    if (process.env.CHECK_WEBHOOK === '1') {
+    if (process.env.REGISTER_WEBHOOK === '1') {
       try {
-        const res = await this.request('GET', '/partners/me/webhooks');
-        console.log("WEBHOOK RO'YXAT:", JSON.stringify(res));
+        const res = await this.request<unknown>(
+          'POST',
+          '/partners/me/webhooks',
+          {
+            url: 'https://stadionbronbot.uz/payment/webhook',
+            secret_key: this.apiSecret,
+          },
+        );
+        this.logger.warn(`WEBHOOK NATIJA: ${this.redact(res)}`);
       } catch (e) {
-        console.log('WEBHOOK XATO:', String(e));
+        this.logger.error(`WEBHOOK XATO: ${String(e)}`);
       }
     }
+    if (process.env.DELETE_WEBHOOK_ID) {
+      try {
+        const res = await this.request<unknown>(
+          'DELETE',
+          `/partners/me/webhooks/${encodeURIComponent(process.env.DELETE_WEBHOOK_ID)}`,
+        );
+        this.logger.warn(`WEBHOOK O'CHIRILDI: ${this.redact(res)}`);
+      } catch (e) {
+        this.logger.error(`WEBHOOK O'CHIRISH XATO: ${String(e)}`);
+      }
+    }
+  }
+
+  private redact(v: unknown): string {
+    return JSON.stringify(v, (k, val: unknown) =>
+      /secret|key|password|token/i.test(k) ? '***' : val,
+    );
   }
 
   private get baseUrl(): string {
@@ -83,63 +104,6 @@ export class PaylovService implements OnModuleInit {
       [method, signedPath, ts, bodyHash].join('\n'),
     );
   }
- debugWebhook2(d: PaylovWebhookDto): void {
-  const received = String(d.signature ?? '').toLowerCase();
-  const rest: Record<string, unknown> = Object.fromEntries(
-    Object.entries(d).filter(([k]) => k !== 'signature'),
-  );
-
-  const keys: Array<[string, Buffer | string]> = [];
-  const sources: Record<string, string> = {
-    API_SECRET: this.apiSecret,
-    API_KEY: this.apiKey,
-  };
-  for (const [n, s] of Object.entries(sources)) {
-    if (!s) continue;
-    keys.push([`${n}/utf8`, s]);
-    keys.push([`${n}/sha256`, createHash('sha256').update(s).digest()]);
-    keys.push([`${n}/base64dec`, Buffer.from(s, 'base64')]);
-    if (/^[0-9a-f]+$/i.test(s) && s.length % 2 === 0) {
-      keys.push([`${n}/hexdec`, Buffer.from(s, 'hex')]);
-    }
-  }
-
-  const amountNum = Number(d.amount);
-  const amounts: Record<string, string> = {
-    asIs: String(d.amount),
-    num: String(amountNum),
-    tiyin: String(Math.round(amountNum * 100)),
-  };
-  const tsMs = Number(d.timestamp);
-  const stamps: Record<string, string> = {
-    ms: String(tsMs),
-    sec: String(Math.floor(tsMs / 1000)),
-  };
-
-  const hits: string[] = [];
-  for (const [an, amount] of Object.entries(amounts)) {
-    for (const [tn, ts] of Object.entries(stamps)) {
-      const obj: Record<string, unknown> = { ...rest, amount, timestamp: ts };
-      const names = Object.keys(obj);
-      for (const order of [names, [...names].sort()]) {
-        for (let mask = 1; mask < 1 << order.length; mask++) {
-          const picked = order.filter((_, i) => mask & (1 << i));
-          for (const sep of [':', '\n', '', '|']) {
-            const msg = picked.map((k) => String(obj[k])).join(sep);
-            for (const [kn, key] of keys) {
-              if (createHmac('sha256', key).update(msg).digest('hex') === received) {
-                hits.push(
-                  `amount=${an} ts=${tn} fields=[${picked.join('+')}] sep=${JSON.stringify(sep)} key=${kn}`,
-                );
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  this.logger.warn(`WEBHOOK DIAG2 hits=${hits.length ? hits.join(' || ') : 'YOQ'}`);
-}
 
   verifyWebhookSignature(d: {
     order_id: number;
@@ -157,7 +121,7 @@ export class PaylovService implements OnModuleInit {
   }
 
   private async request<T>(
-    method: 'GET' | 'POST',
+    method: 'GET' | 'POST' |'DELETE',
     path: string,
     data?: object,
   ): Promise<T> {

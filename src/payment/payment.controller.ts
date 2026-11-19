@@ -53,8 +53,6 @@ export class PaymentController {
         `msg=${data.order_id}:${data.payment_id}:${data.state}:${data.timestamp} ` +
         `sigLen=${data.signature?.length ?? 0}`,
     );
-
-    this.paylove.debugWebhook2(data);
     
     // 1) Imzo
     if (!this.paylove.verifyWebhookSignature(data)) {
