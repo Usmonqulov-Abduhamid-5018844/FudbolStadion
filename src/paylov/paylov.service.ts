@@ -94,6 +94,8 @@ export class PaylovService implements OnModuleInit {
     if (!secret) return false;
 
     const msg = `${d.order_id}:${d.payment_id}:${d.state}:${d.timestamp}`;
+    console.log("\n\n\nverifyWebhookSignature ichida"+msg);
+    
     return this.safeEqualHex(this.hmacHex(secret, msg), d.signature);
   }
 

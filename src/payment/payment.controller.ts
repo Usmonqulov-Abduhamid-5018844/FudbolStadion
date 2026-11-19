@@ -53,7 +53,8 @@ export class PaymentController {
         `msg=${data.order_id}:${data.payment_id}:${data.state}:${data.timestamp} ` +
         `sigLen=${data.signature?.length ?? 0}`,
     );
-
+    console.log(data);
+    
     // 1) Imzo
     if (!this.paylove.verifyWebhookSignature(data)) {
       this.logger.warn(`paylov webhook: imzo noto'g'ri (${data.external_id})`);
